@@ -23,14 +23,17 @@ reports/*.tmp
 # delivery scratch - screenshots, zips and superseded forecasts. Kept on disk
 # so nothing is lost, kept out of the repo so the published tree is only what
 # the project needs to run.
-Claude outputs/
+*outputs/
 _superseded/
 models_out/
 
-# scratch from the remote bridge (it cannot delete files)
 _gitjunk/
 
-# transfer artefacts from the cloud session; the contents are already extracted
+# local transfer artefacts and working notes; contents already in the tree
 *.tar.gz
 APPLY-THIS.md
 PUSH-TO-GITHUB.md
+
+# personal working notes - the plain-English explainer and resume text. Kept on
+# disk, deliberately not published.
+docs/

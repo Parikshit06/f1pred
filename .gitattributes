@@ -1,0 +1,9 @@
+# The two HTML pages are build output from report_render.py, not hand-written
+# markup. Without this GitHub counts them as source and reports the repo as
+# roughly a fifth HTML, which misrepresents what was actually written, and
+# shows their full diff on every forecast commit.
+reports/*.html linguist-generated=true
+reports/*.json linguist-generated=true
+
+# Same reasoning: the audit trail is machine-written and there is a lot of it.
+predictions/*.json linguist-generated=true

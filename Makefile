@@ -1,6 +1,6 @@
 .PHONY: setup setup-uv which-python data data-jolpica data-fastf1 validate \
         features build-features repair train backtest predict title-backtest \
-        calibrate-spread dashboard test lint all clean
+        calibrate-spread dashboard bias verify test lint all clean
 
 SEASONS ?= 2018-2026
 START   ?= 2022   # first season the backtest reports on
@@ -100,6 +100,17 @@ calibrate-spread:
 # Renders both pages: the forecast and the evidence behind it.
 dashboard:
 	$(PY) -m f1pred.cli dashboard
+
+# ---- diagnostics -----------------------------------------------------------
+# Per-driver bias: is the model just favouring the famous names? The raw column
+# says yes and is an artifact; the corrected one is the answer.
+bias:
+	$(PY) -m f1pred.cli bias
+
+# Seven audits in one pass: leakage, input coverage, feature weighting, driver
+# bias, accuracy against baselines, calibration, prediction sanity.
+verify:
+	$(PY) -m f1pred.cli verify --start-season 2024
 
 # ---- quality ---------------------------------------------------------------
 test:
