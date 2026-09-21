@@ -1,9 +1,21 @@
 .PHONY: setup setup-uv which-python data data-jolpica data-fastf1 validate \
-        features build-features repair train backtest predict title-backtest \
+        features build-features repair backtest predict title-backtest \
         calibrate-spread dashboard bias verify test lint all clean
 
 SEASONS ?= 2018-2026
-START   ?= 2022   # first season the backtest reports on
+
+# The reported window, defined once. `make backtest` has to reproduce the table
+# in the README and on the method page, and it did not: the target ran
+# --start-season 2022 with no tuning, while the published numbers come from a
+# run started at 2024 with the settings fitted on 2022-23. Two different
+# answers under one command name.
+#
+# START is the first season REPORTED on. TUNE is the season the temperature,
+# blend and recency weight are fitted from, and it must be earlier - fitting
+# and reporting on the same races makes the settings part of the answer. The
+# CLI refuses the combination if it is not.
+START ?= 2024
+TUNE  ?= 2022
 
 # Which Python runs everything. Checked in this order so a fresh clone works
 # whatever the person has installed:
@@ -79,11 +91,16 @@ build-features: features
 repair:
 	$(PY) -m f1pred.cli repair
 
-train:
-	$(PY) -m f1pred.cli train
+# There is no `train` target. There was one, and it called a CLI subcommand
+# that does not exist, so it failed on the spot and took `make all` down with
+# it. Nothing in this project loads a model off disk: predict, backtest and
+# verify each fit one on exactly the races they are allowed to see, which is
+# the whole point of a walk-forward. A model saved on Friday would only be a
+# way to accidentally use one that had seen too much.
 
+# Reproduces the published accuracy table. Slow: it refits per race.
 backtest:
-	$(PY) -m f1pred.cli backtest --start-season $(START)
+	$(PY) -m f1pred.cli backtest --start-season $(START) --tune --tune-season $(TUNE)
 
 predict:
 	$(PY) -m f1pred.cli predict --next
@@ -110,7 +127,7 @@ bias:
 # Seven audits in one pass: leakage, input coverage, feature weighting, driver
 # bias, accuracy against baselines, calibration, prediction sanity.
 verify:
-	$(PY) -m f1pred.cli verify --start-season 2024
+	$(PY) -m f1pred.cli verify --start-season $(START)
 
 # ---- quality ---------------------------------------------------------------
 test:
@@ -120,7 +137,7 @@ lint:
 	$(RUFF) check src tests
 	$(RUFF) format --check src tests
 
-all: features train backtest predict dashboard
+all: features backtest predict dashboard
 
 clean:
 	rm -rf data/*.duckdb data/*.duckdb.wal

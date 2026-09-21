@@ -86,6 +86,35 @@ def scoreboard() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
+# Spelled out where the page has a word for it, digits otherwise. A caption is
+# prose, and "Top 10 of 22" reads as a table heading that lost its table.
+_WORDS = {
+    3: "three",
+    5: "five",
+    10: "ten",
+    18: "eighteen",
+    20: "twenty",
+    22: "twenty-two",
+    24: "twenty-four",
+    26: "twenty-six",
+}
+
+
+def _shown_of_field(prediction: dict) -> str:
+    """ "Top ten of twenty-two" - both halves counted, not assumed.
+
+    The field size was written into the markup. Eleven teams happens to make
+    it right today; the grid has been twenty and will be something else again,
+    and a page that states a number it has not counted is the kind of small
+    wrongness nobody notices until it is quoted back.
+    """
+    shown = len(prediction.get("race_board") or [])
+    field = len(prediction.get("field_probs") or []) or shown
+    if not shown:
+        return ""
+    return f"<span>Top {_WORDS.get(shown, shown)} of {_WORDS.get(field, field)}</span>"
+
+
 def _section(label: str, caption: str, body: str, note: str = "", band: bool = False) -> str:
     """Label in the margin, content beside it. No cards; alternate sections sit
     on a tinted full-bleed band so the page has rhythm without panels."""
@@ -99,13 +128,14 @@ def _section(label: str, caption: str, body: str, note: str = "", band: bool = F
     )
 
 
-def build(
-    prediction: dict | None = None,
-    backtest_summary: pd.DataFrame | None = None,
-    calibration: pd.DataFrame | None = None,
-    params: dict | None = None,
-    standalone: bool = True,
-) -> str:
+def build(prediction: dict | None = None, standalone: bool = True) -> str:
+    """The forecast page.
+
+    It used to take the backtest summary, the calibration table and the fitted
+    parameters as well. It never drew any of them - accuracy lives on the
+    method page, which loads reports/backtest.json itself - so the caller was
+    reading and reshaping two dataframes per render for nothing.
+    """
     board = scoreboard()
     generated = rr.utcnow()
     if prediction and prediction.get("generated_at_utc"):
@@ -137,7 +167,7 @@ def build(
                 "Race",
                 "10,000 simulated races. <a href='method.html'>How these are calculated</a>.",
                 rr.race_board(prediction["race_board"]),
-                "<span>Top ten of twenty-two</span>",
+                _shown_of_field(prediction),
             )
         )
 
@@ -209,15 +239,9 @@ def build(
     return rr.document("".join(s), standalone=standalone, title=title)
 
 
-def write(
-    prediction: dict | None = None,
-    backtest_summary: pd.DataFrame | None = None,
-    calibration: pd.DataFrame | None = None,
-    params: dict | None = None,
-    path: Path | None = None,
-) -> Path:
+def write(prediction: dict | None = None, path: Path | None = None) -> Path:
     path = path or (config.REPORTS / "index.html")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(build(prediction, backtest_summary, calibration, params))
+    path.write_text(build(prediction))
     log.info("Wrote %s", path)
     return path

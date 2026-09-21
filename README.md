@@ -118,18 +118,28 @@ make predict
 make dashboard
 ```
 
+That is the whole pipeline. `make data-fastf1 SEASONS=2024-2026` is optional and
+separate: it is slow, a few hundred MB a season, and it feeds practice pace to
+the qualifying model only — worth roughly double the pole hit rate before
+qualifying, and nothing at all once the grid is known. Without it
+`practice_available` is 0 and everything else runs unchanged; `make verify`
+reports its absence as a warning rather than a failure.
+
 No API keys; all three sources are free and keyless. `make which-python` prints
 the interpreter the targets use.
 
-Slower, run separately: `make backtest START=2022`, `make title-backtest`,
-`make calibrate-spread`.
+Slower, run separately: `make backtest`, `make title-backtest`,
+`make calibrate-spread`. `make backtest` reproduces the table above exactly —
+the reported window and the season the settings are fitted on are `START` and
+`TUNE` in the Makefile, and the CLI refuses to report on a window it tuned on.
 
-Gates: `make test` (138 tests), `make lint`, `make verify` (7 audits — leakage,
+Gates: `make test` (164 tests), `make lint`, `make verify` (7 audits — leakage,
 inputs, weighting, bias, accuracy, calibration, sanity).
 
-`ci.yml` runs tests and lint on every push; `predict.yml` forecasts and deploys
-to Pages on race weekends; `evaluate.yml` re-measures accuracy monthly, kept out
-of the weekend pipeline so published figures cannot drift from documented ones.
+`ci.yml` runs tests and lint on pushes to `main` and on every pull request;
+`predict.yml` forecasts and deploys to Pages on race weekends; `evaluate.yml`
+re-measures accuracy monthly, kept out of the weekend pipeline so published
+figures cannot drift from documented ones.
 
 ## How it works
 
@@ -160,17 +170,24 @@ asserts it is not.
 
 ```
 src/f1pred/
+  cli.py                 every command in this README
+  config.py              paths, and the fitted constants with their workings
   store.py               DuckDB schema and idempotent upserts
+  http_cache.py          rate-limited, resumable, on-disk HTTP
   ingest/                jolpica, FastF1, Open-Meteo
-  validate.py            16 data quality checks
+  validate.py            18 data quality checks
   features.py            feature engineering, leakage guards, rejected ledger
   model.py               XGBRanker wrappers
   simulate.py            Plackett–Luce and Monte Carlo
+  predict.py             one race, forecast and logged
   backtest.py            walk-forward evaluation and hyperparameter fitting
   championship.py        season projection
   title_backtest.py      grades the title favourite
   spread_calibration.py  grades and re-fits the projection's range
-  report.py              forecast page
+  diagnostics.py         per-driver bias, and the artifact in it
+  verify.py              the seven audits behind `make verify`
+  report.py              forecast page: what goes on it
+  report_render.py       and how it is drawn — CSS, SVG, colour
   method_page.py         the evidence behind it
 predictions/             timestamped forecasts, committed — the track record
 ```

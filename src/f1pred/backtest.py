@@ -117,10 +117,24 @@ class BacktestResult:
         return out.sort_values("ndcg5", ascending=False)
 
     def calibration(self, bins: int = 5) -> pd.DataFrame:
+        # Guard the frame before the column, the way summary() does. A run that
+        # graded nothing returns a DataFrame with no columns at all, and
+        # `self.races.method` on one of those raises AttributeError - which is
+        # how `verify` turned "the backtest produced no races" into a traceback
+        # instead of the FAIL it had already written.
+        if self.races.empty or "method" not in self.races.columns:
+            return pd.DataFrame()
         d = self.races[self.races.method == "model"]
         if d.empty:
             return pd.DataFrame()
-        edges = np.linspace(0, max(0.6, d["p_winner"].max()), bins + 1)
+        # Edges have to span the column being binned. They were built from
+        # p_winner - the probability given to whoever actually won - while the
+        # cut is on p_top_pick, the probability given to the model's own pick.
+        # p_top_pick is the larger of the two whenever the favourite lost, so
+        # the top edge sat below the data and pd.cut returned NaN for the most
+        # confident races, which then vanished from the table: 61 of 62 races
+        # reported, with the missing one exactly the kind you most want graded.
+        edges = np.linspace(0, max(0.6, float(d["p_top_pick"].max())), bins + 1)
         d = d.assign(bucket=pd.cut(d["p_top_pick"], edges, include_lowest=True))
         g = d.groupby("bucket", observed=True).agg(
             predicted=("p_top_pick", "mean"), actual=("top1_hit", "mean"), n=("top1_hit", "size")

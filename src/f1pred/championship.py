@@ -86,8 +86,9 @@ def simulate_seasons(
     safety_car_prob: float = 0.35,
     season_fraction_left: float = 0.0,
     seed: int = config.RANDOM_SEED,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Returns (final totals per sim, mean cumulative points after each round).
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Returns (final totals per sim, and then per round: the mean cumulative
+    points, the 10th percentile, the 90th, and expected wins per driver).
 
     The noise model is lifted from simulate.simulate so the two agree: pace
     varies between Sundays by 0.55 of the spread in model score, a safety car
@@ -288,7 +289,7 @@ def project(
     max_reachable = base + POINTS[0] * n_races
     alive = max_reachable >= base.max()
     clinched = alive.sum() == 1
-    title = allocate_odds(raw_title, np.where(alive & clinched, True, False), totals.mean(axis=0))
+    title = allocate_odds(raw_title, alive & clinched, totals.mean(axis=0))
 
     drivers = pd.DataFrame(
         {
@@ -321,9 +322,7 @@ def project(
             "projected": team_totals.mean(axis=0),
             "low": np.percentile(team_totals, 10, axis=0),
             "high": np.percentile(team_totals, 90, axis=0),
-            "p_title": allocate_odds(
-                t_raw, np.where(t_alive & (t_alive.sum() == 1), True, False), team_totals.mean(axis=0)
-            ),
+            "p_title": allocate_odds(t_raw, t_alive & (t_alive.sum() == 1), team_totals.mean(axis=0)),
         }
     ).sort_values("projected", ascending=False)
 

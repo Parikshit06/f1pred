@@ -11,10 +11,15 @@ cars break, so theirs sits above. Comparing a deterministic ranking against a
 mean that has been pulled toward the middle manufactures a bias gradient
 running the length of the grid.
 
-On 2024-26 that gradient explained 66% of the variance in per-driver bias, and
-retirement rate correlated 0.51 with it. So this module fits the trend and
-reports the residual - what is left once position on the grid is accounted for.
-That residual is the part that is actually about the driver.
+That gradient explains most of the variance in per-driver bias. The exact share
+is not written down here on purpose: it moves with the window and with every
+change to the model, and the last copy of it in this docstring ended up
+disagreeing with the README about the same measurement. `f1pred.cli bias`
+prints the live figure, and `verify.audit_bias` puts it in the audit.
+
+So this module fits the trend and reports the residual - what is left once
+position on the grid is accounted for. That residual is the part that is
+actually about the driver.
 """
 
 from __future__ import annotations

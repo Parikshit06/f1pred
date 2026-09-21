@@ -132,8 +132,17 @@ class RateLimitedSession:
         self._cache_path(url).write_text(json.dumps(payload))
 
     # -- fetch -------------------------------------------------------------
-    def get_json(self, url: str, *, max_retries: int = 6) -> dict[str, Any]:
-        cached = self._read_cache(url)
+    def get_json(self, url: str, *, max_retries: int = 6, refresh: bool = False) -> dict[str, Any]:
+        """Fetch a URL, serving it from disk if we have it.
+
+        `refresh` goes back to the network and overwrites the cached copy. It
+        exists because a cached response is not always a finished one: asking
+        for standings after a round that has not run yet returns an empty body
+        with a 200, and caching that by URL means the answer stays empty for
+        the rest of the season. Anything whose content can still change has to
+        be able to say so.
+        """
+        cached = None if refresh else self._read_cache(url)
         if cached is not None:
             self.cache_hits += 1
             return cached
@@ -194,18 +203,21 @@ class RateLimitedSession:
 
         raise RuntimeError(f"Gave up on {url} after {max_retries} attempts")
 
-    def paginate(self, url_template: str, path_to_list: tuple[str, ...]) -> list[dict[str, Any]]:
+    def paginate(
+        self, url_template: str, path_to_list: tuple[str, ...], *, refresh: bool = False
+    ) -> list[dict[str, Any]]:
         """Walk an Ergast-style paginated endpoint until every record is collected.
 
         ``url_template`` must contain ``{limit}`` and ``{offset}`` placeholders.
         ``path_to_list`` is the key path inside MRData to the list of records.
+        ``refresh`` re-fetches every page rather than reading the disk cache.
         """
         limit = config.JOLPICA_PAGE_SIZE
         offset = 0
         collected: list[dict[str, Any]] = []
 
         while True:
-            payload = self.get_json(url_template.format(limit=limit, offset=offset))
+            payload = self.get_json(url_template.format(limit=limit, offset=offset), refresh=refresh)
             mrdata = payload["MRData"]
 
             node: Any = mrdata

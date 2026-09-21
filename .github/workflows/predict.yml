@@ -22,9 +22,11 @@ jobs:
   predict:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -35,7 +37,7 @@ jobs:
       # The HTTP cache is what keeps us inside jolpica's rate limit. Without
       # it every run re-fetches nine seasons.
       - name: Restore data cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: data/cache
           key: jolpica-${{ github.run_id }}
@@ -62,17 +64,35 @@ jobs:
       - name: Dashboard
         run: python -m f1pred.cli dashboard
 
+      # Published BEFORE anything is committed. The forecast is the
+      # deliverable; a push that loses a race must not be able to take the site
+      # down with it, which is exactly what the original order allowed.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
+
       - name: Commit prediction
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add predictions reports
-          git diff --staged --quiet || git commit -m "Prediction $(date -u +%Y-%m-%d)"
-          git push
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: reports
+          if git diff --staged --quiet; then
+            echo "nothing new to commit"
+            exit 0
+          fi
+          git commit -m "Prediction $(date -u +%Y-%m-%d)"
+          # Anything can land on the branch while a forecast is running - a
+          # fix, another workflow, a rewritten history. Rebase and retry
+          # instead of failing a run that has already done its work.
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push; then
+              exit 0
+            fi
+            echo "push attempt $attempt was rejected; retrying"
+            sleep 5
+          done
+          echo "could not push the forecast after three attempts" >&2
+          exit 1
 
   deploy:
     needs: predict

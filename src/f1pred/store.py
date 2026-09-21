@@ -246,11 +246,21 @@ def log_ingest(
     )
 
 
-def already_ingested(con: duckdb.DuckDBPyConnection, source: str, scope: str) -> bool:
+def ingest_status(con: duckdb.DuckDBPyConnection, source: str, scope: str) -> str | None:
+    """What the last attempt at this scope recorded, or None if never tried.
+
+    Callers need the distinction between "ok" and "empty": an empty response
+    for a round of the live season usually means the round has not run yet,
+    which is a reason to come back rather than a reason to stop asking.
+    """
     row = con.execute(
         "SELECT status FROM ingest_log WHERE source = ? AND scope = ?", [source, scope]
     ).fetchone()
-    return row is not None and row[0] in ("ok", "empty")
+    return row[0] if row else None
+
+
+def already_ingested(con: duckdb.DuckDBPyConnection, source: str, scope: str) -> bool:
+    return ingest_status(con, source, scope) in ("ok", "empty")
 
 
 def table_counts() -> pd.DataFrame:

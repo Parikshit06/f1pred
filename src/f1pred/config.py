@@ -13,12 +13,14 @@ DATA = ROOT / "data"
 HTTP_CACHE = DATA / "cache"
 FASTF1_CACHE = DATA / "fastf1_cache"
 DB_PATH = DATA / "f1.duckdb"
-CONFIG_DIR = ROOT / "config"
 PREDICTIONS = ROOT / "predictions"
 REPORTS = ROOT / "reports"
-MODELS = ROOT / "models_out"
 
-for _p in (DATA, HTTP_CACHE, FASTF1_CACHE, PREDICTIONS, REPORTS, MODELS):
+# There were two more here - CONFIG_DIR and MODELS - that nothing imported.
+# MODELS was worse than unused: it was in this list, so importing f1pred at all
+# created an empty models_out/ next to the source. Ranker.save() takes the path
+# it writes to, so nothing needs a default one.
+for _p in (DATA, HTTP_CACHE, FASTF1_CACHE, PREDICTIONS, REPORTS):
     _p.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -117,19 +119,20 @@ DEFAULT_BLEND_WEIGHT = 0.6
 # much of the season is left.
 #
 # Calibrated the only way a predictive interval honestly can be - by whether it
-# covers. Swept on 2019-2022, where 6.0 put coverage at 82%, then graded on
+# covers. Swept on 2019-2022, where 6.0 put coverage at 81%, then graded on
 # 2023-2025, which the sweep never saw:
 #
 #                        coverage   mean band width
-#   fixed pace              45.0%              38.6
-#   calibrated (6.0)        70.8%              89.5
+#   fixed pace              45.8%              38.8
+#   calibrated (6.0)        70.8%              89.7
 #   target                  80.0%
 #
 # Still short of 80, and the method page says so rather than rounding it off.
-# The gain is concentrated early in the season, where the old band was worst:
-# with a third of the season run, coverage went from 30% to 90%.
+# The gain is concentrated early in the season, where the old band was worst.
 #
-# Re-fit with: f1pred.cli calibrate-spread
+# Those figures are a transcription of one run and will go stale; the run that
+# produced them is in reports/spread_calibration.json, which is what the method
+# page actually renders. Re-fit with: f1pred.cli calibrate-spread
 SEASON_PACE_UNCERTAINTY = 6.0  # finishing positions, per full season remaining
 
 # The exchange rate between the two scales, so the figure above can be fitted in

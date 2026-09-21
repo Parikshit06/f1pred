@@ -10,9 +10,10 @@ it - and records what the projection said against what actually happened. The
 output is a calibration table for the title probability itself.
 
 It is a small sample by construction: one season yields a handful of
-checkpoints, and there are only eight complete seasons in the data. That is
-stated with the result rather than hidden, and it is still far better evidence
-than none.
+checkpoints, and the seasons available are 2019 onward - 2018 is in the data
+but cannot be graded, because the checkpoints in it have fewer than the thirty
+prior races the ranker needs. That is stated with the result rather than
+hidden, and it is still far better evidence than none.
 """
 
 from __future__ import annotations

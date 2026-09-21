@@ -135,7 +135,7 @@ def no_track_record(monkeypatch):
 def test_report_renders_without_data(no_track_record):
     """The page must build before any prediction exists, or the first CI run
     fails on an empty repository."""
-    out = report.build(prediction=None, backtest_summary=None, calibration=None)
+    out = report.build(prediction=None)
     assert out.startswith("<!doctype html>")
     assert "No race scheduled" in out
     assert "<h1>" in out
@@ -336,7 +336,7 @@ def test_the_method_page_builds_and_links_back():
 def test_the_forecast_page_links_to_the_evidence():
     """The forecast page is deliberately thin; if the link to the working is
     missing, the thinness reads as having nothing to show."""
-    out = report.build(prediction=None, backtest_summary=None, calibration=None)
+    out = report.build(prediction=None)
     assert "method.html" in out
 
 
@@ -490,7 +490,7 @@ def test_both_pages_build_with_no_database(tmp_path, monkeypatch):
     assert not store.database_exists()
 
     assert report.scoreboard().empty, "a missing database invented a track record"
-    assert "method.html" in report.build(prediction=None, backtest_summary=None, calibration=None)
+    assert "method.html" in report.build(prediction=None)
     assert "Model specification" in method_page.build()
 
 
@@ -505,3 +505,85 @@ def test_a_missing_database_is_not_confused_with_an_empty_one(tmp_path, monkeypa
     duckdb.connect(str(db)).close()
     monkeypatch.setattr(config, "DB_PATH", db)
     assert store.database_exists(), "an existing database was treated as absent"
+
+
+# ---------------------------------------------------------------------------
+# Figures quoted in prose have to come from the data beside them
+# ---------------------------------------------------------------------------
+def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeypatch):
+    """It used to be typed out, and it drifted: the page read "16 of 16 correct
+    above 95%" at a true rate "as low as 81%" while the table directly above it
+    showed twelve checkpoints and a Wilson floor of 0.76. A sentence that
+    interprets a table has to be computed from that table."""
+    import json
+
+    from f1pred import config, method_page
+
+    monkeypatch.setattr(config, "REPORTS", tmp_path)
+    (tmp_path / "title_backtest.json").write_text(
+        json.dumps(
+            {
+                "brier": 0.1,
+                "checkpoints": [
+                    {
+                        "season": 2024,
+                        "after_round": 8,
+                        "races_left": 10,
+                        "favourite": "hamilton",
+                        "p_favourite": 0.97,
+                        "champion": "hamilton",
+                        "favourite_was_right": 1,
+                        "p_on_actual_champion": 0.97,
+                    },
+                    {
+                        "season": 2025,
+                        "after_round": 9,
+                        "races_left": 9,
+                        "favourite": "piastri",
+                        "p_favourite": 0.61,
+                        "champion": "norris",
+                        "favourite_was_right": 0,
+                        "p_on_actual_champion": 0.3,
+                    },
+                ],
+                "calibration": [
+                    {"bucket": "50-80%", "claimed": "0.61", "happened": "0.0", "n": "1", "ci_low": "0.0"},
+                    {"bucket": "over 95%", "claimed": "0.97", "happened": "1.0", "n": "1", "ci_low": "0.2"},
+                ],
+            }
+        )
+    )
+    html = method_page.build()
+    assert "1 of 1 correct above 95%" in html, "the count is not read off the table"
+    assert "as low as 20%" in html, "the Wilson floor is not read off the table"
+    assert "16 of 16" not in html
+    # The one miss is named, with the probability the table recorded for it.
+    assert "2025 r9 favoured Piastri at 61.0%" in html
+
+
+def test_the_pooled_calibration_line_adds_up_the_buckets(tmp_path, monkeypatch):
+    """The pooled figure was prose too, and quoted 62 races over a table that
+    summed to 61 - which was how the dropped-bucket bug stayed invisible."""
+    import json
+
+    from f1pred import config, method_page
+
+    monkeypatch.setattr(config, "REPORTS", tmp_path)
+    (tmp_path / "backtest.json").write_text(
+        json.dumps(
+            {
+                "summary": [],
+                "by_season": [],
+                "calibration": [
+                    {"bucket": "(0.0, 0.5]", "predicted": "0.400", "actual": "0.500", "n": "10"},
+                    {"bucket": "(0.5, 1.0]", "predicted": "0.800", "actual": "0.900", "n": "30"},
+                ],
+                "params": {},
+            }
+        )
+    )
+    html = method_page.build()
+    assert "Pooled over 40 races" in html
+    assert "stated 0.700, observed 0.800" in html
+    assert "under-confident" in html
+    assert "Buckets hold 10&ndash;30 races" in html

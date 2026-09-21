@@ -52,7 +52,7 @@ PIPELINE = [
         (
             "XGBoost ranker, objective <code>rank:ndcg</code>, trained on one group per race so "
             "each race contributes every pairwise comparison inside it rather than a single "
-            "winner label. 187 training races. Output is an unbounded score per driver."
+            "winner label. Output is an unbounded score per driver."
         ),
     ),
     (
@@ -118,6 +118,88 @@ NOT_MODELLED = [
         "Sprint calendar for future rounds is not in the source data, so sprint points are excluded from the projection. Bound: 8 points per sprint.",
     ),
 ]
+
+
+def _pooled_calibration(c: pd.DataFrame) -> str:
+    """The one-line reading of the calibration table, taken from the table.
+
+    It used to be prose with the figures typed into it, and the figures went
+    stale the first time the backtest was re-run: the page claimed a pooled
+    0.538 against 0.597 over 62 races while the table beside it summed to 61.
+    A number quoted next to the evidence for it has to come from the evidence.
+    """
+    n = pd.to_numeric(c["n"], errors="coerce")
+    pred = pd.to_numeric(c["predicted"], errors="coerce")
+    obs = pd.to_numeric(c["actual"], errors="coerce")
+    if not n.sum() or pred.isna().any() or obs.isna().any():
+        return ""
+    pooled_pred = float((pred * n).sum() / n.sum())
+    pooled_obs = float((obs * n).sum() / n.sum())
+    direction = "under" if pooled_obs > pooled_pred else "over"
+    return (
+        f"Buckets hold {int(n.min())}&ndash;{int(n.max())} races; read n before reading a row. "
+        f"Pooled over {int(n.sum())} races: stated {pooled_pred:.3f}, observed {pooled_obs:.3f} "
+        f"&mdash; mildly {direction}-confident."
+    )
+
+
+def _high_end(cal: pd.DataFrame, checkpoints: pd.DataFrame) -> str:
+    """How much a near-certain title call is actually worth, and the misses.
+
+    Both come out of the graded checkpoints. Hand-written they drifted: the
+    page read "16 of 16 correct above 95%" and quoted Bottas at 78.4% against
+    a table on the same page showing twelve and 77.2%.
+    """
+    # "over 95%", not "80-95%" - both contain the number, and the loose match
+    # read the wrong row.
+    top = cal[cal["bucket"].astype(str).str.startswith("over")]
+    text = "<p class='cap' style='margin-top:20px'><b>Reading the high end.</b> "
+    if not top.empty:
+        row = top.iloc[0]
+        n = int(float(row["n"]))
+        hits = round(float(row["happened"]) * n)
+        text += (
+            f"{hits} of {n} correct above 95%. On n={n} that is consistent with a true rate as "
+            f"low as {float(row['ci_low']) * 100:.0f}% (Wilson, 95%). "
+        )
+    text += (
+        "Treat a published 99.9% as <em>settled on current form and arithmetic</em>, not as a "
+        "calibrated one-in-a-thousand."
+    )
+
+    missed = checkpoints[checkpoints["favourite_was_right"] == 0]
+    if not missed.empty:
+        surnames = _surnames()
+
+        def name(d: str) -> str:
+            return surnames.get(d, d.replace("_", " ").title())
+
+        parts = [
+            f"{int(m.season)} r{int(m.after_round)} favoured {name(m.favourite)} "
+            f"at {m.p_favourite * 100:.1f}%"
+            for m in missed.itertuples()
+        ]
+        text += " Recorded misses: " + "; ".join(parts) + "."
+    return text + "</p>"
+
+
+def _earliest_checkpoint(held: dict) -> str:
+    """The first checkpoint of a season, before and after calibration.
+
+    Quoted rather than computed, this said "a third of the way in, it went
+    from 25% to 90%" while the constant it describes had 30% written beside
+    it in config.py. Neither could be checked against anything, so the sweep
+    now writes the breakdown out and the sentence reads it.
+    """
+    before = (held.get("before") or {}).get("by_elapsed") or {}
+    after = (held.get("after") or {}).get("by_elapsed") or {}
+    shared = sorted(set(before) & set(after), key=float)
+    if not shared:
+        return ""
+    first = shared[0]
+    return (
+        f" &mdash; {float(first):.0%} of the way in, it went from {before[first]:.0%} to {after[first]:.0%}"
+    )
 
 
 def build(standalone: bool = True) -> str:
@@ -263,11 +345,9 @@ def build(standalone: bool = True) -> str:
         s.append(
             "<section class='band'><div class='lab'><b>Calibration</b><span>make verify</span></div>"
             "<div class='body'><p class='cap'>Stated probability against observed frequency. "
-            "Buckets hold 7&ndash;24 races; read n before reading a row. Pooled over 62 races: "
-            "stated 0.538, observed 0.597 &mdash; mildly under-confident. "
-            "<code>make verify</code> returns this as a warning, not a pass.</p>"
-            + rr.table(c)
-            + "</div></section>"
+            f"{_pooled_calibration(c)} <code>make verify</code> tests each bucket against its "
+            "own Wilson interval rather than on the raw gap, because a bucket this size "
+            "cannot tell a real miss from sampling noise.</p>" + rr.table(c) + "</div></section>"
         )
 
     # ---- title projection, graded ---------------------------------------
@@ -283,14 +363,7 @@ def build(standalone: bool = True) -> str:
         )
         if not cal.empty:
             body += rr.table(cal)
-            body += (
-                "<p class='cap' style='margin-top:20px'><b>Reading the high end.</b> 16 of 16 "
-                "correct above 95%. On n=16 that is consistent with a true rate as low as 81% "
-                "(Wilson, 95%). Treat a published 99.9% as <em>settled on current form and "
-                "arithmetic</em>, not as a calibrated one-in-a-thousand. Recorded misses: 2020 "
-                "r15 favoured Bottas at 78.4%; 2021 r20 favoured Hamilton at 62.5%; 2025 "
-                "favoured Piastri at r8 and r13.</p>"
-            )
+            body += _high_end(cal, f)
         show = f[
             [
                 "season",
@@ -354,8 +427,8 @@ def build(standalone: bool = True) -> str:
             f"<p class='cap'>Size chosen on {fit[0] if fit else '2019'}&ndash;"
             f"{fit[-1] if fit else '2022'} and graded on {grade[0] if grade else '2023'}&ndash;"
             f"{grade[-1] if grade else '2025'}, which the sweep never saw. Still short of 80%, and "
-            "the gain is concentrated early in the season where the old band was worst &mdash; a "
-            "third of the way in, it went from 25% to 90%.</p>"
+            "the gain is concentrated early in the season where the old band was worst"
+            f"{_earliest_checkpoint(held)}.</p>"
         )
         s.append(
             "<section><div class='lab'><b>Does the range hold up?</b>"

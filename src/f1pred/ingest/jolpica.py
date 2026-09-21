@@ -17,7 +17,7 @@ import pandas as pd
 
 from .. import config
 from ..http_cache import RateLimitedSession
-from ..store import already_ingested, connect, log_ingest, upsert
+from ..store import already_ingested, connect, ingest_status, log_ingest, upsert
 
 log = logging.getLogger(__name__)
 
@@ -319,7 +319,7 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
         if force or not already_ingested(con, "drivers", str(season)) or season == config.CURRENT_SEASON:
             url = f"{config.JOLPICA_BASE}/{season}/drivers.json?limit={{limit}}&offset={{offset}}"
             try:
-                records = session.paginate(url, ("DriverTable", "Drivers"))
+                records = session.paginate(url, ("DriverTable", "Drivers"), refresh=force)
                 n = upsert(con, "raw_drivers", parse_drivers(records, season), ["season", "driver_id"])
                 counts["drivers"] = n
                 log_ingest(con, "drivers", str(season), "ok" if n else "empty", f"{n} rows")
@@ -336,7 +336,15 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
 
             url = f"{config.JOLPICA_BASE}/{season}/{suffix}.json?limit={{limit}}&offset={{offset}}"
             try:
-                records = session.paginate(url, key_path)
+                # The live season is re-read every run, so it must come off
+                # the wire and not out of the response cache. It did not: the
+                # skip below is bypassed for the current season, but the fetch
+                # underneath it hit a cache keyed on URL, and the season-wide
+                # results URL never changes. So "always refresh the current
+                # season" re-parsed the same bytes every time and the results
+                # of a race that had since been run were never ingested at all
+                # until something cleared the cache.
+                records = session.paginate(url, key_path, refresh=force or season == config.CURRENT_SEASON)
                 df = parser(records)
                 n = upsert(con, table, df, keys)
                 counts[source] = n
@@ -359,11 +367,26 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
             total = 0
             for rnd in rounds:
                 scope = f"{season}:{rnd}"
-                if not force and already_ingested(con, source, scope):
+                status = ingest_status(con, source, scope)
+
+                # `rounds` is the whole calendar, including races that have not
+                # happened yet, and asking for those returns an empty 200. Left
+                # alone that empty answer gets recorded as done and cached by
+                # URL, so the round is never asked about again - the standings
+                # for the back half of a live season stay permanently missing,
+                # and with them champ_*_before and the entire championship
+                # projection, which quietly returns nothing once the last
+                # ingested round is behind the race being predicted.
+                #
+                # So an empty round of the live season is a "come back later",
+                # and coming back has to bypass the response cache too.
+                stale = status == "empty" and season == config.CURRENT_SEASON
+                if not force and status in ("ok", "empty") and not stale:
                     continue
+
                 url = f"{config.JOLPICA_BASE}/{season}/{rnd}/{suffix}.json?limit={{limit}}&offset={{offset}}"
                 try:
-                    df = parser(session.paginate(url, key_path))
+                    df = parser(session.paginate(url, key_path, refresh=force or stale))
                     n = upsert(con, table, df, keys)
                     total += n
                     # An empty result is normal, not a failure: a cancelled race

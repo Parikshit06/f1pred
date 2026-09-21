@@ -213,7 +213,8 @@ MAX_FIELD = 24
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
-def _load() -> pd.DataFrame:
+def _load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """results, qualifying, standings, practice pace - in that order."""
     with connect(read_only=True) as con:
         results = con.execute(
             """

@@ -69,7 +69,7 @@ class Ranker:
 
     @property
     def booster(self) -> xgb.XGBRanker:
-        """First member. SHAP explains one tree ensemble, not seven."""
+        """First member. SHAP explains one tree ensemble, not an average of them."""
         return self.boosters[0]
 
     def score(self, df: pd.DataFrame) -> np.ndarray:

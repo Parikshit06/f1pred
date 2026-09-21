@@ -353,6 +353,18 @@ def main(argv: list[str] | None = None) -> int:
                                 "coverage": float(frame["inside"].mean()),
                                 "width": float(frame["width"].mean()),
                                 "n": len(frame),
+                                # Coverage by how much of the season had been
+                                # run. The headline average hides the thing the
+                                # calibration was for: the old band was worst
+                                # early, so the method page quotes the earliest
+                                # checkpoint and needs it written down here
+                                # rather than typed into the prose.
+                                "by_elapsed": {
+                                    f"{k:.2f}": float(v)
+                                    for k, v in frame.groupby(frame["elapsed"].round(2))["inside"]
+                                    .mean()
+                                    .items()
+                                },
                             }
                             for label, frame in result["graded"].items()
                         },
@@ -370,8 +382,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "dashboard":
-        import pandas as pd
-
         from . import report
 
         prediction = None
@@ -379,16 +389,10 @@ def main(argv: list[str] | None = None) -> int:
         if preds:
             prediction = max(preds, key=lambda p: p["generated_at_utc"])
 
-        summary = calibration = None
-        params = None
-        bt = config.REPORTS / "backtest.json"
-        if bt.exists():
-            data = json.loads(bt.read_text())
-            summary = pd.DataFrame(data["summary"]).set_index("method")
-            calibration = pd.DataFrame(data["calibration"])
-            params = data.get("params")
-
-        path = report.write(prediction, summary, calibration, params)
+        # The accuracy tables are the method page's job and it reads
+        # reports/backtest.json for itself; the forecast page only needs the
+        # latest logged prediction.
+        path = report.write(prediction)
         print(f"wrote {path}")
 
         from . import method_page
