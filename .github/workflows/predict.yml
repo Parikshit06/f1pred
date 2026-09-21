@@ -1,0 +1,82 @@
+name: Predict
+
+# Race weekends: Friday (pre-qualifying), Saturday evening (grid known),
+# and Monday to grade the result once it is in.
+on:
+  schedule:
+    - cron: "0 6 * * 5"    # Fri 06:00 UTC - before qualifying
+    - cron: "0 19 * * 6"   # Sat 19:00 UTC - after qualifying
+    - cron: "0 8 * * 1"    # Mon 08:00 UTC - grade and refresh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: predict
+  cancel-in-progress: false
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # The HTTP cache is what keeps us inside jolpica's rate limit. Without
+      # it every run re-fetches nine seasons.
+      - name: Restore data cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: jolpica-${{ github.run_id }}
+          restore-keys: jolpica-
+
+      - name: Ingest
+        run: python -m f1pred.cli ingest-jolpica --seasons 2018-2026
+
+      - name: Validate
+        run: python -m f1pred.cli validate
+
+      - name: Features
+        run: python -m f1pred.cli build-features
+
+      - name: Backtest
+        run: python -m f1pred.cli backtest --start-season 2022 --retrain-every 2
+
+      - name: Predict
+        run: python -m f1pred.cli predict --next
+
+      - name: Dashboard
+        run: python -m f1pred.cli dashboard
+
+      - name: Commit prediction
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add predictions reports
+          git diff --staged --quiet || git commit -m "Prediction $(date -u +%Y-%m-%d)"
+          git push
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
+
+  deploy:
+    needs: predict
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,397 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'><title>Method and accuracy</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"><style>
+*,*::before,*::after{box-sizing:border-box}
+/* SVG elements ignore the HTML hidden attribute without this. Leaving it out
+   parks the hover crosshair and its dots at the viewBox origin, which renders
+   as a stray line and a stray dot in the corner of the chart. */
+[hidden]{display:none!important}
+
+:root{
+  --paper:#fbfaf8; --band:#f2f0ec; --ink:#0c0c0d; --ink-2:#4d4d52; --ink-3:#86868d;
+  --rule:#0c0c0d; --hair:#dedbd5;
+  --accent:#c8102e;            /* signal red: kerbs, lights, the live marker */
+  --good:#12704a; --bad:#a8172e;
+  --car-edge:rgba(12,12,13,.32); --kerb-2:#ffffff;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --t-mercedes:#00917C; --t-ferrari:#B00026; --t-mclaren:#B57500; --t-red_bull:#2F63AE; --t-aston_martin:#1C7A5A; --t-alpine:#0A6E99; --t-williams:#2B7FB5; --t-rb:#4457C4; --t-alphatauri:#3F6E88; --t-haas:#5C6469; --t-audi:#0A7D22; --t-sauber:#1E8F30; --t-alfa:#A02038; --t-cadillac:#8A6B12; --t-renault:#7A6E00; --t-racing_point:#B44D82; --t-force_india:#B44D82; --t-toro_rosso:#2A6FD1; --t-default:#646E7B;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0b0b0c; --band:#141416; --ink:#f4f3f0; --ink-2:#a3a29d; --ink-3:#6e6e74;
+    --rule:#f4f3f0; --hair:#232326;
+    --accent:#ff2d3f;
+    --good:#3cc98a; --bad:#ff6b7a;
+    --car-edge:rgba(255,255,255,.26); --kerb-2:#d8d5cf;
+    --t-mercedes:#00A188; --t-ferrari:#E04A66; --t-mclaren:#BE8200; --t-red_bull:#5288D4; --t-aston_martin:#2E9B75; --t-alpine:#2C8FBF; --t-williams:#6BB2DE; --t-rb:#7C93F0; --t-alphatauri:#6E9AB4; --t-haas:#98A2A9; --t-audi:#2FA544; --t-sauber:#46B657; --t-alfa:#D1566C; --t-cadillac:#B9932B; --t-renault:#A89A1A; --t-racing_point:#DD7FAE; --t-force_india:#DD7FAE; --t-toro_rosso:#6B9BE8; --t-default:#8A94A6;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0b0b0c; --band:#141416; --ink:#f4f3f0; --ink-2:#a3a29d; --ink-3:#6e6e74;
+  --rule:#f4f3f0; --hair:#232326;
+  --accent:#ff2d3f;
+  --good:#3cc98a; --bad:#ff6b7a;
+  --car-edge:rgba(255,255,255,.26); --kerb-2:#d8d5cf;
+  --t-mercedes:#00A188; --t-ferrari:#E04A66; --t-mclaren:#BE8200; --t-red_bull:#5288D4; --t-aston_martin:#2E9B75; --t-alpine:#2C8FBF; --t-williams:#6BB2DE; --t-rb:#7C93F0; --t-alphatauri:#6E9AB4; --t-haas:#98A2A9; --t-audi:#2FA544; --t-sauber:#46B657; --t-alfa:#D1566C; --t-cadillac:#B9932B; --t-renault:#A89A1A; --t-racing_point:#DD7FAE; --t-force_india:#DD7FAE; --t-toro_rosso:#6B9BE8; --t-default:#8A94A6;
+}
+
+body{margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--sans); font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+
+/* Kerbing. Painted red-and-white at 45 degrees on every circuit on the
+   calendar, which makes it the one piece of F1 iconography that is a pattern
+   rather than somebody's trademark. Used as a 5px band under the masthead and
+   above the footer, and nowhere else.
+   A gradient wash sat here before. It was the generative-AI house style and it
+   is gone. */
+.kerb{height:6px; width:100%;
+  background:repeating-linear-gradient(135deg,
+    var(--accent) 0 10px, var(--kerb-2) 10px 20px)}
+.wrap{max-width:1140px; margin:0 auto; padding-inline:20px; padding-block:0 0}
+h1,h2,h3{margin:0; text-wrap:balance; letter-spacing:-.02em; font-weight:700}
+p{margin:0}
+.mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* ---- top bar: solid, dense, no blur. A broadcast strap, not a web header. */
+.bar{background:var(--rule); color:var(--paper)}
+.bar .inner{max-width:1140px; margin:0 auto; padding:0 20px; min-height:34px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px 20px;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase}
+.bar .sep{flex:1}
+.bar b{font-weight:600}
+/* The bar inverts the page, so a link in it must take the bar's own ink, not
+   the accent - the accent on the dark strap is unreadable. */
+.bar a{color:color-mix(in srgb, var(--paper) 78%, transparent); text-decoration:none;
+  border-bottom:1px solid color-mix(in srgb, var(--paper) 35%, transparent)}
+.bar a:hover{color:var(--paper); border-bottom-color:var(--paper)}
+.lights{display:inline-flex; gap:3px; align-items:center; margin-right:4px}
+.lights i{width:6px; height:6px; border-radius:50%;
+  background:color-mix(in srgb, var(--paper) 22%, transparent);
+  animation:lights 3.2s ease-in-out 1 forwards; animation-delay:calc(var(--n) * 300ms)}
+@keyframes lights{
+  0%{background:color-mix(in srgb,var(--paper) 22%,transparent)}
+  9%,45%{background:#ff2d20; box-shadow:0 0 6px #ff2d2099}
+  53%,100%{background:color-mix(in srgb,var(--paper) 22%,transparent); box-shadow:none}
+}
+
+/* ---- masthead --------------------------------------------------------- */
+.mast{padding:52px 0 30px}
+.mast h1{font-size:clamp(2.3rem,7vw,4.4rem); line-height:.96; font-weight:800;
+  letter-spacing:-.035em}
+.kicker{font-family:var(--mono); font-size:11px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:14px}
+.mast .sub{margin-top:16px; max-width:56ch; color:var(--ink-2); font-size:1rem}
+.facts{display:flex; flex-wrap:wrap; gap:0 36px; margin-top:26px;
+  padding-top:18px; border-top:2px solid var(--rule)}
+.facts div{padding-block:4px}
+.facts dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3)}
+.facts dd{margin:2px 0 0; font-family:var(--mono); font-size:.95rem; font-weight:500}
+
+/* ---- section: label in the margin, content beside it ------------------- */
+/* Alternating full-bleed bands give the page rhythm without wrapping anything
+   in a card. */
+section{display:grid; grid-template-columns:132px 1fr; gap:0 28px;
+  padding-block:44px; border-top:1px solid var(--hair); position:relative}
+section::before{content:""; position:absolute; inset:0; z-index:-1;
+  left:50%; transform:translateX(-50%); width:100vw; max-width:100vw;
+  background:var(--band); opacity:0}
+section.band::before{opacity:1}
+section > .lab{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3); padding-top:3px}
+section > .lab b{display:block; color:var(--ink); font-weight:600; font-size:11px;
+  letter-spacing:.12em; margin-bottom:6px}
+section > .body{min-width:0}
+.cap{color:var(--ink-2); font-size:.9rem; max-width:64ch; margin-bottom:18px}
+.cap a, footer a{color:var(--ink); text-decoration:underline;
+  text-decoration-color:var(--ink-3); text-underline-offset:3px;
+  text-decoration-thickness:1px}
+.cap a:hover, footer a:hover{text-decoration-color:var(--accent)}
+@media (max-width:760px){
+  section{grid-template-columns:1fr; gap:10px}
+  section > .lab{padding-top:0}
+}
+
+/* ---- data tables: rules, not cards ------------------------------------ */
+.grid5{display:grid;
+  grid-template-columns:28px 3px minmax(110px,1.5fr) 52px 60px 56px 56px 92px;
+  align-items:center; gap:0 10px}
+.grid4{display:grid; grid-template-columns:28px 3px minmax(110px,1.6fr) 60px 56px 56px;
+  align-items:center; gap:0 10px}
+.colhead{padding:0 0 7px; border-bottom:2px solid var(--rule);
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--ink-3)}
+.colhead span{text-align:right}
+.colhead span:nth-child(3){text-align:left}
+.row{padding:9px 0; border-bottom:1px solid var(--hair);
+  transition:background .18s, box-shadow .18s;
+  animation:slide .4s cubic-bezier(.2,.7,.3,1) backwards;
+  animation-delay:calc(var(--i,0) * 35ms + 60ms)}
+/* Hovering a row lifts its constructor colour into the margin - the car you
+   are looking at, marked, without moving anything. */
+.row:hover{background:color-mix(in srgb,var(--tc,var(--ink)) 7%,transparent);
+  box-shadow:inset 3px 0 0 var(--tc,var(--ink))}
+.row:last-child{border-bottom:0}
+@keyframes slide{from{opacity:0; transform:translateX(-6px)} to{opacity:1; transform:none}}
+.pos{font-family:var(--mono); font-size:.92rem; font-weight:600; color:var(--ink-3);
+  text-align:right; font-variant-numeric:tabular-nums}
+.row.podium .pos{color:var(--ink)}
+/* A hairline keeps a pale livery visible whichever surface it lands on. */
+.car{width:3px; height:22px; border-radius:2px; background:var(--tc,var(--ink-3));
+  box-shadow:inset 0 0 0 .5px var(--car-edge)}
+.who{min-width:0}
+.name{font-weight:600; font-size:.92rem; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; line-height:1.25}
+.n-short{display:none}
+@media (max-width:560px){ .n-full{display:none} .n-short{display:inline} }
+.team{font-family:var(--mono); font-size:9.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--ink-3)}
+.v{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right;
+  font-size:.86rem}
+.v.lead{font-weight:600; font-size:.95rem}
+.v.dim{color:var(--ink-3)}
+/* The 10th-90th percentile under the projected total. A single number reads as
+   a promise; the range is the actual claim. */
+.rng{display:block; font-size:9.5px; font-weight:400; color:var(--ink-3);
+  letter-spacing:.02em; margin-top:1px}
+
+@media (max-width:860px){
+  .grid5{grid-template-columns:26px 3px minmax(96px,1fr) 52px 66px 56px}
+  .grid5 > .c-points, .colhead.grid5 > span:nth-child(7){display:none}
+}
+@media (max-width:480px){
+  .grid5{grid-template-columns:22px 3px minmax(80px,1fr) 56px 48px}
+  .grid5 > .c-start, .colhead.grid5 > span:nth-child(4){display:none}
+  .grid4{grid-template-columns:22px 3px minmax(80px,1fr) 56px 48px}
+  .grid4 > .c-third, .colhead.grid4 > span:nth-child(5){display:none}
+}
+
+/* ---- the title arithmetic --------------------------------------------- */
+.titlerace{display:flex; flex-wrap:wrap; align-items:baseline; gap:12px 34px;
+  padding:14px 0 20px; margin-bottom:22px; border-bottom:1px solid var(--hair)}
+.titlerace dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3)}
+.titlerace dd{margin:3px 0 0; font-family:var(--mono); font-size:1.45rem;
+  font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.titlerace dd .of{font-size:.72rem; font-weight:400; color:var(--ink-3);
+  margin-left:5px; letter-spacing:.04em}
+.titlerace .verdict{flex:1 1 240px; color:var(--ink-2); font-size:.92rem;
+  align-self:center}
+.titlerace .verdict b{color:var(--ink); font-weight:600}
+
+/* ---- two panels side by side (championship) --------------------------- */
+.pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:34px}
+.panel h3{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-2); margin-bottom:10px}
+.gridC{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 58px 52px;
+  align-items:center; gap:0 10px}
+.gridT{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 58px 52px;
+  align-items:center; gap:0 10px}
+
+/* ---- plain tables ------------------------------------------------------ */
+.scroll{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:.86rem}
+th,td{padding:8px 12px 8px 0; text-align:left; border-bottom:1px solid var(--hair);
+  white-space:nowrap}
+thead th{font-family:var(--mono); font-size:9.5px; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--ink-3); font-weight:600;
+  border-bottom:2px solid var(--rule)}
+tbody tr:last-child td{border-bottom:0}
+td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right}
+th.n{text-align:right}
+tr.me td{font-weight:600}
+tr.me td:first-child{box-shadow:inset 3px 0 0 var(--ink); padding-left:10px}
+.best{color:var(--good)}
+
+/* ---- chart ------------------------------------------------------------- */
+.chart{position:relative; width:100%}
+.chart svg{display:block; width:100%; height:auto; overflow:visible}
+.chart .gridline{stroke:var(--hair); stroke-width:1}
+.chart .band{stroke:none; opacity:.13}
+.chart .axis{stroke:var(--hair); stroke-width:1}
+.chart text{font-family:var(--mono); font-size:10px; fill:var(--ink-3)}
+.chart text.lbl{font-size:10.5px; font-weight:600; fill:var(--ink-2)}
+.chart .now{stroke:var(--accent); stroke-width:1; stroke-dasharray:2 3}
+/* Lines draw themselves in once, left to right, the way a lap builds. The
+   dash offset is set from the measured path length in script so the timing is
+   right whatever the shape. */
+.chart .ser{fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+.chart .ser.draw{animation:draw 1.1s cubic-bezier(.35,.1,.25,1) backwards}
+@keyframes draw{from{stroke-dashoffset:var(--len)} to{stroke-dashoffset:0}}
+.chart .pt{opacity:0; animation:fadein .4s ease-out .9s forwards}
+@keyframes fadein{to{opacity:1}}
+.chart .proj{stroke-dasharray:5 4; opacity:.95}
+.chart .pt{stroke:var(--paper); stroke-width:2}
+.chart .hx{stroke:var(--ink-3); stroke-width:1}
+.chart .hp{stroke:var(--paper); stroke-width:2}
+.chart .hit{fill:transparent; cursor:crosshair}
+.tip{position:absolute; pointer-events:none; z-index:5; min-width:132px;
+  background:var(--paper); border:1px solid var(--rule); border-radius:4px;
+  padding:8px 10px; box-shadow:0 8px 24px -10px rgba(0,0,0,.45);
+  font-family:var(--mono); font-size:11px; line-height:1.5}
+.tip .rd{color:var(--ink-3); letter-spacing:.1em; text-transform:uppercase;
+  font-size:9.5px; margin-bottom:5px}
+.tip .r{display:flex; align-items:center; gap:7px; justify-content:space-between}
+.tip .r i{width:8px; height:2px; border-radius:1px; flex:none}
+.tip .r b{font-weight:600; margin-left:auto; font-variant-numeric:tabular-nums}
+.tip .r em{font-style:normal; color:var(--ink-3); font-size:9.5px}
+.legend{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:14px;
+  font-family:var(--mono); font-size:10.5px; color:var(--ink-2)}
+.legend span{display:inline-flex; align-items:center; gap:6px}
+.legend i{width:14px; height:2px; background:currentColor; border-radius:1px}
+
+/* ---- numbered pipeline: these ARE a sequence, which is why they are numbered */
+.steps{list-style:none; margin:0; padding:0; display:grid; gap:22px}
+.steps li{display:grid; grid-template-columns:30px 1fr; gap:0 16px; align-items:start}
+.steps .sn{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ink-3);
+  border-top:2px solid var(--ink); padding-top:5px; margin-top:4px}
+.steps h3{font-size:.98rem; margin-bottom:5px}
+.steps p{color:var(--ink-2); font-size:.92rem; max-width:70ch}
+.steps code, .feat code, .cap code{font-family:var(--mono); font-size:.82em;
+  background:var(--band); padding:1px 5px; border-radius:2px; color:var(--ink)}
+td.feat{white-space:normal; color:var(--ink-2); line-height:1.7}
+.lab span{display:block; margin-top:4px}
+
+/* ---- footer ------------------------------------------------------------ */
+.notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:20px 34px}
+.notes p{color:var(--ink-2); font-size:.86rem}
+.notes b{color:var(--ink); font-weight:600}
+footer{border-top:2px solid var(--rule); margin-top:8px; padding:20px 0 56px;
+  display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between;
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important; transition:none!important}
+}
+</style></head><body><div class='bar'><div class='inner'><b>Method and accuracy</b><span class='sep'></span><a href='index.html'>&larr; Back to the forecast</a></div></div><div class='wrap'><header class='mast'><div class='kicker'>f1pred</div><h1>Model specification</h1><p class='sub'>Architecture, features, and measured performance. Each section names the command that regenerates it.</p></header><div class='kerb'></div><section><div class='lab'><b>Pipeline</b><span>src/f1pred</span></div><div class='body'><ol class='steps'><li><div class='sn'>1</div><div><h3>Rank</h3><p>XGBoost ranker, objective <code>rank:ndcg</code>, trained on one group per race so each race contributes every pairwise comparison inside it rather than a single winner label. 187 training races. Output is an unbounded score per driver.</p></div></li><li><div class='sn'>2</div><div><h3>Convert</h3><p>Plackett-Luce: P(driver leads the field) &prop; exp(score / T). T is fitted by log loss on held-out races and re-fitted from a trailing 24-race window.</p></div></li><li><div class='sn'>3</div><div><h3>Simulate</h3><p>10,000 races. Per run: pace noise at 0.55&times; the spread in model score, a safety-car draw at the circuit's historical rate, and an independent retirement draw per car from its own recent DNF rate. Before qualifying, each run samples its own grid from the qualifying model.</p></div></li><li><div class='sn'>4</div><div><h3>Blend</h3><p>Published win probability is a fitted mix of the closed-form ranking and the simulation. Podium and points probabilities are read off the simulated finishing positions directly.</p></div></li><li><div class='sn'>5</div><div><h3>Project</h3><p>Remaining calendar run 10,000 times with the same noise model, carrying points already scored. Returns mean, 10th and 90th percentile, expected wins, and title probability.</p></div></li></ol></div></section><section class='band'><div class='lab'><b>Features</b><span>38 in total</span></div><div class='body'><p class='cap'>All rolling windows shift by one race before aggregating, through a single shared helper. Retirements are excluded from pace averages and counted separately as unreliability.</p><div class='scroll'><table><tr><td>Driver form</td><td class='feat'><code>drv_avg_finish_3</code>, <code>drv_avg_finish_5</code>, <code>drv_positions_gained_5</code>, <code>drv_podium_rate_10</code>, <code>drv_top10_rate_10</code>, <code>drv_points_rate_5</code></td></tr><tr><td>Car pace</td><td class='feat'><code>team_pace_gap_pct</code>, <code>drv_pace_gap_pct</code>, <code>team_pace_trend</code>, <code>team_avg_quali_5</code>, <code>drv_avg_quali_5</code>, <code>drv_pole_rate_10</code></td></tr><tr><td>Reliability</td><td class='feat'><code>drv_dnf_rate_10</code>, <code>team_dnf_rate_10</code>, <code>circuit_dnf_rate</code></td></tr><tr><td>This circuit</td><td class='feat'><code>drv_circuit_avg_finish</code>, <code>team_circuit_avg_finish</code>, <code>circuit_overtaking_score</code>, <code>circuit_pole_win_rate</code>, <code>drv_circuit_starts</code></td></tr><tr><td>Known after qualifying</td><td class='feat'><code>grid</code>, <code>quali_position</code>, <code>quali_gap_to_pole_pct</code>, <code>quali_gap_to_teammate_pct</code></td></tr><tr><td>Practice, when available</td><td class='feat'><code>fp_long_run_gap_pct</code>, <code>fp_best_gap_pct</code>, <code>practice_available</code></td></tr></table></div></div></section><section><div class='lab'><b>Race accuracy</b><span>make backtest</span></div><div class='body'><p class='cap'>Walk-forward. Each race predicted by a model trained only on earlier races, scored against baselines requiring no model. Lower log loss and Brier are better. Hyperparameters fitted on 2022&ndash;23, bounded at both ends, and not re-fitted on the reported window.</p><div class='scroll'><table><thead><tr><th>approach</th><th>top 5</th><th>podium</th><th>winner</th><th>ndcg@5</th><th>log loss</th><th>brier</th><th>races</th></tr></thead><tbody><tr><td class=''>Grid order</td><td class='n best'>3.919</td><td class='n best'>2.065</td><td class='n best'>0.581</td><td class='n best'>0.898</td><td class='n'>1.493</td><td class='n'>0.617</td><td class='n'>62</td></tr><tr class='me'><td class=''>This model</td><td class='n'>3.855</td><td class='n'>1.968</td><td class='n best'>0.581</td><td class='n'>0.889</td><td class='n best'>1.167</td><td class='n best'>0.567</td><td class='n'>62</td></tr><tr><td class=''>Championship leader</td><td class='n'>3.452</td><td class='n'>1.694</td><td class='n'>0.306</td><td class='n'>0.809</td><td class='n'>2.197</td><td class='n'>0.833</td><td class='n'>62</td></tr><tr><td class=''>Recent driver form</td><td class='n'>3.403</td><td class='n'>1.484</td><td class='n'>0.274</td><td class='n'>0.789</td><td class='n'>2.129</td><td class='n'>0.88</td><td class='n'>62</td></tr><tr><td class=''>Team form</td><td class='n'>3.065</td><td class='n'>1.452</td><td class='n'>0.306</td><td class='n'>0.766</td><td class='n'>2.322</td><td class='n'>0.89</td><td class='n'>62</td></tr></tbody></table></div><p class='cap' style='margin-top:26px'>By season. 2026 is live and incomplete.</p><div class='scroll'><table><thead><tr><th>season</th><th>approach</th><th>top 5</th><th>podium</th><th>winner</th><th>ndcg@5</th><th>log loss</th><th>brier</th><th>races</th></tr></thead><tbody><tr><td class=''>2024</td><td class='n'>Grid order</td><td class='n'>4</td><td class='n'>2</td><td class='n'>0.458</td><td class='n'>0.883</td><td class='n'>1.72</td><td class='n'>0.695</td><td class='n'>24</td></tr><tr><td class=''>2024</td><td class='n'>This model</td><td class='n'>4.042</td><td class='n'>1.708</td><td class='n'>0.458</td><td class='n'>0.868</td><td class='n'>1.576</td><td class='n'>0.694</td><td class='n'>24</td></tr><tr><td class=''>2025</td><td class='n'>Grid order</td><td class='n'>4</td><td class='n'>2.25</td><td class='n'>0.667</td><td class='n'>0.925</td><td class='n'>1.122</td><td class='n'>0.568</td><td class='n'>24</td></tr><tr><td class=''>2025</td><td class='n'>This model</td><td class='n'>3.917</td><td class='n'>2.292</td><td class='n'>0.625</td><td class='n'>0.918</td><td class='n'>0.945</td><td class='n'>0.518</td><td class='n'>24</td></tr><tr><td class=''>2026</td><td class='n'>Grid order</td><td class='n'>3.643</td><td class='n'>1.857</td><td class='n'>0.643</td><td class='n'>0.876</td><td class='n'>1.738</td><td class='n'>0.57</td><td class='n'>14</td></tr><tr><td class=''>2026</td><td class='n'>This model</td><td class='n'>3.429</td><td class='n'>1.857</td><td class='n'>0.714</td><td class='n'>0.874</td><td class='n'>0.849</td><td class='n'>0.436</td><td class='n'>14</td></tr></tbody></table></div></div></section><section class='band'><div class='lab'><b>Calibration</b><span>make verify</span></div><div class='body'><p class='cap'>Stated probability against observed frequency. Buckets hold 7&ndash;24 races; read n before reading a row. Pooled over 62 races: stated 0.538, observed 0.597 &mdash; mildly under-confident. <code>make verify</code> returns this as a warning, not a pass.</p><div class='scroll'><table><thead><tr><th>bucket</th><th>predicted</th><th>actual</th><th>n</th></tr></thead><tbody><tr><td class=''>(0.19, 0.379]</td><td class='n'>0.301</td><td class='n'>0.25</td><td class='n'>12</td></tr><tr><td class=''>(0.379, 0.569]</td><td class='n'>0.479</td><td class='n'>0.75</td><td class='n'>24</td></tr><tr><td class=''>(0.569, 0.759]</td><td class='n'>0.651</td><td class='n'>0.5</td><td class='n'>18</td></tr><tr><td class=''>(0.759, 0.948]</td><td class='n'>0.84</td><td class='n'>0.714</td><td class='n'>7</td></tr></tbody></table></div></div></section><section><div class='lab'><b>Title projection</b><span>make title-backtest</span></div><div class='body'><p class='cap'>Each completed season stopped at four checkpoints; title projected from the model as it stood at that point; compared against the eventual champion. 27 checkpoints across 7 seasons. Favourite correct 85% of the time, Brier 0.112.</p><div class='scroll'><table><thead><tr><th>bucket</th><th>claimed</th><th>happened</th><th>n</th><th>ci_low</th><th>ci_high</th></tr></thead><tbody><tr><td class=''>50-80%</td><td class='n'>0.663</td><td class='n'>0.556</td><td class='n'>9</td><td class='n'>0.267</td><td class='n'>0.811</td></tr><tr><td class=''>80-95%</td><td class='n'>0.857</td><td class='n'>1.0</td><td class='n'>2</td><td class='n'>0.342</td><td class='n'>1.0</td></tr><tr><td class=''>over 95%</td><td class='n'>0.996</td><td class='n'>1.0</td><td class='n'>16</td><td class='n'>0.806</td><td class='n'>1.0</td></tr></tbody></table></div><p class='cap' style='margin-top:20px'><b>Reading the high end.</b> 16 of 16 correct above 95%. On n=16 that is consistent with a true rate as low as 81% (Wilson, 95%). Treat a published 99.9% as <em>settled on current form and arithmetic</em>, not as a calibrated one-in-a-thousand. Recorded misses: 2020 r15 favoured Bottas at 78.4%; 2021 r20 favoured Hamilton at 62.5%; 2025 favoured Piastri at r8 and r13.</p><div class='scroll'><table><thead><tr><th>season</th><th>after round</th><th>races left</th><th>model favourite</th><th>claimed</th><th>champion</th><th>correct</th></tr></thead><tbody><tr><td class=''>2019</td><td class='n'>12</td><td class='n'>9</td><td class='n'>Hamilton</td><td class='n'>0.994</td><td class='n'>Hamilton</td><td class='n'>yes</td></tr><tr><td class=''>2019</td><td class='n'>16</td><td class='n'>5</td><td class='n'>Hamilton</td><td class='n'>0.998</td><td class='n'>Hamilton</td><td class='n'>yes</td></tr><tr><td class=''>2019</td><td class='n'>19</td><td class='n'>2</td><td class='n'>Hamilton</td><td class='n'>1</td><td class='n'>Hamilton</td><td class='n'>yes</td></tr><tr><td class=''>2020</td><td class='n'>6</td><td class='n'>11</td><td class='n'>Hamilton</td><td class='n'>0.999</td><td class='n'>Hamilton</td><td class='n'>yes</td></tr><tr><td class=''>2020</td><td class='n'>9</td><td class='n'>8</td><td class='n'>Hamilton</td><td class='n'>0.99</td><td class='n'>Hamilton</td><td class='n'>yes</td></tr><tr><td class=''>2020</td><td class='n'>13</td><td class='n'>4</td><td class='n'>Hamilton</td><td class='n'>0.999</td><td class='n'>Hamilton</td><td class='n'>yes</td></tr><tr><td class=''>2020</td><td class='n'>15</td><td class='n'>2</td><td class='n'>Bottas</td><td class='n'>0.784</td><td class='n'>Hamilton</td><td class='n'>no</td></tr><tr><td class=''>2021</td><td class='n'>8</td><td class='n'>14</td><td class='n'>Verstappen</td><td class='n'>0.728</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2021</td><td class='n'>12</td><td class='n'>10</td><td class='n'>Verstappen</td><td class='n'>0.551</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2021</td><td class='n'>16</td><td class='n'>6</td><td class='n'>Verstappen</td><td class='n'>0.594</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2021</td><td class='n'>20</td><td class='n'>2</td><td class='n'>Hamilton</td><td class='n'>0.625</td><td class='n'>Verstappen</td><td class='n'>no</td></tr><tr><td class=''>2022</td><td class='n'>8</td><td class='n'>14</td><td class='n'>Verstappen</td><td class='n'>0.968</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2022</td><td class='n'>12</td><td class='n'>10</td><td class='n'>Verstappen</td><td class='n'>0.896</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2022</td><td class='n'>16</td><td class='n'>6</td><td class='n'>Verstappen</td><td class='n'>0.999</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2022</td><td class='n'>20</td><td class='n'>2</td><td class='n'>Verstappen</td><td class='n'>1</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2023</td><td class='n'>8</td><td class='n'>14</td><td class='n'>Verstappen</td><td class='n'>0.999</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2023</td><td class='n'>12</td><td class='n'>10</td><td class='n'>Verstappen</td><td class='n'>0.999</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2023</td><td class='n'>16</td><td class='n'>6</td><td class='n'>Verstappen</td><td class='n'>1</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2023</td><td class='n'>20</td><td class='n'>2</td><td class='n'>Verstappen</td><td class='n'>1</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2024</td><td class='n'>8</td><td class='n'>16</td><td class='n'>Verstappen</td><td class='n'>0.991</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2024</td><td class='n'>13</td><td class='n'>11</td><td class='n'>Verstappen</td><td class='n'>0.998</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2024</td><td class='n'>18</td><td class='n'>6</td><td class='n'>Verstappen</td><td class='n'>0.818</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2024</td><td class='n'>22</td><td class='n'>2</td><td class='n'>Verstappen</td><td class='n'>1</td><td class='n'>Verstappen</td><td class='n'>yes</td></tr><tr><td class=''>2025</td><td class='n'>8</td><td class='n'>16</td><td class='n'>Piastri</td><td class='n'>0.763</td><td class='n'>Norris</td><td class='n'>no</td></tr><tr><td class=''>2025</td><td class='n'>13</td><td class='n'>11</td><td class='n'>Piastri</td><td class='n'>0.77</td><td class='n'>Norris</td><td class='n'>no</td></tr><tr><td class=''>2025</td><td class='n'>18</td><td class='n'>6</td><td class='n'>Norris</td><td class='n'>0.53</td><td class='n'>Norris</td><td class='n'>yes</td></tr><tr><td class=''>2025</td><td class='n'>22</td><td class='n'>2</td><td class='n'>Norris</td><td class='n'>0.625</td><td class='n'>Norris</td><td class='n'>yes</td></tr></tbody></table></div></div></section><section class='band'><div class='lab'><b>Not modelled</b><span>Known gaps</span></div><div class='body'><p class='cap'>Sources of error the probabilities do not capture.</p><div class='scroll'><table><tr><td>Weather</td><td class='feat'>Forecasts are ingested but are not a feature. The model does not know it will rain.</td></tr><tr><td>Strategy</td><td class='feat'>No tyre model, no undercut, no stop count.</td></tr><tr><td>Penalties</td><td class='feat'>Pre-session grid drops arrive through the grid. In-race decisions do not.</td></tr><tr><td>Upgrades</td><td class='feat'>Pace is read as it has been, not as it will be after a new floor.</td></tr><tr><td>Team orders</td><td class='feat'>Not represented.</td></tr><tr><td>Remaining sprints</td><td class='feat'>Sprint calendar for future rounds is not in the source data, so sprint points are excluded from the projection. Bound: 8 points per sprint.</td></tr></table></div></div></section><section><div class='lab'><b>Audit trail</b><span>predictions/</span></div><div class='body'><p class='cap'>Each forecast is written to <code>predictions/</code> as timestamped JSON and committed before the session runs. Grading happens afterwards against the classified result. Commit timestamps make the ordering verifiable by a third party.</p></div></section><div class='kerb'></div><footer><span>Data: jolpica-f1 &middot; FastF1</span><span><a href='index.html'>Forecast</a> &middot; <a href='https://github.com/Parikshit06/f1pred'>Source</a></span></footer></div><script>
+(function(){
+  var rtf = null;
+  try { rtf = new Intl.RelativeTimeFormat(undefined,{numeric:'auto'}); } catch(e){}
+
+  function ago(el){
+    var t = Date.parse(el.dataset.since); if(isNaN(t) || !rtf) return;
+    var mins = Math.round((t - Date.now())/60000), txt;
+    if(Math.abs(mins) < 60) txt = rtf.format(mins,'minute');
+    else if(Math.abs(mins) < 2880) txt = rtf.format(Math.round(mins/60),'hour');
+    else txt = rtf.format(Math.round(mins/1440),'day');
+    el.textContent = 'updated ' + txt;
+  }
+  function counts(el){
+    var t = Date.parse(el.dataset.countdown); if(isNaN(t)) return;
+    var ms = t - Date.now();
+    if(ms <= 0){ el.textContent = 'race under way'; return; }
+    var d = Math.floor(ms/86400000), h = Math.floor(ms%86400000/3600000), m = Math.floor(ms%3600000/60000);
+    el.textContent = 'lights out in ' + (d ? d+'d ' : '') + h + 'h ' + m + 'm';
+  }
+  function tick(){
+    document.querySelectorAll('[data-since]').forEach(ago);
+    document.querySelectorAll('[data-countdown]').forEach(counts);
+  }
+  tick(); setInterval(tick, 30000);
+
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Headline probabilities count up once. Only cells tagged data-count are
+  // touched, because the animation rewrites textContent and would otherwise
+  // destroy the range span inside the championship totals. The final value is
+  // already in the markup, so the page is right before the script runs and
+  // right if it never does.
+  if(!still){
+    document.querySelectorAll('[data-count]').forEach(function(el, i){
+      var end = parseFloat(el.textContent);
+      if(isNaN(end)) return;
+      var suffix = el.textContent.replace(/[\d.]+/, ''), t0 = null, dur = 620, delay = 90 + i * 35;
+      function step(ts){
+        if(t0 === null) t0 = ts;
+        var k = Math.min(Math.max(ts - t0 - delay, 0) / dur, 1);
+        el.textContent = (end * (1 - Math.pow(1 - k, 3))).toFixed(1) + suffix;
+        if(k < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Line draw-in: the dash length has to come from the rendered path, so it is
+  // measured here rather than guessed in CSS.
+  document.querySelectorAll('.chart .ser').forEach(function(path, i){
+    if(still) return;
+    var len = path.getTotalLength();
+    if(!len) return;
+    path.style.setProperty('--len', len);
+    path.style.strokeDasharray = path.classList.contains('proj') ? '5 4' : len + ' ' + len;
+    if(!path.classList.contains('proj')){
+      path.style.animationDelay = (i * 60) + 'ms';
+      path.classList.add('draw');
+    }
+  });
+
+  // ---- chart hover -------------------------------------------------------
+  document.querySelectorAll('.chart').forEach(function(chart){
+    var raw = chart.querySelector('.chart-data');
+    var svg = chart.querySelector('svg');
+    var hit = chart.querySelector('.hit');
+    var grp = chart.querySelector('.hover');
+    var tip = chart.querySelector('.tip');
+    if(!raw || !svg || !hit || !grp || !tip) return;
+
+    var d; try { d = JSON.parse(raw.textContent); } catch(e){ return; }
+    var dots = grp.querySelectorAll('.hp');
+    var line = grp.querySelector('.hx');
+    var rounds = [];
+    for(var r = d.xMin; r <= d.xMax; r++) rounds.push(r);
+
+    function X(r){ return d.padL + (r - d.xMin) / Math.max(d.xMax - d.xMin, 1) * d.plotW; }
+    function Y(v){ return d.padT + d.plotH - (v / d.yTop) * d.plotH; }
+
+    function show(evt){
+      // The SVG scales to its container, so pointer pixels have to be mapped
+      // back into viewBox units before they mean anything.
+      var box = svg.getBoundingClientRect();
+      var vx = (evt.clientX - box.left) / box.width * d.width;
+      var near = rounds[0], best = Infinity;
+      rounds.forEach(function(r){
+        var gap = Math.abs(X(r) - vx);
+        if(gap < best){ best = gap; near = r; }
+      });
+
+      var rows = '', any = false;
+      d.series.forEach(function(s, i){
+        var v = s.points[String(near)];
+        var dot = dots[i];
+        if(v === undefined){ dot.setAttribute('r', 0); return; }
+        any = true;
+        dot.setAttribute('r', 4.5);
+        dot.setAttribute('cx', X(near).toFixed(1));
+        dot.setAttribute('cy', Y(v).toFixed(1));
+        dot.setAttribute('fill', s.colour);
+        rows += '<div class="r"><i style="background:' + s.colour + '"></i>' +
+                '<span>' + s.label + '</span><b>' + Math.round(v) + '</b></div>';
+      });
+      if(!any) return;
+
+      grp.hidden = false;
+      line.setAttribute('x1', X(near).toFixed(1));
+      line.setAttribute('x2', X(near).toFixed(1));
+
+      var tail = near > d.lastActual ? '<em> projected</em>' : '';
+      tip.innerHTML = '<div class="rd">Round ' + near + tail + '</div>' + rows;
+      tip.hidden = false;
+
+      // Keep the tooltip inside the chart, flipping side near the right edge.
+      var px = X(near) / d.width * box.width;
+      var w = tip.offsetWidth || 150;
+      tip.style.left = Math.max(0, Math.min(px + 14, box.width - w - 4)) + 'px';
+      tip.style.top = Math.max(0, (evt.clientY - box.top) - tip.offsetHeight - 12) + 'px';
+    }
+
+    function hide(){ grp.hidden = true; tip.hidden = true; }
+
+    hit.addEventListener('pointermove', show);
+    hit.addEventListener('pointerdown', show);
+    hit.addEventListener('pointerleave', hide);
+  });
+})();
+</script></body></html>

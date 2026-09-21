@@ -1,0 +1,28 @@
+# data artefacts - never commit, they are rebuildable
+data/*.duckdb
+data/*.duckdb.wal
+data/cache/
+data/fastf1_cache/
+*.parquet
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# outputs that ARE committed live in predictions/ and reports/
+reports/*.tmp
+
+# os
+.DS_Store
+
+# delivery scratch - screenshots, zips and superseded forecasts. Kept on disk
+# so nothing is lost, kept out of the repo so the published tree is only what
+# the project needs to run.
+Claude outputs/
+_superseded/
+models_out/
