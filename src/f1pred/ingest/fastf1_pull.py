@@ -105,8 +105,8 @@ def _driver_pace(laps: pd.DataFrame, clean: pd.DataFrame, code: str) -> dict[str
         "best_lap_ms": best_ms,
         "median_lap_ms": ms(cln["LapTime"]) if not cln.empty else None,
         "long_run_ms": long_run_ms,
-        "n_laps": int(len(all_d)),
-        "n_clean_laps": int(len(cln)),
+        "n_laps": len(all_d),
+        "n_clean_laps": len(cln),
         "compound_mode": compound_mode,
     }
 

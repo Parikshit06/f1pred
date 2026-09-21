@@ -315,9 +315,13 @@ def test_only_the_probability_cells_animate_their_value():
 
 
 def test_links_in_the_inverted_bar_take_the_bar_ink():
-    """The top strap inverts the page. An accent-coloured link on it is
-    unreadable, which is what shipped the first time."""
-    assert ".bar a{color:color-mix(in srgb, var(--paper)" in rr.CSS
+    """The top strap inverts the page, so its link uses --paper, not the accent
+    (unreadable on the strap) and not a transparent mix (which resolved close
+    to the strap's own background)."""
+    rule = rr.CSS.split(".bar a{")[1].split("}")[0]
+    colour = next(d for d in rule.split(";") if d.strip().startswith("color:"))
+    assert "var(--paper)" in colour, colour
+    assert "color-mix" not in colour, "a transparent text colour resolved near the strap itself"
 
 
 def test_the_method_page_builds_and_links_back():
@@ -334,3 +338,170 @@ def test_the_forecast_page_links_to_the_evidence():
     missing, the thinness reads as having nothing to show."""
     out = report.build(prediction=None, backtest_summary=None, calibration=None)
     assert "method.html" in out
+
+
+@pytest.mark.parametrize("theme,block", THEMES)
+def test_tertiary_ink_clears_aa_on_both_surfaces(theme, block):
+    """--ink-3 carries every column header, team name and range on the page, so
+    it is body text and must clear 4.5:1 — on the tinted band as well as on the
+    paper, because alternate sections sit on the band."""
+    ink3 = _token("ink-3", block)
+    for surface in ("paper", "band"):
+        ratio = _contrast(_token(surface, block), ink3)
+        assert ratio >= 4.5, f"{theme} --ink-3 on --{surface} is {ratio:.2f}"
+
+
+@pytest.mark.parametrize("theme,block", THEMES)
+def test_the_band_surface_is_defined(theme, block):
+    """Alternate sections paint --band full-bleed; if it is missing they render
+    on the page ground and the rhythm disappears."""
+    assert _token("band", block)
+
+
+def test_the_method_page_reports_whether_the_range_holds(tmp_path, monkeypatch):
+    """The projection's band is the one claim on the page that is a promise with
+    a number attached, and it is currently NOT being kept - 71% against a stated
+    80%. A page that quietly dropped that section when the calibration file was
+    renamed would be presenting a shortfall as a clean bill of health."""
+    import json
+
+    from f1pred import config, method_page
+
+    monkeypatch.setattr(config, "REPORTS", tmp_path)
+    (tmp_path / "spread_calibration.json").write_text(
+        json.dumps(
+            {
+                "best": 6.0,
+                "fit_seasons": [2019, 2022],
+                "grade_seasons": [2023, 2025],
+                "held_out": {
+                    "before": {"coverage": 0.458, "width": 38.8, "n": 120},
+                    "after": {"coverage": 0.708, "width": 89.7, "n": 120},
+                },
+            }
+        )
+    )
+    html = method_page.build()
+    assert "Does the range hold up" in html
+    assert "46%" in html and "71%" in html, "the graded coverage is not on the page"
+    assert "80%" in html, "the target the band is being held to is not stated"
+
+
+def test_the_method_page_omits_the_range_section_when_it_has_not_been_graded():
+    """No calibration file means no claim - better a missing section than one
+    quoting numbers from a run that never happened."""
+    import pytest as _pytest
+
+    from f1pred import config, method_page
+
+    with _pytest.MonkeyPatch.context() as mp:
+        mp.setattr(config, "REPORTS", config.REPORTS / "does-not-exist")
+        assert "Does the range hold up" not in method_page.build()
+
+
+# ---------------------------------------------------------------------------
+# The alternating band
+# ---------------------------------------------------------------------------
+def _lstar(hex_colour: str) -> float:
+    """CIE L*, which tracks perceived lightness where a raw RGB average does not."""
+    r, g, b = (int(hex_colour[i : i + 2], 16) / 255 for i in (1, 3, 5))
+
+    def lin(c):
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    y = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+    return 116 * (y ** (1 / 3) if y > 0.008856 else 7.787 * y + 16 / 116) - 16
+
+
+@pytest.mark.parametrize("theme,block", THEMES)
+def test_the_band_is_a_second_ink_pass_not_a_grey_box(theme, block):
+    """Sections alternate between paper and a slightly darker band. Every band
+    edge already carries a hairline, so the tone only has to suggest a change of
+    register - it does not have to separate anything.
+
+    Below about 1 in L* nobody sees it and the page goes flat; above about 3 it
+    stops reading as the same sheet under different light and starts reading as
+    a grey rectangle dropped on top, which is exactly the note this pins. It
+    shipped once at 4.2.
+    """
+    paper = _token("paper", block)
+    band = _token("band", block)
+    step = abs(_lstar(paper) - _lstar(band))
+    assert 1.0 <= step <= 3.0, f"{theme}: paper-to-band step is {step:.1f} in L*"
+
+
+@pytest.mark.parametrize("theme,block", THEMES)
+def test_the_band_is_the_same_paper_not_a_different_colour(theme, block):
+    """A band that drifts in hue reads as dingy against the paper rather than
+    as the same stock. Both surfaces must lean the same way."""
+    paper, band = _token("paper", block), _token("band", block)
+
+    def warmth(c):  # red minus blue: positive is warm, negative is cool
+        return int(c[1:3], 16) - int(c[5:7], 16)
+
+    assert (warmth(paper) >= 0) == (warmth(band) >= 0), (
+        f"{theme}: paper {paper} and band {band} lean opposite ways"
+    )
+    assert abs(warmth(paper) - warmth(band)) <= 6, f"{theme}: hue drifts between paper and band"
+
+
+@pytest.mark.parametrize("theme,block", THEMES)
+def test_inline_code_still_reads_against_its_own_surface(theme, block):
+    """Code chips used to borrow the band colour. Softening the band would have
+    made them vanish, so they have their own token - and it has to be a step
+    away from BOTH surfaces they can sit on."""
+    chip = _token("chip", block)
+    for surface in ("paper", "band"):
+        step = abs(_lstar(chip) - _lstar(_token(surface, block)))
+        assert step >= 1.0, f"{theme}: code chip is invisible on --{surface}"
+
+
+def test_the_page_script_is_a_raw_string():
+    """It contains regex escapes. As a plain string those are invalid escape
+    sequences - a DeprecationWarning today and a SyntaxError in a later Python."""
+    import importlib
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        importlib.reload(rr)
+    assert r"[\d.]+" in rr.SCRIPT, "the escape was 'fixed' by removing the regex"
+
+
+# ---------------------------------------------------------------------------
+# A clean checkout has no database
+# ---------------------------------------------------------------------------
+def test_both_pages_build_with_no_database(tmp_path, monkeypatch):
+    """The condition CI runs in, and the one these tests never had locally.
+
+    `data/*.duckdb` is rebuildable, so it is gitignored and a fresh clone does
+    not have one. Two readers reach for it while rendering - the track record
+    and the driver-surname lookup - and a read-only connect to a missing file
+    raises rather than creating it. Both now have an empty answer instead,
+    because they decorate a page rather than compute it.
+
+    This failed on the repo's very first CI run, which is the honest argument
+    for the test: the suite passed on every machine that had already run the
+    pipeline, which was every machine anyone had tried it on.
+    """
+    from f1pred import config, method_page, store
+
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "absent.duckdb")
+    assert not store.database_exists()
+
+    assert report.scoreboard().empty, "a missing database invented a track record"
+    assert "method.html" in report.build(prediction=None, backtest_summary=None, calibration=None)
+    assert "Model specification" in method_page.build()
+
+
+def test_a_missing_database_is_not_confused_with_an_empty_one(tmp_path, monkeypatch):
+    """If the file exists the readers must go through to it, so that a genuinely
+    empty database still surfaces as an error rather than a silent blank page."""
+    import duckdb
+
+    from f1pred import config, store
+
+    db = tmp_path / "present.duckdb"
+    duckdb.connect(str(db)).close()
+    monkeypatch.setattr(config, "DB_PATH", db)
+    assert store.database_exists(), "an existing database was treated as absent"

@@ -17,7 +17,7 @@ import pandas as pd
 
 from . import config
 from . import report_render as rr
-from .store import connect
+from .store import connect, database_exists
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def load_predictions() -> list[dict]:
 def scoreboard() -> pd.DataFrame:
     """Grade every logged prediction against what actually happened."""
     preds = load_predictions()
-    if not preds:
+    if not preds or not database_exists():
         return pd.DataFrame()
 
     with connect(read_only=True) as con:
@@ -110,7 +110,7 @@ def build(
     generated = rr.utcnow()
     if prediction and prediction.get("generated_at_utc"):
         try:
-            generated = datetime.fromisoformat(prediction["generated_at_utc"].replace("Z", "+00:00"))
+            generated = datetime.fromisoformat(prediction["generated_at_utc"])
         except ValueError:
             pass
 
@@ -129,7 +129,7 @@ def build(
         "<p class='sub'>Finishing order as probabilities. Published before the session, "
         "timestamped, graded against the result.</p>"
     )
-    s.append("</header><div class='kerb'></div>")
+    s.append("</header>")
 
     if prediction:
         s.append(
@@ -198,7 +198,7 @@ def build(
         )
 
     s.append(
-        "<div class='kerb'></div><footer>"
+        "<footer>"
         "<span>Data: jolpica-f1 &middot; FastF1</span>"
         "<span><a href='method.html'>Method and accuracy</a> &middot; "
         f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"

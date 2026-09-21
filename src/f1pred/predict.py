@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -417,7 +417,7 @@ def run(
         race_name=race_name[0] if race_name else f"{season} round {rnd}",
         circuit_id=str(meta_race["circuit_id"]),
         race_start_utc=str(meta_race["race_start_utc"]) if pd.notna(meta_race["race_start_utc"]) else None,
-        generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        generated_at_utc=datetime.now(UTC).isoformat(timespec="seconds"),
         grid_known=known_grid,
         quali_board=lines("q_p_win", "q_p_win", "q_p_top5", "q_p_top5", "q_p_top10", "q_exp_pos"),
         race_board=lines("p_win", "p_win", "p_podium", "p_top5", "p_top10", "exp_position"),

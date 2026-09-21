@@ -41,12 +41,12 @@ def test_fit_temperature_prefers_flat_when_outcomes_are_random():
 
 
 def _inputs(n=6, **kw):
-    defaults = dict(
-        driver_ids=[f"d{i}" for i in range(n)],
-        scores=np.linspace(2.0, -2.0, n),
-        dnf_prob=np.full(n, 0.05),
-        grid=np.arange(1, n + 1, dtype=float),
-    )
+    defaults = {
+        "driver_ids": [f"d{i}" for i in range(n)],
+        "scores": np.linspace(2.0, -2.0, n),
+        "dnf_prob": np.full(n, 0.05),
+        "grid": np.arange(1, n + 1, dtype=float),
+    }
     defaults.update(kw)
     return simulate.SimInputs(**defaults)
 

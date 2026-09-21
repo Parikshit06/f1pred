@@ -65,7 +65,7 @@ def run(
             continue
 
         for frac in CHECKPOINT_FRACTIONS:
-            after = int(round(len(rounds) * frac))
+            after = round(len(rounds) * frac)
             if after < 3 or after >= len(rounds):
                 continue
             nxt = df[(df.season == season) & (df["round"] == after + 1)]

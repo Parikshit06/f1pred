@@ -33,7 +33,10 @@ def _load(name: str) -> dict:
 
 def _surnames() -> dict[str, str]:
     """driver_id -> family name, so the graded table reads as names and not keys."""
-    from .store import connect
+    from .store import connect, database_exists
+
+    if not database_exists():
+        return {}
 
     with connect(read_only=True) as con:
         return dict(con.execute("SELECT driver_id, max(family_name) FROM raw_drivers GROUP BY 1").fetchall())
@@ -46,41 +49,69 @@ def _step(n: int, title: str, body: str) -> str:
 PIPELINE = [
     (
         "Rank",
-        "XGBoost ranker, objective <code>rank:ndcg</code>, trained on one group per race so "
-        "each race contributes every pairwise comparison inside it rather than a single "
-        "winner label. 187 training races. Output is an unbounded score per driver.",
+        (
+            "XGBoost ranker, objective <code>rank:ndcg</code>, trained on one group per race so "
+            "each race contributes every pairwise comparison inside it rather than a single "
+            "winner label. 187 training races. Output is an unbounded score per driver."
+        ),
     ),
     (
         "Convert",
-        "Plackett-Luce: P(driver leads the field) &prop; exp(score / T). T is fitted by log "
-        "loss on held-out races and re-fitted from a trailing 24-race window.",
+        (
+            "Plackett-Luce: P(driver leads the field) &prop; exp(score / T). T is fitted by log "
+            "loss on held-out races and re-fitted from a trailing 24-race window."
+        ),
     ),
     (
         "Simulate",
-        "10,000 races. Per run: pace noise at 0.55&times; the spread in model score, a "
-        "safety-car draw at the circuit's historical rate, and an independent retirement draw "
-        "per car from its own recent DNF rate. Before qualifying, each run samples its own "
-        "grid from the qualifying model.",
+        (
+            "10,000 races. Per run: pace noise at 0.55&times; the spread in model score, a "
+            "safety-car draw at the circuit's historical rate, and an independent retirement draw "
+            "per car from its own recent DNF rate. Before qualifying, each run samples its own "
+            "grid from the qualifying model."
+        ),
     ),
     (
         "Blend",
-        "Published win probability is a fitted mix of the closed-form ranking and the "
-        "simulation. Podium and points probabilities are read off the simulated finishing "
-        "positions directly.",
+        (
+            "Published win probability is a fitted mix of the closed-form ranking and the "
+            "simulation. Podium and points probabilities are read off the simulated finishing "
+            "positions directly."
+        ),
     ),
     (
         "Project",
-        "Remaining calendar run 10,000 times with the same noise model, carrying points "
-        "already scored. Returns mean, 10th and 90th percentile, expected wins, and title "
-        "probability.",
+        (
+            "Remaining calendar run 10,000 times with the same noise model, carrying points "
+            "already scored. Returns mean, 10th and 90th percentile, expected wins, and title "
+            "probability."
+        ),
     ),
 ]
 
 NOT_MODELLED = [
     ("Weather", "Forecasts are ingested but are not a feature. The model does not know it will rain."),
-    ("Strategy", "No tyre model, no undercut, no stop count."),
-    ("Penalties", "Pre-session grid drops arrive through the grid. In-race decisions do not."),
-    ("Upgrades", "Pace is read as it has been, not as it will be after a new floor."),
+    (
+        "Strategy",
+        (
+            "No tyre model, no undercut, no stop count. Pit-crew speed was built as a feature and "
+            "measured; it cost log loss on 62 races and was cut."
+        ),
+    ),
+    (
+        "Penalties",
+        (
+            "Pre-session grid drops arrive through the grid. In-race decisions do not. Splitting "
+            "retirements into driver-caused and car-caused was tried and moved no metric at all."
+        ),
+    ),
+    (
+        "Upgrades",
+        (
+            "Which team improves is not forecast, and nothing here can forecast it. How far a team's "
+            "pace can move is in the championship projection's range - see below."
+        ),
+    ),
     ("Team orders", "Not represented."),
     (
         "Remaining sprints",
@@ -94,16 +125,20 @@ def build(standalone: bool = True) -> str:
     tb = _load("title_backtest.json")
 
     s: list[str] = [
-        "<div class='bar'><div class='inner'><b>Method and accuracy</b>"
-        "<span class='sep'></span><a href='index.html'>&larr; Back to the forecast</a>"
-        "</div></div>",
+        (
+            "<div class='bar'><div class='inner'><b>Method and accuracy</b>"
+            "<span class='sep'></span><a href='index.html'>&larr; Back to the forecast</a>"
+            "</div></div>"
+        ),
         "<div class='wrap'>",
         "<header class='mast'>",
         "<div class='kicker'>f1pred</div>",
         "<h1>Model specification</h1>",
-        "<p class='sub'>Architecture, features, and measured performance. Each section names "
-        "the command that regenerates it.</p>",
-        "</header><div class='kerb'></div>",
+        (
+            "<p class='sub'>Architecture, features, and measured performance. Each section names "
+            "the command that regenerates it.</p>"
+        ),
+        "</header>",
     ]
 
     # ---- pipeline --------------------------------------------------------
@@ -286,6 +321,48 @@ def build(standalone: bool = True) -> str:
             f"<div class='body'>{body}</div></section>"
         )
 
+    # ---- does the published range hold up? --------------------------------
+    sc = _load("spread_calibration.json")
+    if sc.get("held_out"):
+        held = sc["held_out"]
+        fit = sc.get("fit_seasons") or []
+        grade = sc.get("grade_seasons") or []
+        rows = pd.DataFrame(
+            [
+                {
+                    "projection": label,
+                    "band held": f"{held[key]['coverage']:.0%}",
+                    "should be": "80%",
+                    "mean band width": f"{held[key]['width']:.0f} pts",
+                }
+                for label, key in (("Pace held fixed", "before"), ("Current model", "after"))
+            ]
+        )
+        body = (
+            "<p class='cap'>The projection publishes a 10th&ndash;90th percentile band, which is a "
+            "claim that can be checked: the real final total should land inside it eight times in "
+            "ten. Graded against completed constructors' standings, one team at a time, it did not."
+            "</p>"
+            + rr.table(rows)
+            + "<p class='cap'>Race-to-race luck averages out over a dozen races, so it was never "
+            "what made a season miss. What does not average out is the model being wrong about a "
+            "car today and carrying that into every remaining race. The projection now draws one "
+            "pace offset per team per simulated season, sized by how much of the season is left. "
+            "Development is part of what that covers, but the smaller part: fitted on its own it "
+            "is worth 1.4 finishing positions over a full season and moved coverage by two points."
+            "</p>"
+            f"<p class='cap'>Size chosen on {fit[0] if fit else '2019'}&ndash;"
+            f"{fit[-1] if fit else '2022'} and graded on {grade[0] if grade else '2023'}&ndash;"
+            f"{grade[-1] if grade else '2025'}, which the sweep never saw. Still short of 80%, and "
+            "the gain is concentrated early in the season where the old band was worst &mdash; a "
+            "third of the way in, it went from 25% to 90%.</p>"
+        )
+        s.append(
+            "<section><div class='lab'><b>Does the range hold up?</b>"
+            "<span>make calibrate-spread</span></div>"
+            f"<div class='body'>{body}</div></section>"
+        )
+
     # ---- limits ----------------------------------------------------------
     s.append(
         "<section class='band'><div class='lab'><b>Not modelled</b><span>Known gaps</span></div>"
@@ -306,7 +383,6 @@ def build(standalone: bool = True) -> str:
     )
 
     s.append(
-        "<div class='kerb'></div>"
         "<footer><span>Data: jolpica-f1 &middot; FastF1</span>"
         f"<span><a href='index.html'>Forecast</a> &middot; "
         f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"

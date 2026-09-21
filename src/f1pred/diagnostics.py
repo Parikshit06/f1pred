@@ -111,8 +111,10 @@ def report(start_season: int = 2024, retrain_every: int = 3) -> str:
     lines = [
         f"Driver bias, {start_season}+ walk-forward ({entries['round'].size} entries)",
         "",
-        f"Apparent bias correlates {trend['r']:.3f} with predicted rank, so "
-        f"{trend['variance_explained'] * 100:.0f}% of it is an artifact of",
+        (
+            f"Apparent bias correlates {trend['r']:.3f} with predicted rank, so "
+            f"{trend['variance_explained'] * 100:.0f}% of it is an artifact of"
+        ),
         "comparing a fixed ranking against a mean pulled toward the middle by retirements.",
         "The column that matters is driver_specific_bias - what survives that correction.",
         "",

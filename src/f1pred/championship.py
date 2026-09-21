@@ -81,8 +81,10 @@ def simulate_seasons(
     dnf_prob: np.ndarray,
     base_points: np.ndarray,
     n_races: int,
+    team_index: np.ndarray | None = None,
     n_sims: int = 10_000,
     safety_car_prob: float = 0.35,
+    season_fraction_left: float = 0.0,
     seed: int = config.RANDOM_SEED,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Returns (final totals per sim, mean cumulative points after each round).
@@ -94,6 +96,20 @@ def simulate_seasons(
     race simulator an unknown grid is a constant that drops out of the
     ordering anyway.
 
+    One term exists here that has no counterpart in the single-race simulator,
+    because over one afternoon it has nowhere to act: each simulated season
+    gives every team a pace offset, drawn once and held for the rest of the
+    year. It covers the upgrade that works, the one that does not, and - mostly
+    - the plain fact that the ranker's read of the field today is not the
+    field's true pace. Race-to-race noise averages out over a dozen races; that
+    error does not, which is why it dominates and why leaving it out made the
+    published band far too narrow. See config.SEASON_PACE_UNCERTAINTY, which is
+    calibrated on whether the band actually covers.
+
+    It is deliberately not a forecast of WHICH team improves. Nothing in the
+    data supports that, and a projection that guessed would be worse than one
+    that admits the spread.
+
     The second return value is what the progression chart draws; computing it
     here rather than extrapolating a per-race average keeps the line and the
     final standing consistent with each other.
@@ -102,6 +118,25 @@ def simulate_seasons(
     scores = np.asarray(scores, dtype=float)
     n = len(scores)
     score_sd = float(np.std(scores)) or 1.0
+
+    # Pace belongs to the car, so both cars in a garage move together; without a
+    # team map it falls back to per-driver, which is the same magnitude applied
+    # independently. Scaled by how much of the season is left: with two races to
+    # go there is neither time to develop nor much left for the model to be
+    # wrong about.
+    drift_sd = (
+        config.SEASON_PACE_UNCERTAINTY
+        * float(np.clip(season_fraction_left, 0.0, 1.0))
+        / config.POSITIONS_PER_SCORE_SD
+    ) * score_sd
+    if drift_sd > 0:
+        if team_index is not None:
+            per_team = rng.normal(0.0, drift_sd, size=(n_sims, int(team_index.max()) + 1))
+            drift = per_team[:, team_index]
+        else:
+            drift = rng.normal(0.0, drift_sd, size=(n_sims, n))
+    else:
+        drift = np.zeros((1, n))
 
     totals = np.tile(np.asarray(base_points, dtype=float), (n_sims, 1))
     track = np.zeros((n_races, n))
@@ -113,7 +148,7 @@ def simulate_seasons(
 
     for r in range(n_races):
         chaos = np.where(rng.random((n_sims, 1)) < safety_car_prob, 1.9, 1.0)
-        pace = scores + rng.normal(0.0, 1.0, size=(n_sims, n)) * (0.55 * score_sd * chaos)
+        pace = scores + drift + rng.normal(0.0, 1.0, size=(n_sims, n)) * (0.55 * score_sd * chaos)
 
         retired = rng.random((n_sims, n)) < dnf_prob
         pace = np.where(retired, -np.inf, pace)
@@ -229,8 +264,17 @@ def project(
     if n_races == 0:
         return {}
 
+    names = {t: i for i, t in enumerate(dict.fromkeys(teams))}
+    team_index = np.array([names[t] for t in teams])
     totals, track, lo_track, hi_track, wins = simulate_seasons(
-        scores, dnf_prob, base, n_races, n_sims=n_sims, safety_car_prob=safety_car_prob
+        scores,
+        dnf_prob,
+        base,
+        n_races,
+        n_sims=n_sims,
+        safety_car_prob=safety_car_prob,
+        team_index=team_index,
+        season_fraction_left=n_races / max(after_round + n_races, 1),
     )
 
     # Ties for the title are vanishingly rare and are broken on countback in

@@ -26,3 +26,11 @@ reports/*.tmp
 Claude outputs/
 _superseded/
 models_out/
+
+# scratch from the remote bridge (it cannot delete files)
+_gitjunk/
+
+# transfer artefacts from the cloud session; the contents are already extracted
+*.tar.gz
+APPLY-THIS.md
+PUSH-TO-GITHUB.md

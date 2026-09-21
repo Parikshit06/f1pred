@@ -100,6 +100,43 @@ BASE_FEATURES = [
 #     and log loss slightly better. Worse on the number it was built to fix, so
 #     it is out. Second time a blend has looked good on the window it was fitted
 #     on and evaporated off it.
+#   drv_incident_rate_10 / team_mechanical_rate_10 - retirements split by cause,
+#     so that "the driver crashed" and "the engine let go" stop sharing one
+#     number. Built from an explicit status vocabulary; 43% of retirements carry
+#     a generic status and classified as neither. The simulator drew the two as
+#     separate channels with the car-caused half correlated inside a garage, at
+#     a shared-cause fraction fitted from the data (both cars of a team have
+#     suffered a mechanical retirement 16 times against 3.6 expected under
+#     independence - 4.4x, phi 0.316).
+#
+#     It changed nothing that could be measured. Single-race metrics were
+#     identical to four decimal places, which in hindsight is forced: the split
+#     preserves each car's marginal retirement probability exactly, so anything
+#     that scores one driver at a time is blind to it by construction.
+#
+#                          top5   podium  winner  log loss  Brier
+#       one blended rate   3.903   1.952   0.581    1.1880  0.5741
+#       split, correlated  3.903   1.952   0.581    1.1879  0.5742
+#
+#     The joint distribution was the honest place to look, so it was graded
+#     there too - coverage of the constructors' 10th-90th band against real
+#     final standings, 270 team-checkpoints. 50.0% either way, mean band width
+#     38.3 against 38.5. Correlating a 4%-per-car event adds almost nothing next
+#     to a season of pace variance. Cut, and the fitted shared-cause constant
+#     with it.
+#   team_pit_gap_5 - the team's fastest pit stop of a weekend against the
+#     fastest anybody managed, rolled over five races: the one part of race
+#     strategy that is in the public data and is a property of the team rather
+#     than a per-race decision. 99.1% coverage, and a real spread (2026: Red
+#     Bull 0.49s to Cadillac 3.24s), so the signal exists.
+#
+#                      top5   podium  winner  ndcg    log loss  Brier
+#       without       3.855   1.984   0.581  0.8930    1.1837  0.5769
+#       with          3.903   1.952   0.581  0.8902    1.1879  0.5742
+#
+#     Better on two metrics, worse on three, including log loss - the number
+#     the settings are tuned against. On 62 races that is noise, and noise does
+#     not earn a column. Cut.
 #
 # All of them are gone rather than kept "in case": the race model already sees this
 # weekend's grid, which encodes the current driver-and-car combination

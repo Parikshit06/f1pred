@@ -18,7 +18,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3", "ruff>=0.6"]
+# ruff is PINNED, not floated. A linter's default rule set grows between minor
+# versions, so `ruff>=0.6` meant CI installed whatever was newest that morning
+# and could fail a commit that passed locally the day before - which is exactly
+# what happened going from 0.15 to 0.16 (42 new findings, none of them a change
+# in this code). Bump it deliberately, fix what it finds, commit both together.
+dev = ["pytest>=8.3", "ruff==0.16.6"]
 
 [build-system]
 requires = ["hatchling"]

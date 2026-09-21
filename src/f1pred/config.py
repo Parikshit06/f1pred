@@ -88,6 +88,57 @@ DEFAULT_TEMPERATURE = 0.4
 # correct.
 DEFAULT_BLEND_WEIGHT = 0.6
 
+# How far a team's real pace can end up from where the model has it, over the
+# rest of a season. This is the term that stops a title projection printing a
+# range it cannot honour.
+#
+# The projection used to hold every team's pace fixed at whatever the ranker
+# said this weekend, so the only uncertainty in the remaining season was
+# race-to-race noise - and noise averages out over a dozen races. The published
+# 10th-90th band was therefore very narrow, and graded against real final
+# constructors' standings it contained the truth 45% of the time instead of 80%.
+#
+# Three things can move a season away from the projection, and it is worth being
+# clear which one this is, because the obvious answer turned out to be wrong:
+#
+#   race-to-race noise  already modelled, and largely self-cancelling
+#   development         real - fitted at 1.37 finishing positions over a full
+#                       season remaining (95% 0.90-1.83, 283 team-checkpoints,
+#                       decaying to nothing by the last few races) - but far too
+#                       small to explain the gap. Adding it alone moved coverage
+#                       from 45% to 47%.
+#   being wrong now     the ranker's read of the field at round 8 is not the
+#                       field's true pace, and unlike race noise that error does
+#                       not average out. It is carried into every remaining race.
+#
+# The third dominates, so this constant stands for all three together rather
+# than pretending to isolate development. Each simulated season draws one pace
+# offset per team, held for the rest of the year, at this size scaled by how
+# much of the season is left.
+#
+# Calibrated the only way a predictive interval honestly can be - by whether it
+# covers. Swept on 2019-2022, where 6.0 put coverage at 82%, then graded on
+# 2023-2025, which the sweep never saw:
+#
+#                        coverage   mean band width
+#   fixed pace              45.0%              38.6
+#   calibrated (6.0)        70.8%              89.5
+#   target                  80.0%
+#
+# Still short of 80, and the method page says so rather than rounding it off.
+# The gain is concentrated early in the season, where the old band was worst:
+# with a third of the season run, coverage went from 30% to 90%.
+#
+# Re-fit with: f1pred.cli calibrate-spread
+SEASON_PACE_UNCERTAINTY = 6.0  # finishing positions, per full season remaining
+
+# The exchange rate between the two scales, so the figure above can be fitted in
+# finishing positions - where it means something to a reader - and applied in
+# model score, where the simulator works. Measured inside the simulator by
+# nudging one car's score and reading off where it finishes: 5.62 positions per
+# unit of score spread, and stable across eras at 5.45 to 6.07.
+POSITIONS_PER_SCORE_SD = 5.62
+
 N_SIMULATIONS = 10_000
 TOP_N = 10  # how many drivers we publish; we still model the full field
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -77,13 +77,26 @@ def _to_float(value: Any) -> float | None:
 
 
 def _race_start_utc(date_str: str | None, time_str: str | None) -> datetime | None:
+    """Session start as a NAIVE datetime that is UTC by contract.
+
+    The API always sends UTC - the trailing Z in "14:00:00Z" is part of the
+    format string, not something to be parsed into an offset - and every
+    timestamp column in the database is naive UTC. Attaching a timezone here
+    only to strip it again before storage was what the previous version did,
+    and a round trip that returns its input is worse than no round trip: it
+    reads as a conversion that is happening when nothing is.
+
+    So the values stay naive, and the invariant lives in the name and here.
+    A date with no time is midnight UTC, which is what a race without a
+    published start time means in this data.
+    """
     if not date_str:
         return None
     try:
         if time_str:
-            stamp = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%SZ")
-            return stamp.replace(tzinfo=timezone.utc).replace(tzinfo=None)
-        return datetime.strptime(date_str, "%Y-%m-%d")
+            # DTZ007: naive on purpose, see above.
+            return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%SZ")  # noqa: DTZ007
+        return datetime.strptime(date_str, "%Y-%m-%d")  # noqa: DTZ007
     except ValueError:
         return None
 

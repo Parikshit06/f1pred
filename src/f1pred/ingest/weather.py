@@ -15,7 +15,7 @@ fallback for sessions FastF1 has no data for.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
@@ -67,7 +67,7 @@ def fetch_forecast(
 ) -> pd.DataFrame:
     """Forecast for one session. Safe to call repeatedly - each call is stamped
     with its own fetched_at_utc, so we keep a history of how the forecast moved."""
-    days = max(1, min(16, (session_start_utc.date() - datetime.now(timezone.utc).date()).days + 2))
+    days = max(1, min(16, (session_start_utc.date() - datetime.now(UTC).date()).days + 2))
     url = (
         f"{config.OPEN_METEO_BASE}?latitude={lat:.4f}&longitude={lon:.4f}"
         f"&hourly={_HOURLY}&forecast_days={days}&timezone=UTC"
@@ -82,7 +82,7 @@ def fetch_forecast(
             "season": season,
             "round": rnd,
             "session": session_code,
-            "fetched_at_utc": datetime.now(timezone.utc).replace(tzinfo=None),
+            "fetched_at_utc": datetime.now(UTC).replace(tzinfo=None),
         }
     )
     return pd.DataFrame([row])
@@ -124,7 +124,7 @@ def fetch_archive(
 def ingest_upcoming(days_ahead: int = 10) -> int:
     """Forecast every session of every race starting within the next N days."""
     http = RateLimitedSession(min_interval=0.2)
-    horizon = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=days_ahead)
+    horizon = datetime.now(UTC).replace(tzinfo=None) + timedelta(days=days_ahead)
 
     with connect(read_only=True) as con:
         races = con.execute(

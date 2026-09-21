@@ -54,7 +54,8 @@ def test_source_contains_no_hardcoded_driver_or_team_names():
     """A driver named in the modelling code is a red flag whatever its intent."""
     import inspect
 
-    from f1pred import backtest, predict, simulate as sim_mod
+    from f1pred import backtest, predict
+    from f1pred import simulate as sim_mod
 
     names = (
         "hamilton",

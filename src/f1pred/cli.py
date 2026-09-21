@@ -104,6 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--sims", type=int, default=4000)
 
+    p = sub.add_parser(
+        "calibrate-spread",
+        help="re-fit the championship projection's range against real final standings",
+    )
+    p.add_argument("--sims", type=int, default=6000)
+
     sub.add_parser("dashboard", help="render reports/index.html and reports/method.html")
     return parser
 
@@ -326,6 +332,43 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nwrote {out}")
         return 0
 
+    if args.command == "calibrate-spread":
+        import json as _json
+
+        from . import features, spread_calibration
+
+        result = spread_calibration.run(features.load(), n_sims=args.sims)
+        print("\n" + spread_calibration.report(result))
+        if result:
+            out = config.REPORTS / "spread_calibration.json"
+            out.write_text(
+                _json.dumps(
+                    {
+                        "sweep": result["sweep"].to_dict("records"),
+                        "best": result["best"],
+                        "fit_seasons": list(spread_calibration.FIT_SEASONS),
+                        "grade_seasons": list(spread_calibration.GRADE_SEASONS),
+                        "held_out": {
+                            label: {
+                                "coverage": float(frame["inside"].mean()),
+                                "width": float(frame["width"].mean()),
+                                "n": len(frame),
+                            }
+                            for label, frame in result["graded"].items()
+                        },
+                        "in_use": config.SEASON_PACE_UNCERTAINTY,
+                    },
+                    indent=1,
+                )
+            )
+            print(f"\nwrote {out}")
+            if abs(result["best"] - config.SEASON_PACE_UNCERTAINTY) > 1e-9:
+                print(
+                    f"note: config.SEASON_PACE_UNCERTAINTY is {config.SEASON_PACE_UNCERTAINTY}, "
+                    f"this run picked {result['best']:.1f}"
+                )
+        return 0
+
     if args.command == "dashboard":
         import pandas as pd
 
@@ -334,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         prediction = None
         preds = report.load_predictions()
         if preds:
-            prediction = sorted(preds, key=lambda p: p["generated_at_utc"])[-1]
+            prediction = max(preds, key=lambda p: p["generated_at_utc"])
 
         summary = calibration = None
         params = None

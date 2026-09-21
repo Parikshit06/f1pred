@@ -124,7 +124,7 @@ def test_clinch_is_immediate_when_the_lead_already_exceeds_what_is_left():
 def test_the_projection_carries_a_range_not_just_a_mean():
     """A single line reads as certainty. The 10-90 band is what shows that a
     leader retiring twice is an ordinary outcome, not an upset."""
-    totals, track, lo, hi, wins = champ.simulate_seasons(
+    _totals, track, lo, hi, _wins = champ.simulate_seasons(
         np.array([2.0, 1.0, 0.0]), np.array([0.15, 0.15, 0.15]), np.zeros(3), 9, n_sims=3000
     )
     assert (lo[-1] < track[-1]).all(), "the low band is not below the mean"
@@ -156,3 +156,88 @@ def test_the_spare_tenth_goes_to_the_nearest_rival_not_a_random_name():
     out = champ.allocate_odds(probs, rank_by=points)
     assert out[1] == pytest.approx(0.001), "the tenth did not go to second on points"
     assert out[3] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Season-long pace uncertainty
+# ---------------------------------------------------------------------------
+def _spread(scores, fraction_left, team_index=None, races=10, sims=4000):
+    """Spread of a team's final points across simulated seasons."""
+    scores = np.asarray(scores, dtype=float)
+    totals, *_ = champ.simulate_seasons(
+        scores,
+        np.zeros(len(scores)),
+        np.zeros(len(scores)),
+        races,
+        n_sims=sims,
+        safety_car_prob=0.0,
+        season_fraction_left=fraction_left,
+        team_index=team_index,
+    )
+    return totals
+
+
+def test_a_longer_run_in_carries_more_uncertainty():
+    """Twelve races out, the model has more room to be wrong about a car than it
+    does with two to go - and the published range has to say so."""
+    scores = np.linspace(2.0, -2.0, 10)
+    early = _spread(scores, 0.9).std(axis=0).mean()
+    late = _spread(scores, 0.1).std(axis=0).mean()
+    assert early > late * 1.15, "the range did not widen with more of the season left"
+
+
+def test_no_season_left_means_no_added_spread():
+    """The term must vanish rather than shrink to something small, so a
+    projection made after the last race is not noisier than the result."""
+    scores = np.linspace(2.0, -2.0, 10)
+    a = _spread(scores, 0.0, sims=2000)
+    b = _spread(scores, 0.0, sims=2000)
+    assert (a == b).all()
+
+
+def test_the_uncertainty_is_shared_between_teammates():
+    """It stands for how fast the CAR is, so both cars in a garage must move
+    together. Drawn per driver it would cancel out inside a constructors' total,
+    which is the one place it matters most."""
+    scores = np.zeros(8)
+    teams = np.array([i // 2 for i in range(8)])
+    totals = _spread(scores, 0.9, team_index=teams, sims=6000)
+    pairs = [np.corrcoef(totals[:, i], totals[:, i + 1])[0, 1] for i in range(0, 8, 2)]
+    rivals = [np.corrcoef(totals[:, 0], totals[:, j])[0, 1] for j in (2, 4, 6)]
+    assert np.mean(pairs) > np.mean(rivals) + 0.1, "teammates moved independently"
+
+
+def test_the_uncertainty_hands_out_no_extra_points():
+    """It must move points around, never create them. Every simulated race
+    awards the same total whatever the spread, so the field total is a hard
+    invariant - and a term that quietly inflated it would flatter everyone."""
+    scores = np.linspace(2.0, -2.0, 10)
+    without = _spread(scores, 0.0, sims=4000).mean(axis=0).sum()
+    with_ = _spread(scores, 0.9, sims=4000).mean(axis=0).sum()
+    assert with_ == pytest.approx(without, rel=1e-9)
+
+
+def test_the_uncertainty_pulls_toward_the_middle_rather_than_picking_a_side():
+    """Being less sure has to cost the favourite and help the backmarker, in
+    that order and no other. Points are capped at 25 a race, so a car already
+    projected to win has far more to lose from a pace swing than to gain - if
+    the leader's projection did NOT fall when uncertainty rose, the term would
+    be adding optimism rather than doubt.
+
+    This is also the honest reading of the change: the projection did not get
+    more pessimistic about anyone, it got less confident about everyone.
+    """
+    scores = np.linspace(2.0, -2.0, 10)
+    without = _spread(scores, 0.0, sims=6000).mean(axis=0)
+    with_ = _spread(scores, 0.9, sims=6000).mean(axis=0)
+    shift = with_ - without
+    assert shift[0] < 0, "the favourite did not lose ground to the uncertainty"
+    assert shift[-1] > 0, "the slowest car did not gain any"
+    # Monotone: the further down the order, the more the term helps.
+    assert np.corrcoef(np.arange(len(shift)), shift)[0, 1] > 0.9
+
+
+def test_the_ordering_survives_the_uncertainty():
+    scores = np.linspace(2.0, -2.0, 10)
+    mean = _spread(scores, 0.9, sims=6000).mean(axis=0)
+    assert (np.diff(mean) < 0).all(), "a faster car no longer projects ahead of a slower one"

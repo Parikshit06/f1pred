@@ -1,0 +1,83 @@
+name: Evaluate
+
+# Historical evaluation, kept apart from the race-weekend pipeline.
+#
+# These numbers describe how the model has performed, not what happens on
+# Sunday, so they are re-measured when the model or the data window changes -
+# not three times a race weekend. Keeping them on a separate schedule is also
+# what stops the published accuracy figures drifting away from the ones written
+# down in the README.
+#
+# Both commands are slow by design: the backtest refits per race across three
+# seasons, and the title backtest refits at four checkpoints in each of seven.
+
+on:
+  schedule:
+    - cron: "0 4 1 * *"    # 1st of the month, 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: evaluate
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Restore data cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: jolpica-${{ github.run_id }}
+          restore-keys: jolpica-
+
+      - name: Ingest
+        run: python -m f1pred.cli ingest-jolpica --seasons 2018-2026
+
+      - name: Repair status flags
+        run: python -m f1pred.cli repair
+
+      - name: Validate
+        run: python -m f1pred.cli validate
+
+      - name: Features
+        run: python -m f1pred.cli build-features
+
+      # The window and the tuning season here must match what the README and
+      # the method page report. Change one, change all three.
+      - name: Backtest
+        run: python -m f1pred.cli backtest --start-season 2024 --tune --tune-season 2022
+
+      - name: Title backtest
+        run: python -m f1pred.cli title-backtest
+
+      # Re-fits how wide the projection's range has to be to keep its stated
+      # 10th-90th promise, and re-grades that choice on held-out seasons. The
+      # coverage numbers on the method page come from here.
+      - name: Calibrate projection spread
+        run: python -m f1pred.cli calibrate-spread
+
+      - name: Verify
+        run: python -m f1pred.cli verify
+
+      - name: Commit evaluation
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports
+          git diff --staged --quiet || git commit -m "Evaluation $(date -u +%Y-%m-%d)"
+          git push

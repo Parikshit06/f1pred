@@ -14,8 +14,8 @@ Exit code is non-zero if any ERROR fires, so this is usable in CI.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import duckdb
 import pandas as pd

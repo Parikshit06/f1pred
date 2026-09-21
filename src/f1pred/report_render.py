@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -131,31 +131,34 @@ CSS = """
 [hidden]{display:none!important}
 
 :root{
-  --paper:#fbfaf8; --band:#f2f0ec; --ink:#0c0c0d; --ink-2:#4d4d52; --ink-3:#86868d;
-  --rule:#0c0c0d; --hair:#dedbd5;
-  --accent:#c8102e;            /* signal red: kerbs, lights, the live marker */
+  --paper:#faf9f6; --band:#f4f2ec; --chip:#eae7e0; --ink:#101012; --ink-2:#4e4e55; --ink-3:#67676d;
+  --rule:#101012; --hair:#dcd9d3;
+  --accent:#c8102e;            /* signal red: start lights and the live marker */
   --good:#12704a; --bad:#a8172e;
-  --car-edge:rgba(12,12,13,.32); --kerb-2:#ffffff;
+  --car-edge:rgba(16,16,18,.32);
+  --grain:.030; --grain-blend:multiply;
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --sans:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
   __TEAM_LIGHT__
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --paper:#0b0b0c; --band:#141416; --ink:#f4f3f0; --ink-2:#a3a29d; --ink-3:#6e6e74;
-    --rule:#f4f3f0; --hair:#232326;
-    --accent:#ff2d3f;
+    --paper:#0c0d11; --band:#121318; --chip:#1c1f26; --ink:#f2f2ef; --ink-2:#9fa1a8; --ink-3:#838389;
+    --rule:#f2f2ef; --hair:#23262d;
+    --accent:#ff3040;
     --good:#3cc98a; --bad:#ff6b7a;
-    --car-edge:rgba(255,255,255,.26); --kerb-2:#d8d5cf;
+    --car-edge:rgba(255,255,255,.26);
+    --grain:.055; --grain-blend:overlay;
     __TEAM_DARK__
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0b0b0c; --band:#141416; --ink:#f4f3f0; --ink-2:#a3a29d; --ink-3:#6e6e74;
-  --rule:#f4f3f0; --hair:#232326;
-  --accent:#ff2d3f;
+  --paper:#0c0d11; --band:#121318; --chip:#1c1f26; --ink:#f2f2ef; --ink-2:#9fa1a8; --ink-3:#838389;
+  --rule:#f2f2ef; --hair:#23262d;
+  --accent:#ff3040;
   --good:#3cc98a; --bad:#ff6b7a;
-  --car-edge:rgba(255,255,255,.26); --kerb-2:#d8d5cf;
+  --car-edge:rgba(255,255,255,.26);
+  --grain:.055; --grain-blend:overlay;
   __TEAM_DARK__
 }
 
@@ -163,15 +166,15 @@ body{margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--sans); font-size:15px; line-height:1.5;
   -webkit-font-smoothing:antialiased}
 
-/* Kerbing. Painted red-and-white at 45 degrees on every circuit on the
-   calendar, which makes it the one piece of F1 iconography that is a pattern
-   rather than somebody's trademark. Used as a 5px band under the masthead and
-   above the footer, and nowhere else.
-   A gradient wash sat here before. It was the generative-AI house style and it
-   is gone. */
-.kerb{height:6px; width:100%;
-  background:repeating-linear-gradient(135deg,
-    var(--accent) 0 10px, var(--kerb-2) 10px 20px)}
+/* Depth on the dark theme comes from grain, not a gradient.
+   Flat near-black reads as unfinished; a gradient wash reads as generated. A
+   fine fractal-noise overlay at 3-5% is the print answer: it is invisible as an
+   effect and it stops large dark areas looking like dead pixels. Generated
+   inline as an SVG filter, so the page stays a single file with no CDN. */
+body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  opacity:var(--grain); mix-blend-mode:var(--grain-blend);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")}
+
 .wrap{max-width:1140px; margin:0 auto; padding-inline:20px; padding-block:0 0}
 h1,h2,h3{margin:0; text-wrap:balance; letter-spacing:-.02em; font-weight:700}
 p{margin:0}
@@ -184,11 +187,12 @@ p{margin:0}
   font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase}
 .bar .sep{flex:1}
 .bar b{font-weight:600}
-/* The bar inverts the page, so a link in it must take the bar's own ink, not
-   the accent - the accent on the dark strap is unreadable. */
-.bar a{color:color-mix(in srgb, var(--paper) 78%, transparent); text-decoration:none;
-  border-bottom:1px solid color-mix(in srgb, var(--paper) 35%, transparent)}
-.bar a:hover{color:var(--paper); border-bottom-color:var(--paper)}
+/* The bar inverts the page, so its link takes the bar's own ink. A transparent
+   colour-mix was used here and computed to roughly the bar's own background at
+   some zoom levels; an opaque token cannot do that. */
+.bar a{color:var(--paper); text-decoration:none; opacity:.85;
+  border-bottom:1px solid color-mix(in srgb, var(--paper) 40%, transparent)}
+.bar a:hover{opacity:1; border-bottom-color:var(--paper)}
 .lights{display:inline-flex; gap:3px; align-items:center; margin-right:4px}
 .lights i{width:6px; height:6px; border-radius:50%;
   background:color-mix(in srgb, var(--paper) 22%, transparent);
@@ -200,7 +204,7 @@ p{margin:0}
 }
 
 /* ---- masthead --------------------------------------------------------- */
-.mast{padding:52px 0 30px}
+.mast{padding:52px 0 34px; border-bottom:2px solid var(--rule)}
 .mast h1{font-size:clamp(2.3rem,7vw,4.4rem); line-height:.96; font-weight:800;
   letter-spacing:-.035em}
 .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.2em;
@@ -215,7 +219,12 @@ p{margin:0}
 
 /* ---- section: label in the margin, content beside it ------------------- */
 /* Alternating full-bleed bands give the page rhythm without wrapping anything
-   in a card. */
+   in a card.
+   The step between paper and band is deliberately about 2.4 in L* - roughly
+   what a second ink pass costs on press. It was 4.2, which is enough to read
+   as a grey box dropped on the page rather than the same sheet under slightly
+   different light; every band edge already carries a hairline, so the tone
+   does not have to do the work of separating anything. */
 section{display:grid; grid-template-columns:132px 1fr; gap:0 28px;
   padding-block:44px; border-top:1px solid var(--hair); position:relative}
 section::before{content:""; position:absolute; inset:0; z-index:-1;
@@ -285,10 +294,16 @@ section > .body{min-width:0}
   .grid5 > .c-points, .colhead.grid5 > span:nth-child(7){display:none}
 }
 @media (max-width:480px){
-  .grid5{grid-template-columns:22px 3px minmax(80px,1fr) 56px 48px}
+  .grid5{grid-template-columns:22px 3px minmax(74px,1fr) 54px 46px; gap:0 8px}
   .grid5 > .c-start, .colhead.grid5 > span:nth-child(4){display:none}
-  .grid4{grid-template-columns:22px 3px minmax(80px,1fr) 56px 48px}
+  .grid4{grid-template-columns:22px 3px minmax(74px,1fr) 54px 46px; gap:0 8px}
   .grid4 > .c-third, .colhead.grid4 > span:nth-child(5){display:none}
+  /* The championship panels carry three numeric columns and overflow a 320px
+     screen if they keep them all. "Now" is the one a reader already knows. */
+  .gridC,.gridT{grid-template-columns:20px 3px minmax(70px,1fr) 58px 50px; gap:0 8px}
+  .gridC > .c-now, .colhead.gridC > span:nth-child(4){display:none}
+  .wrap{padding-inline:14px}
+  .bar .inner{padding:0 14px}
 }
 
 /* ---- the title arithmetic --------------------------------------------- */
@@ -373,7 +388,7 @@ tr.me td:first-child{box-shadow:inset 3px 0 0 var(--ink); padding-left:10px}
 .steps h3{font-size:.98rem; margin-bottom:5px}
 .steps p{color:var(--ink-2); font-size:.92rem; max-width:70ch}
 .steps code, .feat code, .cap code{font-family:var(--mono); font-size:.82em;
-  background:var(--band); padding:1px 5px; border-radius:2px; color:var(--ink)}
+  background:var(--chip); padding:1px 5px; border-radius:2px; color:var(--ink)}
 td.feat{white-space:normal; color:var(--ink-2); line-height:1.7}
 .lab span{display:block; margin-top:4px}
 
@@ -426,8 +441,10 @@ def _row_head(i: int, r: dict) -> str:
 
 def race_board(rows: list[dict]) -> str:
     out = [
-        "<div class='colhead grid5'><span></span><span></span><span>Driver</span>"
-        "<span>Start</span><span>Win</span><span>Podium</span><span>Points</span></div>"
+        (
+            "<div class='colhead grid5'><span></span><span></span><span>Driver</span>"
+            "<span>Start</span><span>Win</span><span>Podium</span><span>Points</span></div>"
+        )
     ]
     for i, r in enumerate(rows):
         grid = r.get("grid")
@@ -447,8 +464,10 @@ def race_board(rows: list[dict]) -> str:
 
 def quali_board(rows: list[dict]) -> str:
     out = [
-        "<div class='colhead grid4'><span></span><span></span><span>Driver</span>"
-        "<span>Pole</span><span>Top 3</span><span>Top 10</span></div>"
+        (
+            "<div class='colhead grid4'><span></span><span></span><span>Driver</span>"
+            "<span>Pole</span><span>Top 3</span><span>Top 10</span></div>"
+        )
     ]
     for i, r in enumerate(rows):
         out.append(
@@ -476,9 +495,11 @@ def _odds(p: float) -> str:
 def championship_panel(title: str, rows: list[dict], name_key: str, sub_key: str | None) -> str:
     out = [
         f"<div class='panel'><h3>{esc(title)}</h3>",
-        "<div class='colhead gridC'><span></span><span></span><span>"
-        f"{'Driver' if sub_key else 'Constructor'}</span>"
-        "<span>Now</span><span>Projected</span><span>Title</span></div>",
+        (
+            "<div class='colhead gridC'><span></span><span></span><span>"
+            f"{'Driver' if sub_key else 'Constructor'}</span>"
+            "<span>Now</span><span>Projected</span><span>Title</span></div>"
+        ),
     ]
     for i, r in enumerate(rows):
         out.append(
@@ -489,7 +510,7 @@ def championship_panel(title: str, rows: list[dict], name_key: str, sub_key: str
             f"{esc(team_name(r[name_key]) if not sub_key else r[name_key])}</div>"
             + (f"<div class='team'>{esc(team_name(r.get('team')))}</div>" if sub_key else "")
             + "</div>"
-            + f"<div class='v dim'>{r['now']:.0f}</div>"
+            + f"<div class='v dim c-now'>{r['now']:.0f}</div>"
             + f"<div class='v lead'>{r['projected']:.0f}"
             + (
                 f"<span class='rng'>{r['low']:.0f}\u2013{r['high']:.0f}</span>"
@@ -596,8 +617,10 @@ def progression_chart(
         return pad_t + plot_h - (v / y_top) * plot_h
 
     out = [
-        f"<div class='chart'><svg viewBox='0 0 {width} {height}' role='img' "
-        f"aria-label='Cumulative championship points by round, actual then projected'>"
+        (
+            f"<div class='chart'><svg viewBox='0 0 {width} {height}' role='img' "
+            f"aria-label='Cumulative championship points by round, actual then projected'>"
+        )
     ]
 
     for v in range(0, y_top + 1, step):
@@ -752,7 +775,7 @@ def top_bar(prediction: dict | None, generated: datetime) -> str:
 # The page's only script. Three jobs, each of which is something static HTML
 # genuinely cannot do: say how long ago the page was built, count down to the
 # race, and read values off the chart.
-SCRIPT = """
+SCRIPT = r"""
 (function(){
   var rtf = null;
   try { rtf = new Intl.RelativeTimeFormat(undefined,{numeric:'auto'}); } catch(e){}
@@ -901,4 +924,4 @@ def json_payload(obj) -> str:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)

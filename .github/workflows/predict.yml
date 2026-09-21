@@ -50,8 +50,11 @@ jobs:
       - name: Features
         run: python -m f1pred.cli build-features
 
-      - name: Backtest
-        run: python -m f1pred.cli backtest --start-season 2022 --retrain-every 2
+      # No backtest here. It evaluates historical performance, which does not
+      # change between Friday and Sunday, and re-running it per weekend with a
+      # different window than the one the README reports would let the
+      # published accuracy numbers drift away from the documented ones. It runs
+      # on its own schedule in evaluate.yml and commits reports/*.json.
 
       - name: Predict
         run: python -m f1pred.cli predict --next

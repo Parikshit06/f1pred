@@ -414,7 +414,7 @@ def audit_calibration(res) -> Audit:
     lo, hi, verdict = [], [], []
     for row in cal.itertuples():
         n = int(row.n)
-        k = int(round(row.actual * n))
+        k = round(row.actual * n)
         a, b = _wilson(k, n)
         lo.append(round(a, 3))
         hi.append(round(b, 3))
@@ -426,7 +426,7 @@ def audit_calibration(res) -> Audit:
     total_n = int(cal["n"].sum())
     pooled_pred = float((cal["predicted"] * cal["n"]).sum() / total_n)
     pooled_obs = float((cal["actual"] * cal["n"]).sum() / total_n)
-    agg_lo, agg_hi = _wilson(int(round(pooled_obs * total_n)), total_n)
+    agg_lo, agg_hi = _wilson(round(pooled_obs * total_n), total_n)
     aggregate_ok = agg_lo <= pooled_pred <= agg_hi
 
     detail = (

@@ -10,8 +10,8 @@ Derived tables (features, predictions) never overwrite raw_*.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import duckdb
 import pandas as pd
@@ -169,6 +169,22 @@ CREATE TABLE IF NOT EXISTS ingest_log (
     PRIMARY KEY (source, scope)
 );
 """
+
+
+def database_exists() -> bool:
+    """Whether there is anything to read yet.
+
+    A read-only connect to a missing file raises rather than creating one. That
+    is right for the pipeline - `build-features` on a machine with no data
+    should fail loudly and say so - but wrong for the two readers that only
+    decorate a rendered page: the track record and the driver-surname lookup.
+    Those have a sensible empty answer, and a fresh clone has no database
+    because `data/*.duckdb` is rebuildable and therefore not committed.
+
+    This is what CI caught on its first run: three tests rendered a page, the
+    page reached for the database, and there was none.
+    """
+    return config.DB_PATH.exists()
 
 
 @contextmanager

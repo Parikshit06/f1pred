@@ -28,20 +28,20 @@ log = logging.getLogger(__name__)
 # directly is the consistent choice - and it measurably beat pairwise on the
 # 2021 hold-out (NDCG@5 0.892 vs 0.804, winner hit rate 64% vs 23%). Pairwise
 # spends capacity separating 15th from 16th, which nobody cares about.
-PARAMS = dict(
-    objective="rank:ndcg",
-    eval_metric="ndcg@5",
-    lambdarank_num_pair_per_sample=8,
-    n_estimators=400,
-    learning_rate=0.05,
-    max_depth=4,
-    min_child_weight=5,
-    subsample=0.85,
-    colsample_bytree=0.8,
-    reg_lambda=2.0,
-    random_state=config.RANDOM_SEED,
-    n_jobs=4,
-)
+PARAMS = {
+    "objective": "rank:ndcg",
+    "eval_metric": "ndcg@5",
+    "lambdarank_num_pair_per_sample": 8,
+    "n_estimators": 400,
+    "learning_rate": 0.05,
+    "max_depth": 4,
+    "min_child_weight": 5,
+    "subsample": 0.85,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 2.0,
+    "random_state": config.RANDOM_SEED,
+    "n_jobs": 4,
+}
 
 
 # Averaging several seeds measured as accuracy-neutral on the 2021 hold-out
