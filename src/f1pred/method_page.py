@@ -1,0 +1,472 @@
+"""Model documentation: specification, features, measured performance.
+
+Written as a spec sheet, not an essay. Each section names the command that
+regenerates it. Earlier drafts of this page explained why each choice was good;
+that is the register that makes a page read as generated, and it is also not
+what a reader checking the work needs.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+
+import pandas as pd
+
+from . import config
+from . import report_render as rr
+
+log = logging.getLogger(__name__)
+
+
+def _load(name: str) -> dict:
+    path = config.REPORTS / name
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        log.warning("could not read %s", path)
+        return {}
+
+
+def _surnames() -> dict[str, str]:
+    """driver_id -> family name, so the graded table reads as names and not keys."""
+    from .store import connect, database_exists
+
+    if not database_exists():
+        return {}
+
+    with connect(read_only=True) as con:
+        return dict(con.execute("SELECT driver_id, max(family_name) FROM raw_drivers GROUP BY 1").fetchall())
+
+
+def _step(n: int, title: str, body: str) -> str:
+    return f"<li><div class='sn'>{n}</div><div><h3>{rr.esc(title)}</h3><p>{body}</p></div></li>"
+
+
+PIPELINE = [
+    (
+        "Rank",
+        (
+            "XGBoost ranker, objective <code>rank:ndcg</code>, trained on one group per race so "
+            "each race contributes every pairwise comparison inside it rather than a single "
+            "winner label. Output is an unbounded score per driver."
+        ),
+    ),
+    (
+        "Convert",
+        (
+            "Plackett-Luce: P(driver leads the field) &prop; exp(score / T). T is fitted by log "
+            "loss on held-out races and re-fitted from a trailing 24-race window."
+        ),
+    ),
+    (
+        "Simulate",
+        (
+            "10,000 races. Per run: pace noise at 0.55&times; the spread in model score, a "
+            "safety-car draw at the circuit's historical rate, and an independent retirement draw "
+            "per car from its own recent DNF rate. Before qualifying, each run samples its own "
+            "grid from the qualifying model."
+        ),
+    ),
+    (
+        "Blend",
+        (
+            "Published win probability is a fitted mix of the closed-form ranking and the "
+            "simulation. Podium and points probabilities are read off the simulated finishing "
+            "positions directly."
+        ),
+    ),
+    (
+        "Project",
+        (
+            "Remaining calendar run 10,000 times with the same noise model, carrying points "
+            "already scored. Returns mean, 10th and 90th percentile, expected wins, and title "
+            "probability."
+        ),
+    ),
+]
+
+NOT_MODELLED = [
+    ("Weather", "Forecasts are ingested but are not a feature. The model does not know it will rain."),
+    (
+        "Strategy",
+        (
+            "No tyre model, no undercut, no stop count. Pit-crew speed was built as a feature and "
+            "measured; it cost log loss on 62 races and was cut."
+        ),
+    ),
+    (
+        "Penalties",
+        (
+            "Pre-session grid drops arrive through the grid. In-race decisions do not. Splitting "
+            "retirements into driver-caused and car-caused was tried and moved no metric at all."
+        ),
+    ),
+    (
+        "Upgrades",
+        (
+            "Which team improves is not forecast, and nothing here can forecast it. How far a team's "
+            "pace can move is in the championship projection's range - see below."
+        ),
+    ),
+    ("Team orders", "Not represented."),
+    (
+        "Remaining sprints",
+        "Sprint calendar for future rounds is not in the source data, so sprint points are excluded from the projection. Bound: 8 points per sprint.",
+    ),
+]
+
+
+def _pooled_calibration(c: pd.DataFrame) -> str:
+    """The one-line reading of the calibration table, taken from the table.
+
+    It used to be prose with the figures typed into it, and the figures went
+    stale the first time the backtest was re-run: the page claimed a pooled
+    0.538 against 0.597 over 62 races while the table beside it summed to 61.
+    A number quoted next to the evidence for it has to come from the evidence.
+    """
+    n = pd.to_numeric(c["n"], errors="coerce")
+    pred = pd.to_numeric(c["predicted"], errors="coerce")
+    obs = pd.to_numeric(c["actual"], errors="coerce")
+    if not n.sum() or pred.isna().any() or obs.isna().any():
+        return ""
+    pooled_pred = float((pred * n).sum() / n.sum())
+    pooled_obs = float((obs * n).sum() / n.sum())
+    direction = "under" if pooled_obs > pooled_pred else "over"
+    return (
+        f"Buckets hold {int(n.min())}&ndash;{int(n.max())} races; read n before reading a row. "
+        f"Pooled over {int(n.sum())} races: stated {pooled_pred:.3f}, observed {pooled_obs:.3f} "
+        f"&mdash; mildly {direction}-confident."
+    )
+
+
+def _high_end(cal: pd.DataFrame, checkpoints: pd.DataFrame) -> str:
+    """How much a near-certain title call is actually worth, and the misses.
+
+    Both come out of the graded checkpoints. Hand-written they drifted: the
+    page read "16 of 16 correct above 95%" and quoted Bottas at 78.4% against
+    a table on the same page showing twelve and 77.2%.
+    """
+    # "over 95%", not "80-95%" - both contain the number, and the loose match
+    # read the wrong row.
+    top = cal[cal["bucket"].astype(str).str.startswith("over")]
+    text = "<p class='cap' style='margin-top:20px'><b>Reading the high end.</b> "
+    if not top.empty:
+        row = top.iloc[0]
+        n = int(float(row["n"]))
+        hits = round(float(row["happened"]) * n)
+        text += (
+            f"{hits} of {n} correct above 95%. On n={n} that is consistent with a true rate as "
+            f"low as {float(row['ci_low']) * 100:.0f}% (Wilson, 95%). "
+        )
+    text += (
+        "Treat a published 99.9% as <em>settled on current form and arithmetic</em>, not as a "
+        "calibrated one-in-a-thousand."
+    )
+
+    missed = checkpoints[checkpoints["favourite_was_right"] == 0]
+    if not missed.empty:
+        surnames = _surnames()
+
+        def name(d: str) -> str:
+            return surnames.get(d, d.replace("_", " ").title())
+
+        parts = [
+            f"{int(m.season)} r{int(m.after_round)} favoured {name(m.favourite)} "
+            f"at {m.p_favourite * 100:.1f}%"
+            for m in missed.itertuples()
+        ]
+        text += " Recorded misses: " + "; ".join(parts) + "."
+    return text + "</p>"
+
+
+def _earliest_checkpoint(held: dict) -> str:
+    """The first checkpoint of a season, before and after calibration.
+
+    Quoted rather than computed, this said "a third of the way in, it went
+    from 25% to 90%" while the constant it describes had 30% written beside
+    it in config.py. Neither could be checked against anything, so the sweep
+    now writes the breakdown out and the sentence reads it.
+    """
+    before = (held.get("before") or {}).get("by_elapsed") or {}
+    after = (held.get("after") or {}).get("by_elapsed") or {}
+    shared = sorted(set(before) & set(after), key=float)
+    if not shared:
+        return ""
+    first = shared[0]
+    return (
+        f" &mdash; {float(first):.0%} of the way in, it went from {before[first]:.0%} to {after[first]:.0%}"
+    )
+
+
+def build(standalone: bool = True) -> str:
+    bt = _load("backtest.json")
+    tb = _load("title_backtest.json")
+
+    s: list[str] = [
+        (
+            "<div class='bar'><div class='inner'><b>Method and accuracy</b>"
+            "<span class='sep'></span><a href='index.html'>&larr; Back to the forecast</a>"
+            "</div></div>"
+        ),
+        "<div class='wrap'>",
+        "<header class='mast'>",
+        "<div class='kicker'>f1pred</div>",
+        "<h1>Model specification</h1>",
+        (
+            "<p class='sub'>Architecture, features, and measured performance. Each section names "
+            "the command that regenerates it.</p>"
+        ),
+        "</header>",
+    ]
+
+    # ---- pipeline --------------------------------------------------------
+    s.append(
+        "<section><div class='lab'><b>Pipeline</b><span>src/f1pred</span></div>"
+        "<div class='body'><ol class='steps'>"
+        + "".join(_step(i + 1, t, b) for i, (t, b) in enumerate(PIPELINE))
+        + "</ol></div></section>"
+    )
+
+    # ---- features --------------------------------------------------------
+    from . import features as F
+
+    groups = [
+        (
+            "Driver form",
+            [
+                "drv_avg_finish_3",
+                "drv_avg_finish_5",
+                "drv_positions_gained_5",
+                "drv_podium_rate_10",
+                "drv_top10_rate_10",
+                "drv_points_rate_5",
+            ],
+        ),
+        (
+            "Car pace",
+            [
+                "team_pace_gap_pct",
+                "drv_pace_gap_pct",
+                "team_pace_trend",
+                "team_avg_quali_5",
+                "drv_avg_quali_5",
+                "drv_pole_rate_10",
+            ],
+        ),
+        ("Reliability", ["drv_dnf_rate_10", "team_dnf_rate_10", "circuit_dnf_rate"]),
+        (
+            "This circuit",
+            [
+                "drv_circuit_avg_finish",
+                "team_circuit_avg_finish",
+                "circuit_overtaking_score",
+                "circuit_pole_win_rate",
+                "drv_circuit_starts",
+            ],
+        ),
+        ("Known after qualifying", F.GRID_FEATURES),
+        ("Practice, when available", F.PRACTICE_FEATURES),
+    ]
+    rows = "".join(
+        f"<tr><td>{rr.esc(name)}</td><td class='feat'>"
+        + ", ".join(f"<code>{rr.esc(f)}</code>" for f in items)
+        + "</td></tr>"
+        for name, items in groups
+    )
+    s.append(
+        "<section class='band'><div class='lab'><b>Features</b>"
+        f"<span>{len(set(F.RACE_FEATURES) | set(F.QUALI_FEATURES))} in total</span></div>"
+        "<div class='body'><p class='cap'>All rolling windows shift by one race before "
+        "aggregating, through a single shared helper. Retirements are excluded from pace "
+        "averages and counted separately as unreliability.</p>"
+        f"<div class='scroll'><table>{rows}</table></div></div></section>"
+    )
+
+    # ---- race accuracy ---------------------------------------------------
+    body = (
+        "<p class='cap'>Walk-forward. Each race predicted by a model trained only on "
+        "earlier races, scored against baselines requiring no model. Lower log loss and "
+        "Brier are better. Hyperparameters fitted on 2022&ndash;23, bounded at both ends, "
+        "and not re-fitted on the reported window.</p>"
+    )
+    if bt.get("summary"):
+        b = pd.DataFrame(bt["summary"]).rename(
+            columns={
+                "method": "approach",
+                "top5_overlap": "top 5",
+                "podium_overlap": "podium",
+                "top1_hit": "winner",
+                "ndcg5": "ndcg@5",
+                "logloss": "log loss",
+                "n_races": "races",
+            }
+        )
+        names = {
+            "model": "This model",
+            "grid": "Grid order",
+            "championship": "Championship leader",
+            "recent_form": "Recent driver form",
+            "team_form": "Team form",
+        }
+        b["approach"] = b["approach"].map(lambda x: names.get(x, x))
+        cols = [
+            c
+            for c in ["approach", "top 5", "podium", "winner", "ndcg@5", "log loss", "brier", "races"]
+            if c in b.columns
+        ]
+        body += rr.table(
+            b[cols].round(3),
+            emphasise="This model",
+            best_cols={
+                "top 5": "max",
+                "podium": "max",
+                "winner": "max",
+                "ndcg@5": "max",
+                "log loss": "min",
+                "brier": "min",
+            },
+        )
+    if bt.get("by_season"):
+        body += "<p class='cap' style='margin-top:26px'>By season. 2026 is live and incomplete.</p>"
+        body += rr.table(pd.DataFrame(bt["by_season"]).round(3), emphasise="This model")
+    s.append(
+        "<section><div class='lab'><b>Race accuracy</b><span>make backtest</span></div>"
+        f"<div class='body'>{body}</div></section>"
+    )
+
+    # ---- calibration -----------------------------------------------------
+    if bt.get("calibration"):
+        c = pd.DataFrame(bt["calibration"])
+        c.columns = [str(x) for x in c.columns]
+        s.append(
+            "<section class='band'><div class='lab'><b>Calibration</b><span>make verify</span></div>"
+            "<div class='body'><p class='cap'>Stated probability against observed frequency. "
+            f"{_pooled_calibration(c)} <code>make verify</code> tests each bucket against its "
+            "own Wilson interval rather than on the raw gap, because a bucket this size "
+            "cannot tell a real miss from sampling noise.</p>" + rr.table(c) + "</div></section>"
+        )
+
+    # ---- title projection, graded ---------------------------------------
+    if tb.get("checkpoints"):
+        f = pd.DataFrame(tb["checkpoints"])
+        cal = pd.DataFrame(tb.get("calibration") or [])
+        hit = f["favourite_was_right"].mean()
+        body = (
+            "<p class='cap'>Each completed season stopped at four checkpoints; title projected "
+            "from the model as it stood at that point; compared against the eventual champion. "
+            f"{len(f)} checkpoints across {f['season'].nunique()} seasons. Favourite correct "
+            f"{hit * 100:.0f}% of the time, Brier {tb.get('brier', 0):.3f}.</p>"
+        )
+        if not cal.empty:
+            body += rr.table(cal)
+            body += _high_end(cal, f)
+        show = f[
+            [
+                "season",
+                "after_round",
+                "races_left",
+                "favourite",
+                "p_favourite",
+                "champion",
+                "favourite_was_right",
+            ]
+        ].copy()
+        surnames = _surnames()
+        for col in ("favourite", "champion"):
+            show[col] = show[col].map(lambda d: surnames.get(d, d.replace("_", " ").title()))
+        show["favourite_was_right"] = show["favourite_was_right"].map({1: "yes", 0: "no"})
+        show = show.rename(
+            columns={
+                "after_round": "after round",
+                "races_left": "races left",
+                "favourite": "model favourite",
+                "p_favourite": "claimed",
+                "favourite_was_right": "correct",
+            }
+        )
+        body += rr.table(show.round(3))
+        s.append(
+            "<section><div class='lab'><b>Title projection</b><span>make title-backtest</span></div>"
+            f"<div class='body'>{body}</div></section>"
+        )
+
+    # ---- does the published range hold up? --------------------------------
+    sc = _load("spread_calibration.json")
+    if sc.get("held_out"):
+        held = sc["held_out"]
+        fit = sc.get("fit_seasons") or []
+        grade = sc.get("grade_seasons") or []
+        rows = pd.DataFrame(
+            [
+                {
+                    "projection": label,
+                    "band held": f"{held[key]['coverage']:.0%}",
+                    "should be": "80%",
+                    "mean band width": f"{held[key]['width']:.0f} pts",
+                }
+                for label, key in (("Pace held fixed", "before"), ("Current model", "after"))
+            ]
+        )
+        body = (
+            "<p class='cap'>The projection publishes a 10th&ndash;90th percentile band, which is a "
+            "claim that can be checked: the real final total should land inside it eight times in "
+            "ten. Graded against completed constructors' standings, one team at a time, it did not."
+            "</p>"
+            + rr.table(rows)
+            + "<p class='cap'>Race-to-race luck averages out over a dozen races, so it was never "
+            "what made a season miss. What does not average out is the model being wrong about a "
+            "car today and carrying that into every remaining race. The projection now draws one "
+            "pace offset per team per simulated season, sized by how much of the season is left. "
+            "Development is part of what that covers, but the smaller part: fitted on its own it "
+            "is worth 1.4 finishing positions over a full season and moved coverage by two points."
+            "</p>"
+            f"<p class='cap'>Size chosen on {fit[0] if fit else '2019'}&ndash;"
+            f"{fit[-1] if fit else '2022'} and graded on {grade[0] if grade else '2023'}&ndash;"
+            f"{grade[-1] if grade else '2025'}, which the sweep never saw. Still short of 80%, and "
+            "the gain is concentrated early in the season where the old band was worst"
+            f"{_earliest_checkpoint(held)}.</p>"
+        )
+        s.append(
+            "<section><div class='lab'><b>Does the range hold up?</b>"
+            "<span>make calibrate-spread</span></div>"
+            f"<div class='body'>{body}</div></section>"
+        )
+
+    # ---- limits ----------------------------------------------------------
+    s.append(
+        "<section class='band'><div class='lab'><b>Not modelled</b><span>Known gaps</span></div>"
+        "<div class='body'><p class='cap'>Sources of error the probabilities do not "
+        "capture.</p>"
+        "<div class='scroll'><table>"
+        + "".join(f"<tr><td>{rr.esc(k)}</td><td class='feat'>{rr.esc(v)}</td></tr>" for k, v in NOT_MODELLED)
+        + "</table></div></div></section>"
+    )
+
+    # ---- audit -----------------------------------------------------------
+    s.append(
+        "<section><div class='lab'><b>Audit trail</b><span>predictions/</span></div>"
+        "<div class='body'><p class='cap'>Each forecast is written to <code>predictions/</code> "
+        "as timestamped JSON and committed before the session runs. Grading happens afterwards "
+        "against the classified result. Commit timestamps make the ordering verifiable by a "
+        "third party.</p></div></section>"
+    )
+
+    s.append(
+        "<footer><span>Data: jolpica-f1 &middot; FastF1</span>"
+        f"<span><a href='index.html'>Forecast</a> &middot; "
+        f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"
+    )
+    s.append("</div>")
+    return rr.document("".join(s), standalone=standalone, title="Method and accuracy")
+
+
+def write(path: Path | None = None) -> Path:
+    path = path or (config.REPORTS / "method.html")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(build())
+    log.info("Wrote %s", path)
+    return path
