@@ -61,85 +61,40 @@ OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 FIRST_SEASON = 2018
 CURRENT_SEASON = 2026
 
-# Every number below is fitted, never chosen. They come from a walk-forward
-# over 2022-2023 only - the seasons BEFORE the window the README reports - so
-# the headline table stays out-of-sample. An earlier version tuned from 2022
-# with no upper bound, which quietly walked through 2024-2026 and fitted the
-# settings on the very races it then reported; see tune_* in backtest.py.
-#
-# Re-fit with: f1pred.cli backtest --start-season 2024 --tune --tune-season 2022
+# Fitted on 2022-23 only, which is before the window the README reports, so the
+# headline numbers stay out-of-sample. The tuner is bounded at both ends -
+# an earlier version had no end season and walked into the reported window.
+# Re-fit: f1pred.cli backtest --start-season 2024 --tune --tune-season 2022
 
-# How much heavier a current-season race counts in training. The reel this is
-# modelled on used 3x because that felt about right; the tuner says 1.5.
-#
-# It briefly said 4x, which was the model compensating for a defect rather than
-# learning about F1: recent form was being poisoned by retirements scored as
-# last place, so the only way to get a usable signal was to lean hard on the
-# newest races. Once pace and reliability were separated the need for that
-# largely went away. A settings value that moves a long way when a bug is fixed
-# is usually a symptom, not a finding.
+# Weight on current-season races in training. Was briefly fitted at 4x, which
+# turned out to be the model compensating for retirements being scored as last
+# place; it dropped to 1.5 once pace and reliability were separated.
 DEFAULT_CURRENT_SEASON_WEIGHT = 1.5
 
-# Plackett-Luce sharpness. Below 1 means the model is more decisive than raw
-# ranking scores imply; it is fitted by log loss on held-out races.
+# Plackett-Luce sharpness. Below 1 = more decisive than the raw scores imply.
 DEFAULT_TEMPERATURE = 0.4
 
-# How much to trust the closed-form ranking over the simulation. The rest is
-# the Monte Carlo, which is what prices in retirements and safety cars - and it
-# earns more of the weight now that the retirement rates it samples from are
-# correct.
+# Weight on the closed-form ranking vs the simulation.
 DEFAULT_BLEND_WEIGHT = 0.6
 
-# How far a team's real pace can end up from where the model has it, over the
-# rest of a season. This is the term that stops a title projection printing a
-# range it cannot honour.
+# How far a team's real pace can be from where the model has it, over the rest
+# of a season. Without it the projection only carried race-to-race noise, which
+# averages out, so the published 10th-90th band covered 46% of real final
+# constructors' totals instead of 80%.
 #
-# The projection used to hold every team's pace fixed at whatever the ranker
-# said this weekend, so the only uncertainty in the remaining season was
-# race-to-race noise - and noise averages out over a dozen races. The published
-# 10th-90th band was therefore very narrow, and graded against real final
-# constructors' standings it contained the truth 45% of the time instead of 80%.
+# It is not development. Development is real but small - fitted at 1.37
+# finishing positions per season (95% 0.90-1.83, 283 team-checkpoints) - and
+# adding exactly that much moved coverage by two points. Most of it is the
+# model being wrong about a car now, which unlike race noise is carried into
+# every remaining race.
 #
-# Three things can move a season away from the projection, and it is worth being
-# clear which one this is, because the obvious answer turned out to be wrong:
-#
-#   race-to-race noise  already modelled, and largely self-cancelling
-#   development         real - fitted at 1.37 finishing positions over a full
-#                       season remaining (95% 0.90-1.83, 283 team-checkpoints,
-#                       decaying to nothing by the last few races) - but far too
-#                       small to explain the gap. Adding it alone moved coverage
-#                       from 45% to 47%.
-#   being wrong now     the ranker's read of the field at round 8 is not the
-#                       field's true pace, and unlike race noise that error does
-#                       not average out. It is carried into every remaining race.
-#
-# The third dominates, so this constant stands for all three together rather
-# than pretending to isolate development. Each simulated season draws one pace
-# offset per team, held for the rest of the year, at this size scaled by how
-# much of the season is left.
-#
-# Calibrated the only way a predictive interval honestly can be - by whether it
-# covers. Swept on 2019-2022, where 6.0 put coverage at 81%, then graded on
-# 2023-2025, which the sweep never saw:
-#
-#                        coverage   mean band width
-#   fixed pace              45.8%              38.8
-#   calibrated (6.0)        70.8%              89.7
-#   target                  80.0%
-#
-# Still short of 80, and the method page says so rather than rounding it off.
-# The gain is concentrated early in the season, where the old band was worst.
-#
-# Those figures are a transcription of one run and will go stale; the run that
-# produced them is in reports/spread_calibration.json, which is what the method
-# page actually renders. Re-fit with: f1pred.cli calibrate-spread
+# Calibrated by coverage: swept on 2019-22, graded on 2023-25 (46% -> 71%,
+# target 80%). Re-fit: f1pred.cli calibrate-spread
 SEASON_PACE_UNCERTAINTY = 6.0  # finishing positions, per full season remaining
 
-# The exchange rate between the two scales, so the figure above can be fitted in
-# finishing positions - where it means something to a reader - and applied in
-# model score, where the simulator works. Measured inside the simulator by
-# nudging one car's score and reading off where it finishes: 5.62 positions per
-# unit of score spread, and stable across eras at 5.45 to 6.07.
+# Positions per unit of score spread, measured inside the simulator by nudging
+# one car's score and reading where it finishes. Stable across eras: 5.45-6.07.
+# Lets the constant above be fitted in positions and applied in score.
 POSITIONS_PER_SCORE_SD = 5.62
 
 N_SIMULATIONS = 10_000

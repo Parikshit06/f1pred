@@ -78,6 +78,12 @@ jobs:
       - name: Verify
         run: python -m f1pred.cli verify
 
+      # The pages quote these numbers, so they are rebuilt in the same run that
+      # refreshes them. Without this the evidence moves and the published pages
+      # keep showing the previous month's figures until the next race weekend.
+      - name: Rebuild the pages against the new evidence
+        run: python -m f1pred.cli dashboard
+
       - name: Commit evaluation
         run: |
           git config user.name  "github-actions[bot]"

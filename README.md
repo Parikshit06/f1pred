@@ -1,8 +1,13 @@
 # f1pred
 
-Calibrated probabilities for Formula 1 qualifying, races and the championship.
+Probabilistic forecasts for Formula 1 qualifying, races and the championship.
 Every forecast is timestamped into `predictions/` before the session runs, then
 graded against the result.
+
+Race probabilities are calibrated in aggregate: across 62 held-out races the
+model claimed its favourite would win 54.7% of the time and they won 54.8%. The
+championship band is not — it covers 71% where it should cover 80%, which the
+method page states rather than rounds off.
 
 **[Live forecast →](https://parikshit06.github.io/f1pred/)** ·
 **[Method and accuracy →](https://parikshit06.github.io/f1pred/method.html)**
@@ -14,31 +19,38 @@ only on earlier races. Settings fitted on 2022–23 only, bounded at both ends.
 
 | Approach | Top 5 | Podium | Winner | NDCG@5 | Log loss | Brier |
 |---|---|---|---|---|---|---|
-| Grid order | **3.92** | **2.07** | **58%** | **0.898** | 1.493 | 0.617 |
-| **This model** | 3.86 | 1.97 | **58%** | 0.889 | **1.167** | **0.567** |
+| Grid order | **3.92** | **2.06** | **58%** | **0.898** | 1.493 | 0.617 |
+| **This model** | 3.89 | 1.92 | 55% | 0.890 | **1.169** | **0.572** |
 | Championship leader | 3.45 | 1.69 | 31% | 0.809 | 2.197 | 0.833 |
 | Recent driver form | 3.40 | 1.48 | 27% | 0.789 | 2.129 | 0.880 |
-| Team form | 3.07 | 1.45 | 31% | 0.766 | 2.322 | 0.890 |
+| Team form | 3.06 | 1.45 | 31% | 0.766 | 2.322 | 0.890 |
 
-Matches the grid on winners, slightly behind on ordering, clearly ahead on log
-loss and Brier — the two that measure whether a stated probability was true. A
-grid says "pole wins" with no confidence attached, so when it is wrong it is
-wrong absolutely.
+**It loses to the grid on every ordering metric and wins on both probability
+metrics.** Two fewer winners called across 62 races, a tenth of a place behind
+on top-five — and log loss 1.169 against 1.493, Brier 0.572 against 0.617. Those
+last two are the ones that measure whether a stated probability was true, which
+a grid readout cannot do at all: it says "pole wins" with no confidence
+attached, so when it is wrong it is wrong absolutely.
 
-That the grid is this strong is the real finding: most of a race is decided on
-Saturday.
+That the grid is this strong is the real finding, and it is worth stating
+plainly rather than burying: most of a race is decided on Saturday. A model that
+beat it on ordering, on this data, would be a model to distrust.
 
 | Season | Top 5 | Winner | Log loss | Grid log loss | Races |
 |---|---|---|---|---|---|
-| 2024 | 4.04 | 45.8% | **1.576** | 1.720 | 24 |
-| 2025 | 3.92 | 62.5% | **0.945** | 1.122 | 24 |
-| 2026 | 3.43 | **71.4%** | **0.849** | 1.738 | 14 |
+| 2024 | 4.08 | 41.7% | **1.581** | 1.720 | 24 |
+| 2025 | 3.96 | 58.3% | **0.928** | 1.122 | 24 |
+| 2026 | 3.43 | 71.4% | **0.875** | 1.738 | 14 |
+
+2026 is the live season and only 14 races, so its 71.4% is the least reliable
+number in this README; a single race moves it by seven points. The log loss
+column is the one worth reading across seasons.
 
 ## Championship projection
 
-**The favourite.** 27 checkpoints across 7 completed seasons: Brier **0.113**,
+**The favourite.** 27 checkpoints across 7 completed seasons: Brier **0.118**,
 correct **85%** of the time. Above 95% claimed it is 12 for 12 — but the 95%
-interval on twelve straight runs down to **0.76**. So a published 99.9% means
+interval on 12 straight runs down to **0.76**. So a published 99.9% means
 *the arithmetic says this is over*, not a calibrated one-in-a-thousand.
 
 **The range.** It publishes a 10th–90th percentile band on every points total.
@@ -46,17 +58,19 @@ Graded against real final constructors' standings:
 
 | Projection | Band held | Should be | Band width |
 |---|---|---|---|
-| Pace held fixed | 46% | 80% | 39 pts |
+| Pace held fixed | 47% | 80% | 39 pts |
 | **Current** | **71%** | 80% | 90 pts |
 
 Upgrades were the obvious suspect and measurably not the cause: development
 fits at **1.37 finishing positions** over a season (95% 0.90–1.83, 283
-team-checkpoints), and adding exactly that much moved coverage 45% → 47%.
+team-checkpoints), and adding exactly that much moved coverage barely at all.
 
 The real gap is that race luck averages out over a dozen races but *the model
 being wrong about a car today* does not — it rides into every remaining race.
 Each simulated season now draws one pace offset per team, swept on 2019–2022
-and graded on 2023–2025. Still short of 80%, and the method page says so.
+and graded on 2023–2025. Still short of 80%, and the method page says so. The
+gain is concentrated early in the season, where the old band was worst;
+`make calibrate-spread` prints the breakdown by how much of the season had run.
 
 ## Measured and cut
 
@@ -93,7 +107,7 @@ now checks the flag against **laps completed** — a fact, not a label.
 last, and that went into rolling form features while reliability was already
 counted separately, charging one event twice.
 
-Together: log loss 1.281 → **1.167**, Brier 0.629 → **0.567**. The fitted
+Together: log loss 1.281 → **1.169**, Brier 0.629 → **0.567**. The fitted
 current-season weight fell from 4× to 1.5×, which had been the model
 compensating for corrupted form.
 
@@ -133,7 +147,7 @@ Slower, run separately: `make backtest`, `make title-backtest`,
 the reported window and the season the settings are fitted on are `START` and
 `TUNE` in the Makefile, and the CLI refuses to report on a window it tuned on.
 
-Gates: `make test` (164 tests), `make lint`, `make verify` (7 audits — leakage,
+Gates: `make test` (177 tests), `make lint`, `make verify` (7 audits — leakage,
 inputs, weighting, bias, accuracy, calibration, sanity).
 
 `ci.yml` runs tests and lint on pushes to `main` and on every pull request;
@@ -206,10 +220,14 @@ their 500/hour persisted between runs, backoff on 429, everything cached.
 
 ## Limits
 
-About 80% of an F1 result is which car is fastest, and roughly one race in six
-turns on something nothing knowable beforehand predicts. A well-built model
-lands near 35–50% on winners in a dominant-car season and lower in a close one.
-Anything claiming much more is leaking.
+Most of a race is settled before it starts. The measure of that here is the
+grid baseline: starting order alone calls 58% of winners and scores 3.92 on
+top-five, which is the bar any model has to clear. Retirements and safety cars
+account for much of the rest, and neither is knowable beforehand.
+
+Per-season winner accuracy swings between 42% and 71% on 14–24 races each. That
+spread is what a sample this size looks like, not a trend — the 2026 figure in
+particular rests on 14 races and should not be read as the model improving.
 
 Not modelled: weather, tyre strategy, in-race penalties, team orders, and which
 team will improve. The method page lists these with what was tried against each.
