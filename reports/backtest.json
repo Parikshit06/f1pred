@@ -1,160 +1,166 @@
 {
- "summary": [
-  {
-   "method": "grid",
-   "top5_overlap": 3.919,
-   "podium_overlap": 2.065,
-   "top1_hit": 0.581,
-   "ndcg5": 0.898,
-   "spearman": 0.681,
-   "logloss": 1.493,
-   "brier": 0.617,
-   "n_races": 62
-  },
-  {
-   "method": "model",
-   "top5_overlap": 3.855,
-   "podium_overlap": 1.968,
-   "top1_hit": 0.581,
-   "ndcg5": 0.889,
-   "spearman": 0.667,
-   "logloss": 1.167,
-   "brier": 0.567,
-   "n_races": 62
-  },
-  {
-   "method": "championship",
-   "top5_overlap": 3.452,
-   "podium_overlap": 1.694,
-   "top1_hit": 0.306,
-   "ndcg5": 0.809,
-   "spearman": 0.569,
-   "logloss": 2.197,
-   "brier": 0.833,
-   "n_races": 62
-  },
-  {
-   "method": "recent_form",
-   "top5_overlap": 3.403,
-   "podium_overlap": 1.484,
-   "top1_hit": 0.274,
-   "ndcg5": 0.789,
-   "spearman": 0.589,
-   "logloss": 2.129,
-   "brier": 0.88,
-   "n_races": 62
-  },
-  {
-   "method": "team_form",
-   "top5_overlap": 3.065,
-   "podium_overlap": 1.452,
-   "top1_hit": 0.306,
-   "ndcg5": 0.766,
-   "spearman": 0.555,
-   "logloss": 2.322,
-   "brier": 0.89,
-   "n_races": 62
+  "summary": [
+    {
+      "method": "grid",
+      "top5_overlap": 3.919,
+      "podium_overlap": 2.065,
+      "top1_hit": 0.581,
+      "ndcg5": 0.898,
+      "spearman": 0.681,
+      "logloss": 1.493,
+      "brier": 0.617,
+      "n_races": 62
+    },
+    {
+      "method": "model",
+      "top5_overlap": 3.887,
+      "podium_overlap": 1.919,
+      "top1_hit": 0.548,
+      "ndcg5": 0.89,
+      "spearman": 0.661,
+      "logloss": 1.169,
+      "brier": 0.572,
+      "n_races": 62
+    },
+    {
+      "method": "championship",
+      "top5_overlap": 3.452,
+      "podium_overlap": 1.694,
+      "top1_hit": 0.306,
+      "ndcg5": 0.809,
+      "spearman": 0.569,
+      "logloss": 2.197,
+      "brier": 0.833,
+      "n_races": 62
+    },
+    {
+      "method": "recent_form",
+      "top5_overlap": 3.403,
+      "podium_overlap": 1.484,
+      "top1_hit": 0.274,
+      "ndcg5": 0.789,
+      "spearman": 0.589,
+      "logloss": 2.129,
+      "brier": 0.88,
+      "n_races": 62
+    },
+    {
+      "method": "team_form",
+      "top5_overlap": 3.065,
+      "podium_overlap": 1.452,
+      "top1_hit": 0.306,
+      "ndcg5": 0.766,
+      "spearman": 0.555,
+      "logloss": 2.322,
+      "brier": 0.89,
+      "n_races": 62
+    }
+  ],
+  "by_season": [
+    {
+      "season": 2024,
+      "approach": "Grid order",
+      "top 5": 4.0,
+      "podium": 2.0,
+      "winner": 0.458,
+      "ndcg@5": 0.883,
+      "log loss": 1.72,
+      "brier": 0.695,
+      "races": 24
+    },
+    {
+      "season": 2024,
+      "approach": "This model",
+      "top 5": 4.083,
+      "podium": 1.667,
+      "winner": 0.417,
+      "ndcg@5": 0.871,
+      "log loss": 1.581,
+      "brier": 0.706,
+      "races": 24
+    },
+    {
+      "season": 2025,
+      "approach": "Grid order",
+      "top 5": 4.0,
+      "podium": 2.25,
+      "winner": 0.667,
+      "ndcg@5": 0.925,
+      "log loss": 1.122,
+      "brier": 0.568,
+      "races": 24
+    },
+    {
+      "season": 2025,
+      "approach": "This model",
+      "top 5": 3.958,
+      "podium": 2.208,
+      "winner": 0.583,
+      "ndcg@5": 0.915,
+      "log loss": 0.928,
+      "brier": 0.51,
+      "races": 24
+    },
+    {
+      "season": 2026,
+      "approach": "Grid order",
+      "top 5": 3.643,
+      "podium": 1.857,
+      "winner": 0.643,
+      "ndcg@5": 0.876,
+      "log loss": 1.738,
+      "brier": 0.57,
+      "races": 14
+    },
+    {
+      "season": 2026,
+      "approach": "This model",
+      "top 5": 3.429,
+      "podium": 1.857,
+      "winner": 0.714,
+      "ndcg@5": 0.878,
+      "log loss": 0.875,
+      "brier": 0.447,
+      "races": 14
+    }
+  ],
+  "calibration": [
+    {
+      "bucket": "(-0.001, 0.189]",
+      "predicted": "0.164",
+      "actual": "0.0",
+      "n": "1"
+    },
+    {
+      "bucket": "(0.189, 0.378]",
+      "predicted": "0.32",
+      "actual": "0.333",
+      "n": "12"
+    },
+    {
+      "bucket": "(0.378, 0.567]",
+      "predicted": "0.481",
+      "actual": "0.652",
+      "n": "23"
+    },
+    {
+      "bucket": "(0.567, 0.756]",
+      "predicted": "0.649",
+      "actual": "0.471",
+      "n": "17"
+    },
+    {
+      "bucket": "(0.756, 0.945]",
+      "predicted": "0.866",
+      "actual": "0.778",
+      "n": "9"
+    }
+  ],
+  "params": {
+    "temperature": 0.39999999999999997,
+    "blend_weight": 0.6000000000000001,
+    "recency_weight": 2.0,
+    "start_season": 2024,
+    "tuned_on_season": 2022
   }
- ],
- "calibration": [
-  {
-   "bucket": "(0.19, 0.379]",
-   "predicted": "0.301",
-   "actual": "0.25",
-   "n": "12"
-  },
-  {
-   "bucket": "(0.379, 0.569]",
-   "predicted": "0.479",
-   "actual": "0.75",
-   "n": "24"
-  },
-  {
-   "bucket": "(0.569, 0.759]",
-   "predicted": "0.651",
-   "actual": "0.5",
-   "n": "18"
-  },
-  {
-   "bucket": "(0.759, 0.948]",
-   "predicted": "0.84",
-   "actual": "0.714",
-   "n": "7"
-  }
- ],
- "params": {
-  "temperature": 0.39999999999999997,
-  "blend_weight": 0.6000000000000001,
-  "recency_weight": 1.5,
-  "start_season": 2024,
-  "tuned_on_season": 2022
- },
- "by_season": [
-  {
-   "season": 2024,
-   "approach": "Grid order",
-   "top 5": 4.0,
-   "podium": 2.0,
-   "winner": 0.458,
-   "ndcg@5": 0.883,
-   "log loss": 1.72,
-   "brier": 0.695,
-   "races": 24
-  },
-  {
-   "season": 2024,
-   "approach": "This model",
-   "top 5": 4.042,
-   "podium": 1.708,
-   "winner": 0.458,
-   "ndcg@5": 0.868,
-   "log loss": 1.576,
-   "brier": 0.694,
-   "races": 24
-  },
-  {
-   "season": 2025,
-   "approach": "Grid order",
-   "top 5": 4.0,
-   "podium": 2.25,
-   "winner": 0.667,
-   "ndcg@5": 0.925,
-   "log loss": 1.122,
-   "brier": 0.568,
-   "races": 24
-  },
-  {
-   "season": 2025,
-   "approach": "This model",
-   "top 5": 3.917,
-   "podium": 2.292,
-   "winner": 0.625,
-   "ndcg@5": 0.918,
-   "log loss": 0.945,
-   "brier": 0.518,
-   "races": 24
-  },
-  {
-   "season": 2026,
-   "approach": "Grid order",
-   "top 5": 3.643,
-   "podium": 1.857,
-   "winner": 0.643,
-   "ndcg@5": 0.876,
-   "log loss": 1.738,
-   "brier": 0.57,
-   "races": 14
-  },
-  {
-   "season": 2026,
-   "approach": "This model",
-   "top 5": 3.429,
-   "podium": 1.857,
-   "winner": 0.714,
-   "ndcg@5": 0.874,
-   "log loss": 0.849,
-   "brier": 0.436,
-   "races": 14
-  }
- ]
 }
