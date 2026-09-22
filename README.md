@@ -147,7 +147,7 @@ Slower, run separately: `make backtest`, `make title-backtest`,
 the reported window and the season the settings are fitted on are `START` and
 `TUNE` in the Makefile, and the CLI refuses to report on a window it tuned on.
 
-Gates: `make test` (177 tests), `make lint`, `make verify` (7 audits — leakage,
+Gates: `make test`, `make lint`, `make verify` (7 audits — leakage,
 inputs, weighting, bias, accuracy, calibration, sanity).
 
 `ci.yml` runs tests and lint on pushes to `main` and on every pull request;

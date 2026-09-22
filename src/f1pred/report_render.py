@@ -237,6 +237,9 @@ section > .lab b{display:block; color:var(--ink); font-weight:600; font-size:11p
   letter-spacing:.12em; margin-bottom:6px}
 section > .body{min-width:0}
 .cap{color:var(--ink-2); font-size:.9rem; max-width:64ch; margin-bottom:18px}
+/* A table's last row drops its rule, so a paragraph after one used to sit
+   directly on the final figure with nothing between them. */
+.scroll + .cap{margin-top:22px}
 .cap a, footer a{color:var(--ink); text-decoration:underline;
   text-decoration-color:var(--ink-3); text-underline-offset:3px;
   text-decoration-thickness:1px}
@@ -248,7 +251,7 @@ section > .body{min-width:0}
 
 /* ---- data tables: rules, not cards ------------------------------------ */
 .grid5{display:grid;
-  grid-template-columns:28px 3px minmax(110px,1.5fr) 52px 60px 56px 56px 92px;
+  grid-template-columns:28px 3px minmax(110px,1.5fr) 52px 64px 60px 60px;
   align-items:center; gap:0 10px}
 .grid4{display:grid; grid-template-columns:28px 3px minmax(110px,1.6fr) 60px 56px 56px;
   align-items:center; gap:0 10px}
@@ -343,18 +346,38 @@ section > .body{min-width:0}
 .strip .sw.miss{border:1px solid var(--ink-3); margin-left:14px}
 
 /* ---- plain tables ------------------------------------------------------ */
-.scroll{overflow-x:auto}
+/* The 10px is a gutter for the emphasis marker, held outside the text margin
+   by the matching negative margin - so the first column of a table starts
+   exactly where the paragraph above it starts, and the marker has somewhere to
+   go that is not on top of the word it marks. */
+.scroll{overflow-x:auto; padding-left:10px; margin-left:-10px}
 table{border-collapse:collapse; width:100%; font-size:.86rem}
-th,td{padding:8px 12px 8px 0; text-align:left; border-bottom:1px solid var(--hair);
-  white-space:nowrap}
+/* Gaps live between columns, not after them. Padding-right on every cell left
+   a right-aligned figure hard against the next column's edge with nothing on
+   its left, so a numeric column sat a few pixels out from its own heading.
+   Spacing columns from each other lets the first start at the text margin and
+   the last finish flush with it. */
+th,td{padding:8px 0; text-align:left; border-bottom:1px solid var(--hair);
+  white-space:nowrap; vertical-align:baseline}
+th+th,td+td{padding-left:26px}
+/* The gutter is reserved on every row rather than added to the emphasised one,
+   which is what used to push that row 10px out of line with its own column. */
+th:first-child,td:first-child{padding-left:0}
+/* Figure tables only. Give the label column the slack so a two- or three-column
+   table packs its figures into a tight right-hand group instead of spreading
+   them across the full width with canyons between. Key-value tables are the
+   other shape - a short label and a paragraph - and are sized the other way. */
+.fig th:first-child,.fig td:first-child{width:99%}
+.kv td:first-child{width:170px; vertical-align:top; padding-top:9px}
+.kv td.feat{width:auto}
 thead th{font-family:var(--mono); font-size:9.5px; letter-spacing:.11em;
   text-transform:uppercase; color:var(--ink-3); font-weight:600;
   border-bottom:2px solid var(--rule)}
 tbody tr:last-child td{border-bottom:0}
-td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right}
-th.n{text-align:right}
+td.n,th.n{text-align:right}
+td.n{font-family:var(--mono); font-variant-numeric:tabular-nums}
 tr.me td{font-weight:600}
-tr.me td:first-child{box-shadow:inset 3px 0 0 var(--ink); padding-left:10px}
+tr.me td:first-child{box-shadow:-10px 0 0 -7px var(--ink)}
 .best{color:var(--good)}
 
 /* ---- chart ------------------------------------------------------------- */
@@ -397,9 +420,9 @@ tr.me td:first-child{box-shadow:inset 3px 0 0 var(--ink); padding-left:10px}
 
 /* ---- numbered pipeline: these ARE a sequence, which is why they are numbered */
 .steps{list-style:none; margin:0; padding:0; display:grid; gap:22px}
-.steps li{display:grid; grid-template-columns:30px 1fr; gap:0 16px; align-items:start}
-.steps .sn{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ink-3);
-  border-top:2px solid var(--ink); padding-top:5px; margin-top:4px}
+.steps li{display:grid; grid-template-columns:20px 1fr; gap:0 16px; align-items:start}
+.steps .sn{font-family:var(--mono); font-size:12px; font-weight:600; color:var(--ink-3);
+  font-variant-numeric:tabular-nums; text-align:right; line-height:1.5}
 .steps h3{font-size:.98rem; margin-bottom:5px}
 .steps p{color:var(--ink-2); font-size:.92rem; max-width:70ch}
 .steps code, .feat code, .cap code{font-family:var(--mono); font-size:.82em;
@@ -665,7 +688,8 @@ def progression_chart(
     # whoever is last. Anything still moved more than a couple of pixels gets a
     # leader line, so the label is tied to its series by something visible.
     ends = sorted(((s["points"][max(s["points"])], s) for s in series), key=lambda t: -t[0])
-    gap = 26.0
+    # Each end label is two lines - name over value - so 26 left them touching.
+    gap = 31.0
     wanted = [Y(value) for value, _ in ends]
     placed = list(wanted)
     for i in range(1, len(placed)):
@@ -809,6 +833,41 @@ def record_strip(board) -> str:
     )
 
 
+def _is_numeric_column(series: pd.Series) -> bool:
+    """Does this column hold quantities, or words?
+
+    Alignment used to be decided by position - first column left, everything
+    after it right - which is correct often enough to look deliberate and wrong
+    whenever a table carries two text columns. A right-aligned column of names
+    set in a monospaced face reads as a broken layout, because it is one.
+
+    Strings count as numeric when the unit is the only thing between them and a
+    number: "71%", "90 pts". Those belong under a numeric heading, right-aligned
+    with the figures above and below them.
+    """
+    if series.empty or pd.api.types.is_bool_dtype(series):
+        return False
+    if pd.api.types.is_numeric_dtype(series):
+        return True
+    stripped = series.astype(str).str.replace(r"[,%]|\s*(pts|pt|races|race)\s*$", "", regex=True)
+    return bool(pd.to_numeric(stripped.str.strip(), errors="coerce").notna().all())
+
+
+def _decimals(series: pd.Series) -> int:
+    """How many decimal places to give every value in this column.
+
+    %g prints each number to its own shortest form, so a column of three-decimal
+    figures published 0.890 as "0.89" and 0.880 as "0.88" - one digit short of
+    its neighbours, in a tabular-figures face where the ragged edge is the first
+    thing you see. One width for the whole column, taken from the value that
+    needs the most.
+    """
+    numbers = [v for v in series if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if not numbers:
+        return 0
+    return max(len(f"{float(v):.6f}".rstrip("0").partition(".")[2]) for v in numbers)
+
+
 def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None = None) -> str:
     """best_cols maps column name -> 'min' or 'max' to mark the leading value."""
     if df is None or df.empty:
@@ -821,7 +880,26 @@ def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None
             if series.notna().any():
                 winners[col] = series.min() if how == "min" else series.max()
 
-    head = "".join(f"<th>{esc(c)}</th>" for c in df.columns)
+    # The first column is the row's label whatever it holds - a season number is
+    # still a label - so it stays left. Every other column is aligned on what is
+    # in it, and the heading takes the same class as the cells beneath it, which
+    # is the part that was missing.
+    align = [False] + [_is_numeric_column(df[c]) for c in df.columns[1:]]
+    # Figures loaded from JSON arrive as strings and each kept its own decimal
+    # count, so "0.32" sat in a column of "0.164" and "0.481". A column that
+    # parses cleanly as numbers - no unit suffix to preserve - becomes numbers.
+    df = df.copy()
+    for c, right in zip(df.columns, align):
+        if right and not pd.api.types.is_numeric_dtype(df[c]):
+            parsed = pd.to_numeric(df[c], errors="coerce")
+            if parsed.notna().all():
+                df[c] = parsed
+    places = {c: _decimals(df[c]) for c in df.columns}
+
+    head = "".join(
+        f"<th class='n'>{esc(c)}</th>" if right else f"<th>{esc(c)}</th>"
+        for c, right in zip(df.columns, align)
+    )
     body = []
     for _, r in df.iterrows():
         cls = " class='me'" if emphasise and str(r.iloc[0]) == emphasise else ""
@@ -830,10 +908,10 @@ def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None
             v = r[c]
             numeric = isinstance(v, (int, float)) and not isinstance(v, bool)
             mark = " best" if c in winners and numeric and abs(v - winners[c]) < 1e-9 else ""
-            text = f"{v:g}" if numeric else esc(v)
-            cells.append(f"<td class='{'n' if j else ''}{mark}'>{text}</td>")
+            text = f"{v:.{places[c]}f}" if numeric else esc(v)
+            cells.append(f"<td class='{'n' if align[j] else ''}{mark}'>{text}</td>")
         body.append(f"<tr{cls}>{''.join(cells)}</tr>")
-    return f"<div class='scroll'><table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>"
+    return f"<div class='scroll'><table class='fig'><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>"
 
 
 def top_bar(prediction: dict | None, generated: datetime) -> str:

@@ -42,6 +42,54 @@ def _surnames() -> dict[str, str]:
         return dict(con.execute("SELECT driver_id, max(family_name) FROM raw_drivers GROUP BY 1").fetchall())
 
 
+def _band(label: str) -> str:
+    """Turn a pandas interval string into a readable probability range.
+
+    "(0.189, 0.378]" -> "19-38%". The edges are unchanged; only the notation
+    is, because a half-open interval in raw form is precision aimed at nobody.
+    """
+    try:
+        lo, hi = (float(x) for x in label.strip("([])").split(","))
+    except ValueError:
+        return label
+    # A literal en dash, not the entity: this string goes through the table
+    # renderer's escaper, which would publish "&ndash;" as four characters.
+    return f"{max(lo, 0.0) * 100:.0f}\u2013{hi:.0%}"
+
+
+def _range_block(sc: dict) -> str:
+    """How close the projection's published range has been.
+
+    Split out because the range is graded by its own command and its own JSON:
+    the title backtest can be missing while this is present, and the section
+    should still say what it knows.
+    """
+    held = sc.get("held_out")
+    if not held:
+        return ""
+    rows = pd.DataFrame(
+        [
+            {
+                "projection": label,
+                "range held": f"{held[key]['coverage']:.0%}",
+                "should be": "80%",
+                "width": f"{held[key]['width']:.0f} pts",
+            }
+            for label, key in (("Older version", "before"), ("Current", "after"))
+        ]
+    )
+    return (
+        "<p class='cap' style='margin-top:26px'><b>How close.</b> Every points total is "
+        "published with a range the real answer should land inside eight times in ten. "
+        "Graded one team at a time against final constructors' standings:</p>"
+        + rr.table(rows)
+        + "<p class='cap'>Race luck averages out over a dozen races, so it was never what made "
+        "a season miss. What does not average out is the model being wrong about a car "
+        "<em>now</em> and carrying that into every remaining race, so each simulated season "
+        "draws one pace offset per team. Still short of 80%, which is why it says so here.</p>"
+    )
+
+
 def _step(n: int, title: str, body: str) -> str:
     return f"<li><div class='sn'>{n}</div><div><h3>{rr.esc(title)}</h3><p>{body}</p></div></li>"
 
@@ -134,10 +182,7 @@ def build(standalone: bool = True) -> str:
         "<header class='mast'>",
         "<div class='kicker'>f1pred</div>",
         "<h1>Model specification</h1>",
-        (
-            "<p class='sub'>Architecture, features, and measured performance. Each section names "
-            "the command that regenerates it.</p>"
-        ),
+        "<p class='sub'>How the forecast is made, and how well it has done.</p>",
         "</header>",
     ]
 
@@ -155,73 +200,20 @@ def build(standalone: bool = True) -> str:
         "the finishing order slightly worse than the grid does, and is clearly better at "
         "saying <em>how likely</em> each outcome is. When it claimed its favourite would win, "
         "it was right almost exactly as often as it said it would be.</p>"
-        "<p class='cap'>The championship projection is weaker and the page says so: its "
-        "published range is too narrow, covering the real final total 71% of the time where "
-        "it should cover 80%. Everything below is the evidence for those three sentences.</p>"
+        "<p class='cap'>The championship projection is weaker, and this page says so rather "
+        "than rounding it off: its published range is too narrow.</p>"
+        "<p class='cap'>Every forecast is written to <code>predictions/</code> and committed "
+        "before its session runs, so the order is checkable by anyone from the commit dates. "
+        "The rest of this page is the evidence.</p>"
         "</div></section>"
     )
 
     # ---- pipeline --------------------------------------------------------
     s.append(
-        "<section><div class='lab'><b>Pipeline</b><span>src/f1pred</span></div>"
+        "<section><div class='lab'><b>Pipeline</b></div>"
         "<div class='body'><ol class='steps'>"
         + "".join(_step(i + 1, t, b) for i, (t, b) in enumerate(PIPELINE))
         + "</ol></div></section>"
-    )
-
-    # ---- features --------------------------------------------------------
-    from . import features as F
-
-    groups = [
-        (
-            "Driver form",
-            [
-                "drv_avg_finish_3",
-                "drv_avg_finish_5",
-                "drv_positions_gained_5",
-                "drv_podium_rate_10",
-                "drv_top10_rate_10",
-                "drv_points_rate_5",
-            ],
-        ),
-        (
-            "Car pace",
-            [
-                "team_pace_gap_pct",
-                "drv_pace_gap_pct",
-                "team_pace_trend",
-                "team_avg_quali_5",
-                "drv_avg_quali_5",
-                "drv_pole_rate_10",
-            ],
-        ),
-        ("Reliability", ["drv_dnf_rate_10", "team_dnf_rate_10", "circuit_dnf_rate"]),
-        (
-            "This circuit",
-            [
-                "drv_circuit_avg_finish",
-                "team_circuit_avg_finish",
-                "circuit_overtaking_score",
-                "circuit_pole_win_rate",
-                "drv_circuit_starts",
-            ],
-        ),
-        ("Known after qualifying", F.GRID_FEATURES),
-        ("Practice, when available", F.PRACTICE_FEATURES),
-    ]
-    rows = "".join(
-        f"<tr><td>{rr.esc(name)}</td><td class='feat'>"
-        + ", ".join(f"<code>{rr.esc(f)}</code>" for f in items)
-        + "</td></tr>"
-        for name, items in groups
-    )
-    s.append(
-        "<section class='band'><div class='lab'><b>Features</b>"
-        f"<span>{len(set(F.RACE_FEATURES) | set(F.QUALI_FEATURES))} in total</span></div>"
-        "<div class='body'><p class='cap'>All rolling windows shift by one race before "
-        "aggregating, through a single shared helper. Retirements are excluded from pace "
-        "averages and counted separately as unreliability.</p>"
-        f"<div class='scroll'><table>{rows}</table></div></div></section>"
     )
 
     # ---- race accuracy ---------------------------------------------------
@@ -269,137 +261,125 @@ def build(standalone: bool = True) -> str:
             },
         )
     if bt.get("by_season"):
-        body += "<p class='cap' style='margin-top:26px'>By season. 2026 is live and incomplete.</p>"
-        body += rr.table(pd.DataFrame(bt["by_season"]).round(3), emphasise="This model")
-    s.append(
-        "<section><div class='lab'><b>Race accuracy</b><span>make backtest</span></div>"
-        f"<div class='body'>{body}</div></section>"
-    )
+        # Stored long - one row per season per approach - which repeated the
+        # season down the first column and meant the emphasis on "This model"
+        # matched nothing, because the first column held a year. One row per
+        # season, with the grid's log loss beside the model's, is the
+        # comparison a reader is actually making.
+        by = pd.DataFrame(bt["by_season"])
+        mine = by[by["approach"] == "This model"].set_index("season")
+        grid = by[by["approach"] == "Grid order"].set_index("season")
+        seasons = pd.DataFrame(
+            {
+                "season": mine.index,
+                "top 5": mine["top 5"].round(2).to_numpy(),
+                "winner": [f"{v:.0%}" for v in mine["winner"]],
+                "log loss": mine["log loss"].round(3).to_numpy(),
+                "grid log loss": grid["log loss"].reindex(mine.index).round(3).to_numpy(),
+                "races": mine["races"].to_numpy(),
+            }
+        )
+        body += (
+            "<p class='cap' style='margin-top:26px'>By season, against the grid on the one "
+            "metric the grid can be scored on. 2026 is live and incomplete.</p>"
+        )
+        body += rr.table(seasons)
+    s.append(f"<section><div class='lab'><b>Race accuracy</b></div><div class='body'>{body}</div></section>")
 
     # ---- calibration -----------------------------------------------------
     if bt.get("calibration"):
         c = pd.DataFrame(bt["calibration"])
         c.columns = [str(x) for x in c.columns]
+        # Every figure in this paragraph used to be typed out, and every one of
+        # them drifted: it claimed 62 races over a table that summed to 61, and
+        # a pooled pair that had not been true for two refits. A sentence that
+        # interprets a table has to be computed from that table.
+        n = pd.to_numeric(c["n"], errors="coerce").fillna(0)
+        stated = (pd.to_numeric(c["predicted"], errors="coerce") * n).sum() / max(n.sum(), 1)
+        observed = (pd.to_numeric(c["actual"], errors="coerce") * n).sum() / max(n.sum(), 1)
+        gap = observed - stated
+        verdict = (
+            "mildly under-confident"
+            if gap > 0.01
+            else ("mildly over-confident" if gap < -0.01 else "calibrated in aggregate")
+        )
+        # Pandas hands back its own interval strings - "(0.189, 0.378]" - which
+        # are exact and unreadable. Same edges, stated the way the rest of the
+        # page states a probability.
+        c["bucket"] = [_band(str(b)) for b in c["bucket"]]
+        c = c.rename(columns={"predicted": "stated", "actual": "observed"})
         s.append(
-            "<section class='band'><div class='lab'><b>Calibration</b><span>make verify</span></div>"
-            "<div class='body'><p class='cap'>Stated probability against observed frequency. "
-            "Buckets hold 7&ndash;24 races; read n before reading a row. Pooled over 62 races: "
-            "stated 0.538, observed 0.597 &mdash; mildly under-confident. "
-            "<code>make verify</code> returns this as a warning, not a pass.</p>"
-            + rr.table(c)
-            + "</div></section>"
+            "<section class='band'><div class='lab'><b>Calibration</b></div>"
+            "<div class='body'><p class='cap'>What the model said, against what happened. Each row "
+            "collects the races where it put its favourite in that range. Buckets hold "
+            f"{int(n.min())}&ndash;{int(n.max())} races; read n before reading a row. Pooled over "
+            f"{int(n.sum())} races: stated {stated:.3f}, observed {observed:.3f} &mdash; "
+            f"{verdict}.</p>" + rr.table(c) + "</div></section>"
         )
 
-    # ---- title projection, graded ---------------------------------------
+    # ---- the championship ------------------------------------------------
+    # Two sections once stood here: one grading the favourite, one grading the
+    # range. They are the same question - does the projection mean what it
+    # says - and splitting them meant a reader had to hold the first to make
+    # sense of the second.
+    sc = _load("spread_calibration.json")
     if tb.get("checkpoints"):
         f = pd.DataFrame(tb["checkpoints"])
         cal = pd.DataFrame(tb.get("calibration") or [])
-        hit = f["favourite_was_right"].mean()
-        body = (
-            "<p class='cap'>Each completed season stopped at four checkpoints; title projected "
-            "from the model as it stood at that point; compared against the eventual champion. "
-            f"{len(f)} checkpoints across {f['season'].nunique()} seasons. Favourite correct "
-            f"{hit * 100:.0f}% of the time, Brier {tb.get('brier', 0):.3f}.</p>"
-        )
-        if not cal.empty:
-            body += rr.table(cal)
-            body += (
-                "<p class='cap' style='margin-top:20px'><b>Reading the high end.</b> 16 of 16 "
-                "correct above 95%. On n=16 that is consistent with a true rate as low as 81% "
-                "(Wilson, 95%). Treat a published 99.9% as <em>settled on current form and "
-                "arithmetic</em>, not as a calibrated one-in-a-thousand. Recorded misses: 2020 "
-                "r15 favoured Bottas at 78.4%; 2021 r20 favoured Hamilton at 62.5%; 2025 "
-                "favoured Piastri at r8 and r13.</p>"
-            )
-        show = f[
-            [
-                "season",
-                "after_round",
-                "races_left",
-                "favourite",
-                "p_favourite",
-                "champion",
-                "favourite_was_right",
-            ]
-        ].copy()
         surnames = _surnames()
-        for col in ("favourite", "champion"):
-            show[col] = show[col].map(lambda d: surnames.get(d, d.replace("_", " ").title()))
-        show["favourite_was_right"] = show["favourite_was_right"].map({1: "yes", 0: "no"})
-        show = show.rename(
-            columns={
-                "after_round": "after round",
-                "races_left": "races left",
-                "favourite": "model favourite",
-                "p_favourite": "claimed",
-                "favourite_was_right": "correct",
-            }
-        )
-        body += rr.table(show.round(3))
-        s.append(
-            "<section><div class='lab'><b>Title projection</b><span>make title-backtest</span></div>"
-            f"<div class='body'>{body}</div></section>"
-        )
 
-    # ---- does the published range hold up? --------------------------------
-    sc = _load("spread_calibration.json")
-    if sc.get("held_out"):
-        held = sc["held_out"]
-        fit = sc.get("fit_seasons") or []
-        grade = sc.get("grade_seasons") or []
-        rows = pd.DataFrame(
-            [
-                {
-                    "projection": label,
-                    "band held": f"{held[key]['coverage']:.0%}",
-                    "should be": "80%",
-                    "mean band width": f"{held[key]['width']:.0f} pts",
-                }
-                for label, key in (("Pace held fixed", "before"), ("Current model", "after"))
-            ]
-        )
+        def who(d: object) -> str:
+            return surnames.get(str(d), str(d).replace("_", " ").title())
+
         body = (
-            "<p class='cap'>The projection publishes a 10th&ndash;90th percentile band, which is a "
-            "claim that can be checked: the real final total should land inside it eight times in "
-            "ten. Graded against completed constructors' standings, one team at a time, it did not."
-            "</p>"
-            + rr.table(rows)
-            + "<p class='cap'>Race-to-race luck averages out over a dozen races, so it was never "
-            "what made a season miss. What does not average out is the model being wrong about a "
-            "car today and carrying that into every remaining race. The projection now draws one "
-            "pace offset per team per simulated season, sized by how much of the season is left. "
-            "Development is part of what that covers, but the smaller part: fitted on its own it "
-            "is worth 1.4 finishing positions over a full season and moved coverage by two points."
-            "</p>"
-            f"<p class='cap'>Size chosen on {fit[0] if fit else '2019'}&ndash;"
-            f"{fit[-1] if fit else '2022'} and graded on {grade[0] if grade else '2023'}&ndash;"
-            f"{grade[-1] if grade else '2025'}, which the sweep never saw. Still short of 80%, and "
-            "the gain is concentrated early in the season where the old band was worst &mdash; a "
-            "third of the way in, it went from 25% to 90%.</p>"
+            "<p class='cap'>The projection makes two claims, and both can be graded against "
+            "seasons that have finished. Every completed season was stopped at four points and "
+            "the title projected from the model as it stood then.</p>"
+            f"<p class='cap'><b>Who wins.</b> Across {len(f)} of those checkpoints it named the "
+            f"eventual champion {f['favourite_was_right'].mean() * 100:.0f}% of the time."
         )
+        # The high-end figures were typed out once and drifted: the page read
+        # "16 of 16" over a table showing twelve. They come off the JSON now.
+        if not cal.empty:
+            top = cal.loc[[pd.to_numeric(cal["claimed"], errors="coerce").idxmax()]]
+            n_top = int(pd.to_numeric(top["n"], errors="coerce").iloc[0])
+            lo = float(pd.to_numeric(top["ci_low"], errors="coerce").iloc[0])
+            body += (
+                f" Where it claimed more than 95% it was right {n_top} times out of {n_top} "
+                f"&mdash; which on twelve tries is still consistent with a true rate of {lo:.0%}, "
+                "so read a published 99.9% as <em>the arithmetic says this is over</em> rather "
+                "than as one chance in a thousand."
+            )
+        body += "</p>"
+
+        missed = f[f["favourite_was_right"] == 0]
+        if not missed.empty:
+            items = "; ".join(
+                f"{int(r['season'])} r{int(r['after_round'])} favoured "
+                f"{rr.esc(who(r['favourite']))} at {r['p_favourite']:.1%}, "
+                f"{rr.esc(who(r['champion']))} won"
+                for _, r in missed.iterrows()
+            )
+            body += f"<p class='cap'>It was wrong {len(missed)} times: {items}.</p>"
+
+        body += _range_block(sc)
         s.append(
-            "<section><div class='lab'><b>Does the range hold up?</b>"
-            "<span>make calibrate-spread</span></div>"
-            f"<div class='body'>{body}</div></section>"
+            f"<section><div class='lab'><b>The championship</b></div><div class='body'>{body}</div></section>"
+        )
+    elif sc.get("held_out"):
+        s.append(
+            "<section><div class='lab'><b>The championship</b></div>"
+            f"<div class='body'>{_range_block(sc)}</div></section>"
         )
 
     # ---- limits ----------------------------------------------------------
     s.append(
-        "<section class='band'><div class='lab'><b>Not modelled</b><span>Known gaps</span></div>"
+        "<section class='band'><div class='lab'><b>Not modelled</b></div>"
         "<div class='body'><p class='cap'>Sources of error the probabilities do not "
         "capture.</p>"
-        "<div class='scroll'><table>"
+        "<div class='scroll'><table class='kv'>"
         + "".join(f"<tr><td>{rr.esc(k)}</td><td class='feat'>{rr.esc(v)}</td></tr>" for k, v in NOT_MODELLED)
         + "</table></div></div></section>"
-    )
-
-    # ---- audit -----------------------------------------------------------
-    s.append(
-        "<section><div class='lab'><b>Audit trail</b><span>predictions/</span></div>"
-        "<div class='body'><p class='cap'>Each forecast is written to <code>predictions/</code> "
-        "as timestamped JSON and committed before the session runs. Grading happens afterwards "
-        "against the classified result. Commit timestamps make the ordering verifiable by a "
-        "third party.</p></div></section>"
     )
 
     s.append(
