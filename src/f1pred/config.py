@@ -100,4 +100,10 @@ POSITIONS_PER_SCORE_SD = 5.62
 N_SIMULATIONS = 10_000
 TOP_N = 10  # how many drivers we publish; we still model the full field
 
+# How near a race a pre-qualifying forecast has to be before it is committed to
+# predictions/. Five days reaches back to the Monday of a race week and no
+# further, so the logged call is a race-week call - not one the scheduler
+# happened to make a fortnight out while grading the previous result.
+LOG_WINDOW_DAYS = 5.0
+
 RANDOM_SEED = 20260913

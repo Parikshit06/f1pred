@@ -328,6 +328,20 @@ section > .body{min-width:0}
 .gridT{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 58px 52px;
   align-items:center; gap:0 10px}
 
+/* ---- track record strip ------------------------------------------------ */
+.strip{margin-bottom:18px}
+.strip svg{display:block; width:100%; max-width:520px; height:auto; overflow:visible}
+.strip .rec rect{transition:opacity .15s}
+.strip .rec.hit rect{fill:var(--good)}
+.strip .rec.miss rect{fill:none; stroke:var(--ink-3); stroke-width:1}
+.strip .rec:hover rect{opacity:.65}
+.strip svg line{stroke:var(--hair); stroke-width:1}
+.strip .key{margin-top:8px; font-family:var(--mono); font-size:10px; color:var(--ink-3)}
+.strip .sw{display:inline-block; width:9px; height:9px; border-radius:2px; margin:0 5px 0 0;
+  vertical-align:-1px}
+.strip .sw.hit{background:var(--good)}
+.strip .sw.miss{border:1px solid var(--ink-3); margin-left:14px}
+
 /* ---- plain tables ------------------------------------------------------ */
 .scroll{overflow-x:auto}
 table{border-collapse:collapse; width:100%; font-size:.86rem}
@@ -754,6 +768,45 @@ def progression_chart(
     out.append(f"<script type='application/json' class='chart-data'>{json.dumps(payload)}</script>")
     out.append("</div>")
     return "".join(out)
+
+
+def record_strip(board) -> str:
+    """One mark per graded race: was the favourite right, and how sure was it?
+
+    A table of results is checkable but not readable - nobody scans twenty rows
+    to form an impression. The strip gives the shape at a glance: bar height is
+    the probability the model published for its own pick, and the fill says
+    whether that pick won. A row of tall filled bars is a model that was
+    confident and correct; tall hollow ones are the honest failures.
+    """
+    if board is None or board.empty or "winner_hit" not in board:
+        return ""
+    rows = list(board.itertuples())
+    w, h, gap = 10.0, 44.0, 4.0
+    width = len(rows) * (w + gap)
+    bars = []
+    for i, r in enumerate(rows):
+        p = float(getattr(r, "p_top_pick", 0.0) or 0.0)
+        p = min(max(p, 0.0), 1.0)
+        bh = max(3.0, p * h)
+        x = i * (w + gap)
+        hit = bool(getattr(r, "winner_hit", 0))
+        cls = "rec hit" if hit else "rec miss"
+        label = f"{getattr(r, 'race', '')}: said {p:.0%} for {getattr(r, 'picked', '?')}, "
+        label += "correct" if hit else f"{getattr(r, 'actual', '?')} won"
+        bars.append(
+            f"<g class='{cls}'><title>{esc(label)}</title>"
+            f"<rect x='{x:.1f}' y='{h - bh:.1f}' width='{w}' height='{bh:.1f}' rx='1.5'/></g>"
+        )
+    return (
+        f"<div class='strip'><svg viewBox='0 0 {max(width, 1):.0f} {h + 12:.0f}' "
+        f"preserveAspectRatio='xMinYMid meet' role='img' "
+        f"aria-label='Winner called or missed, per graded race'>"
+        + "".join(bars)
+        + f"<line x1='0' y1='{h + 0.5}' x2='{max(width, 1):.0f}' y2='{h + 0.5}'/></svg>"
+        "<p class='key'><span class='sw hit'></span>winner called"
+        "<span class='sw miss'></span>missed &middot; bar height is the probability published</p></div>"
+    )
 
 
 def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None = None) -> str:
