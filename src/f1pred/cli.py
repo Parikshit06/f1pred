@@ -84,6 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sims", type=int, default=3000)
 
     p = sub.add_parser("predict", help="forecast a race and log it")
+    p.add_argument(
+        "--force-log",
+        action="store_true",
+        help="write a new forecast file even if this race and stage already has one",
+    )
     p.add_argument("--next", action="store_true", help="the next unrun race")
     p.add_argument("--season", type=int)
     p.add_argument("--round", type=int)
@@ -277,9 +282,12 @@ def main(argv: list[str] | None = None) -> int:
         season = args.season if not args.next else None
         rnd = args.round if not args.next else None
         p = predict.run(season=season, rnd=rnd, n_sims=args.sims)
-        path = p.save()
+        path = p.save(force=getattr(args, "force_log", False))
 
         stage = "grid known" if p.grid_known else "before qualifying"
+        if path is None:
+            ahead = p.days_out() or 0.0
+            print(f"\nnot logged: {ahead:.1f} days before the race, outside the logging window")
         print(f"\n{p.race_name}  ({stage})")
         print(f"trained on {p.meta['n_training_races']} races\n")
         print(f"QUALIFYING - top {config.TOP_N}")
@@ -293,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"  {i:2}. {d['name']:<24} win {d['p_win'] * 100:5.1f}%"
                 f"   podium {d['p_podium'] * 100:5.1f}%   points {d['p_top10'] * 100:5.1f}%"
             )
-        print(f"\nlogged to {path}")
+        print(f"\nlogged to {path}" if path else "\nnot logged (see above); the page still renders")
         return 0
 
     if args.command == "bias":
@@ -353,18 +361,6 @@ def main(argv: list[str] | None = None) -> int:
                                 "coverage": float(frame["inside"].mean()),
                                 "width": float(frame["width"].mean()),
                                 "n": len(frame),
-                                # Coverage by how much of the season had been
-                                # run. The headline average hides the thing the
-                                # calibration was for: the old band was worst
-                                # early, so the method page quotes the earliest
-                                # checkpoint and needs it written down here
-                                # rather than typed into the prose.
-                                "by_elapsed": {
-                                    f"{k:.2f}": float(v)
-                                    for k, v in frame.groupby(frame["elapsed"].round(2))["inside"]
-                                    .mean()
-                                    .items()
-                                },
                             }
                             for label, frame in result["graded"].items()
                         },
@@ -382,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "dashboard":
+        import pandas as pd
+
         from . import report
 
         prediction = None
@@ -389,10 +387,16 @@ def main(argv: list[str] | None = None) -> int:
         if preds:
             prediction = max(preds, key=lambda p: p["generated_at_utc"])
 
-        # The accuracy tables are the method page's job and it reads
-        # reports/backtest.json for itself; the forecast page only needs the
-        # latest logged prediction.
-        path = report.write(prediction)
+        summary = calibration = None
+        params = None
+        bt = config.REPORTS / "backtest.json"
+        if bt.exists():
+            data = json.loads(bt.read_text())
+            summary = pd.DataFrame(data["summary"]).set_index("method")
+            calibration = pd.DataFrame(data["calibration"])
+            params = data.get("params")
+
+        path = report.write(prediction, summary, calibration, params)
         print(f"wrote {path}")
 
         from . import method_page

@@ -3,10 +3,25 @@ name: Predict
 # Race weekends: Friday (pre-qualifying), Saturday evening (grid known),
 # and Monday to grade the result once it is in.
 on:
+  # Sessions move, so the schedule covers the shapes a weekend can take rather
+  # than assuming the usual one, and nothing here has to line up exactly with a
+  # session. Two rules in the code make an early or late run harmless:
+  #
+  #   predict.next_race  skips any race whose start time has passed, so a run
+  #                      that lands after the flag rolls to the next round
+  #                      rather than forecasting a race that is already over
+  #   Prediction.save    writes one file per race per stage, and withholds a
+  #                      pre-qualifying forecast made more than five days out
+  #
+  # Azerbaijan is why the first of those exists: it is the one Saturday race of
+  # 2026, at 11:00 UTC, so the Saturday-evening run arrives eight hours late.
+  # Its qualifying is on Friday, which the 20:00 Friday run already covers.
   schedule:
-    - cron: "0 6 * * 5"    # Fri 06:00 UTC - before qualifying
-    - cron: "0 19 * * 6"   # Sat 19:00 UTC - after qualifying
-    - cron: "0 8 * * 1"    # Mon 08:00 UTC - grade and refresh
+    - cron: "0 6 * * 5"    # Fri 06:00 UTC - before any qualifying
+    - cron: "0 20 * * 5"   # Fri 20:00 UTC - sprint and Saturday-race weekends
+    - cron: "0 19 * * 6"   # Sat 19:00 UTC - normal weekends, grid known
+    - cron: "0 6 * * 0"    # Sun 06:00 UTC - Las Vegas qualifies Sat night US
+    - cron: "0 8 * * 1"    # Mon 08:00 UTC - grade the result, roll to the next
   workflow_dispatch:
 
 permissions:

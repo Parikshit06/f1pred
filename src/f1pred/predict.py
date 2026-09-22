@@ -67,7 +67,62 @@ class Prediction:
         tag = "postquali" if self.grid_known else "prequali"
         return config.PREDICTIONS / f"{self.season}-{self.round:02d}-{tag}-{stamp}.json"
 
-    def save(self) -> Path:
+    def existing(self) -> Path | None:
+        """An earlier forecast for this race at this stage, if there is one."""
+        tag = "postquali" if self.grid_known else "prequali"
+        matches = sorted(config.PREDICTIONS.glob(f"{self.season}-{self.round:02d}-{tag}-*.json"))
+        return matches[0] if matches else None
+
+    def days_out(self) -> float | None:
+        """How far ahead of the race this forecast is being made."""
+        if not self.race_start_utc:
+            return None
+        start = pd.to_datetime(self.race_start_utc, errors="coerce", utc=True)
+        if pd.isna(start):
+            return None
+        return float((start - pd.Timestamp(datetime.now(UTC))).total_seconds()) / 86400
+
+    def save(self, force: bool = False) -> Path | None:
+        """Write the forecast, unless this race and stage already has one.
+
+        The audit trail is the point of this folder, and it means one forecast
+        per race per stage - the pre-qualifying call and the post-grid call.
+        Writing a second pre-qualifying file on a later run does not add
+        evidence; it adds a near-identical file with a different timestamp and
+        makes the record look like it was replayed until it looked good.
+
+        It also lets the workflow run on a schedule loose enough to catch
+        qualifying whenever it actually happens - sprint weekends move it to
+        Friday, Las Vegas runs it on Sunday UTC - without the extra runs
+        littering the folder.
+        """
+        prior = None if force else self.existing()
+        if prior is not None:
+            log.info(
+                "forecast already logged for %d r%d at this stage: %s",
+                self.season,
+                self.round,
+                prior.name,
+            )
+            return prior
+
+        # A forecast made a fortnight out is not logged at all. The scheduled
+        # run that grades Monday's result rolls straight on to the next race,
+        # and on a weekend off that race can be two weeks away; logging then
+        # would put the least informed call of the season into the record and,
+        # because the first file for a stage wins, keep the race-week one out.
+        # The page is still rendered - only the claim is withheld.
+        ahead = self.days_out()
+        if not force and not self.grid_known and ahead is not None and ahead > config.LOG_WINDOW_DAYS:
+            log.info(
+                "not logging %d r%d yet: %.1f days out, window is %.0f",
+                self.season,
+                self.round,
+                ahead,
+                config.LOG_WINDOW_DAYS,
+            )
+            return None
+
         p = self.path()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(asdict(self), indent=2, default=str))
@@ -89,10 +144,39 @@ def _driver_names() -> dict[str, tuple[str, str]]:
 
 
 def next_race(df: pd.DataFrame) -> tuple[int, int]:
-    """The earliest scheduled race with no results yet."""
+    """The earliest race that has not started yet.
+
+    "No results yet" is not the same as "has not happened yet", and the gap
+    between them is where hindsight gets in. Results arrive through a
+    volunteer-run API that can lag a race by hours, so a run in that window
+    finds the finished race still showing no results and would publish a
+    pre-race forecast for it - timestamped after the fact.
+
+    Every claim this project makes rests on the files in predictions/ having
+    been committed before their sessions ran. One forecast dated after its own
+    race would be enough for a reader to discount all of them, so the start
+    time is checked rather than inferred from the results being absent.
+
+    2026 makes it concrete: Azerbaijan is the only Saturday race of the season
+    and runs at 11:00 UTC, so the Saturday-evening job reaches it eight hours
+    after the flag.
+    """
     pending = df[df["position"].isna()]
+    if "race_start_utc" in pending.columns:
+        # utc=True on both sides. The column is UTC by name, but whether it
+        # arrives carrying a timezone depends on the ingest, and comparing a
+        # naive series against an aware timestamp raises rather than returning
+        # False - which would take the scheduled run down on a race weekend.
+        now = pd.Timestamp(datetime.now(UTC))
+        starts = pd.to_datetime(pending["race_start_utc"], errors="coerce", utc=True)
+        # A race with no published start time is kept: better to forecast one
+        # we cannot date than to silently skip a round.
+        pending = pending[starts.isna() | (starts > now)]
     if pending.empty:
-        raise RuntimeError("No upcoming race found. Is the schedule ingested for this season?")
+        raise RuntimeError(
+            "No upcoming race found - every scheduled race has either run or started. "
+            "Is the schedule ingested for this season?"
+        )
     row = pending.sort_values(["season", "round"]).iloc[0]
     return int(row["season"]), int(row["round"])
 

@@ -382,7 +382,10 @@ def test_the_method_page_reports_whether_the_range_holds(tmp_path, monkeypatch):
         )
     )
     html = method_page.build()
-    assert "Does the range hold up" in html
+    # The section was folded into "The championship" - grading who wins and
+    # grading how close are the same question, and splitting them made a reader
+    # hold the first to follow the second.
+    assert "The championship" in html
     assert "46%" in html and "71%" in html, "the graded coverage is not on the page"
     assert "80%" in html, "the target the band is being held to is not stated"
 
@@ -554,8 +557,8 @@ def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeyp
         )
     )
     html = method_page.build()
-    assert "1 of 1 correct above 95%" in html, "the count is not read off the table"
-    assert "as low as 20%" in html, "the Wilson floor is not read off the table"
+    assert "right 1 times out of 1" in html, "the count is not read off the table"
+    assert "true rate of 20%" in html, "the Wilson floor is not read off the table"
     assert "16 of 16" not in html
     # The one miss is named, with the probability the table recorded for it.
     assert "2025 r9 favoured Piastri at 61.0%" in html
@@ -587,3 +590,61 @@ def test_the_pooled_calibration_line_adds_up_the_buckets(tmp_path, monkeypatch):
     assert "stated 0.700, observed 0.800" in html
     assert "under-confident" in html
     assert "Buckets hold 10&ndash;30 races" in html
+
+
+def test_a_column_heading_is_aligned_the_same_way_as_its_own_cells():
+    """The bug this catches is visible from across the room and was invisible
+    in the code: cells were right-aligned by position and headings were not
+    aligned at all, so every numeric column sat under a left-flush label."""
+    df = pd.DataFrame({"approach": ["Grid order"], "top 5": [3.919], "races": [62]})
+    html = rr.table(df)
+
+    heads = re.findall(r"<th(?: class='([^']*)')?>", html)
+    cells = re.findall(r"<td class='([^']*)'>", html)
+    assert len(heads) == len(cells) == 3
+    for head, cell in zip(heads, cells):
+        assert ("n" in (head or "").split()) == ("n" in cell.split()), (
+            f"heading {head!r} disagrees with cell {cell!r}"
+        )
+
+
+def test_a_column_of_words_is_not_right_aligned():
+    """Alignment used to be chosen by column position, which right-aligned a
+    column of names in a monospaced face whenever a table carried two text
+    columns - the title-projection listing did, and it read as broken."""
+    df = pd.DataFrame(
+        {"season": [2021], "favourite": ["Hamilton"], "champion": ["Verstappen"], "claimed": [0.63]}
+    )
+    cells = re.findall(r"<td class='([^']*)'>", rr.table(df))
+    assert cells[1] == "" and cells[2] == "", "a column of driver names was right-aligned"
+    assert "n" in cells[3].split(), "a column of probabilities was not right-aligned"
+
+
+def test_a_quantity_carrying_its_unit_still_counts_as_a_number():
+    """The range table publishes "90 pts" and "71%" as strings. They belong
+    under a right-aligned heading with the figures they sit beside."""
+    df = pd.DataFrame({"projection": ["Current model"], "band held": ["71%"], "width": ["90 pts"]})
+    cells = re.findall(r"<td class='([^']*)'>", rr.table(df))
+    assert "n" in cells[1].split() and "n" in cells[2].split()
+
+
+def test_the_emphasised_row_starts_where_every_other_row_starts():
+    """The marker on the highlighted row used to be drawn by giving that one
+    cell an extra 10px of padding, which pushed its text out of line with the
+    column it belonged to. The gutter is reserved on every row now."""
+    css = rr.document("", standalone=True)
+    rule = re.search(r"tr\.me td:first-child\{([^}]*)\}", css)
+    assert rule, "the emphasis rule is gone"
+    assert "padding" not in rule.group(1), "the emphasised row is still padded out of line"
+    assert re.search(r"th:first-child,\s*td:first-child\{[^}]*padding-left", css), (
+        "the first-column gutter is not reserved on every row"
+    )
+
+
+def test_probability_buckets_are_published_as_ranges_not_pandas_intervals():
+    from f1pred.method_page import _band
+
+    assert _band("(0.189, 0.378]") == "19–38%"
+    assert _band("(-0.001, 0.189]") == "0–19%", "a negative edge leaked into the page"
+    assert _band("over 95%") == "over 95%", "a label that is already readable was mangled"
+    assert "&ndash;" not in _band("(0.189, 0.378]"), "an HTML entity will be escaped and shown raw"
