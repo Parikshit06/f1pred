@@ -351,6 +351,7 @@ tr.me td:first-child{box-shadow:inset 3px 0 0 var(--ink); padding-left:10px}
 .chart .axis{stroke:var(--hair); stroke-width:1}
 .chart text{font-family:var(--mono); font-size:10px; fill:var(--ink-3)}
 .chart text.lbl{font-size:10.5px; font-weight:600; fill:var(--ink-2)}
+.chart .lead{fill:none; stroke-width:1; opacity:.45; stroke-linejoin:round}
 .chart .now{stroke:var(--accent); stroke-width:1; stroke-dasharray:2 3}
 /* Lines draw themselves in once, left to right, the way a lap builds. The
    dash offset is set from the measured path length in script so the timing is
@@ -601,7 +602,7 @@ def progression_chart(
     if not series:
         return ""
 
-    pad_l, pad_r, pad_t, pad_b = 44, 118, 16, 30
+    pad_l, pad_r, pad_t, pad_b = 44, 132, 16, 30
     plot_w, plot_h = width - pad_l - pad_r, height - pad_t - pad_b
 
     rounds = sorted({r for s in series for r in s["points"]})
@@ -637,11 +638,32 @@ def progression_chart(
     out.append(f"<line class='now' x1='{nx:.1f}' y1='{pad_t}' x2='{nx:.1f}' y2='{pad_t + plot_h}'/>")
     out.append(f"<text x='{nx + 5:.1f}' y='{pad_t + 10}' text-anchor='start'>projected &rarr;</text>")
 
-    # Labels are placed on a simple collision ladder so two drivers finishing
-    # within a few points of each other do not print on top of one another.
+    # End labels sit beside the line they belong to, so their vertical position
+    # has to stay close to where the line actually finishes. An earlier version
+    # walked a collision ladder downward only, which compounded: two drivers
+    # eight points apart pushed the second label 25px down, the third collided
+    # with THAT and moved again, and by the fifth the label was nowhere near
+    # its line.
+    #
+    # Two passes instead. The first enforces a minimum gap top to bottom; the
+    # second, only if the stack has run past the plot, lifts it back and
+    # re-enforces upward. Displacement ends up shared rather than dumped on
+    # whoever is last. Anything still moved more than a couple of pixels gets a
+    # leader line, so the label is tied to its series by something visible.
     ends = sorted(((s["points"][max(s["points"])], s) for s in series), key=lambda t: -t[0])
-    taken: list[float] = []
-    for value, s in ends:
+    gap = 26.0
+    wanted = [Y(value) for value, _ in ends]
+    placed = list(wanted)
+    for i in range(1, len(placed)):
+        placed[i] = max(placed[i], placed[i - 1] + gap)
+    overflow = placed[-1] - (pad_t + plot_h - 10) if placed else 0
+    if overflow > 0:
+        placed = [y - overflow for y in placed]
+        for i in range(len(placed) - 2, -1, -1):
+            placed[i] = min(placed[i], placed[i + 1] - gap)
+        placed = [max(y, pad_t + 6) for y in placed]
+
+    for (value, s), want, y in zip(ends, wanted, placed):
         colour = team_colour(s["team"])
         # Second car in a garage: same hue, lighter stroke.
         weight = "1.4" if s.get("second_car") else "2"
@@ -671,17 +693,19 @@ def progression_chart(
             r, v = actual[-1]
             out.append(f"<circle class='pt' cx='{X(r):.1f}' cy='{Y(v):.1f}' r='3.5' fill='{colour}'/>")
 
-        # Each label is two lines - name over value - so the ladder clears 25px,
-        # not the 13 an earlier version used, which stacked them on top of one
-        # another whenever three drivers finished within a few points.
-        y = Y(value)
-        while any(abs(y - t) < 25 for t in taken):
-            y += 25
-        taken.append(y)
+        # A label that had to move gets a hairline back to its own line end.
+        if abs(y - want) > 2:
+            x0 = pad_l + plot_w
+            out.append(
+                f"<path class='lead' d='M{x0:.1f} {want:.1f} "
+                f"L{x0 + 6:.1f} {want:.1f} "
+                f"L{x0 + 18:.1f} {y:.1f} "
+                f"L{x0 + 24:.1f} {y:.1f}' stroke='{colour}'/>"
+            )
         out.append(
-            f"<text class='lbl' x='{pad_l + plot_w + 10}' y='{y + 3.5:.1f}' text-anchor='start'>"
+            f"<text class='lbl' x='{pad_l + plot_w + 28}' y='{y + 3.5:.1f}' text-anchor='start'>"
             f"{esc(s['label'])}</text>"
-            f"<text x='{pad_l + plot_w + 10}' y='{y + 15:.1f}' text-anchor='start'>{value:.0f}</text>"
+            f"<text x='{pad_l + plot_w + 28}' y='{y + 15:.1f}' text-anchor='start'>{value:.0f}</text>"
         )
 
     out.append(
