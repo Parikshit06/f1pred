@@ -16,6 +16,7 @@ and never overwritten. That file is the track record.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 from dataclasses import asdict, dataclass, field
@@ -435,10 +436,31 @@ def run(
     race["q_exp_pos"] = q_sim["exp_position"].to_numpy()
 
     # ---- race ------------------------------------------------------------
+    # The grid column comes from raw_results, which does not exist until the
+    # race has been run - so between qualifying and the flag it is entirely
+    # NaN, which is exactly when this forecast matters most. The starting grid
+    # is the qualifying classification (penalties aside, and the method page
+    # says penalties are not modelled), so take it from there.
+    if known_grid:
+        g = race["grid"].fillna(race["quali_position"]).to_numpy(dtype=float)
+        if np.isnan(g).any():
+            # grid_is_known only asks for 80% of the field, so a driver who set
+            # no time can still be missing here. In a real race they line up at
+            # the back, which is also the honest default: last, in field order.
+            back = np.nanmax(g) if np.isfinite(g).any() else 0.0
+            g[np.isnan(g)] = back + 1.0 + np.arange(int(np.isnan(g).sum()))
+        race["grid"] = g
     if not known_grid:
         # Feed the quali model's expected order in as the grid the race model
         # sees. It is a prediction, not a fact, and the output says so.
-        race["grid"] = q_sim["exp_position"].rank(method="first")
+        # .to_numpy() is load-bearing. race is a slice of the features frame and
+        # carries its index (3766..3787 for a 2026 round); q_sim is built fresh
+        # and is indexed 0..n-1. Assigning the Series aligns on index, matches
+        # nothing, and fills the column with NaN - silently, because NaN is a
+        # legal value for an XGBoost feature. The race model then forecasts with
+        # no grid at all, which is its strongest input, and the published
+        # probabilities come out of a model flying blind.
+        race["grid"] = q_sim["exp_position"].rank(method="first").to_numpy()
 
     race["score"] = race_model.score(race)
     r_probs = simulate.plackett_luce(race["score"].to_numpy(), temperature)
@@ -463,6 +485,22 @@ def run(
     for col in ("p_podium", "p_top5", "exp_position"):
         race[col] = sim[col].to_numpy()
     race["p_top10"] = sim["p_points"].to_numpy()
+
+    # Only the win column is blended with the closed-form ranking; the wider
+    # bands come straight out of the simulation. When the two disagree - the
+    # ranker rating a car highly while the simulation buries it from a bad grid
+    # slot - the blend can lift p_win above a p_podium it never touched, and
+    # the page publishes a driver with a better chance of winning than of
+    # finishing in the top three. That is not a close call, it is impossible,
+    # and a reader checks it by eye before they check anything else.
+    #
+    # Winning is a podium is a top five is a points finish, so each band is at
+    # least the one inside it. This is a floor, not a rescale: it only moves a
+    # figure that was already contradicting its neighbour. Blending the whole
+    # finishing distribution rather than one column of it is the real fix.
+    bands = ["p_win", "p_podium", "p_top5", "p_top10"]
+    for inner, outer in itertools.pairwise(bands):
+        race[outer] = np.maximum(race[outer].to_numpy(), race[inner].to_numpy())
     race["why"] = explain(race_model, race)
 
     # ---- assemble --------------------------------------------------------

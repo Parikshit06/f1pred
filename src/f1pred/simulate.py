@@ -117,10 +117,26 @@ def simulate(
 
     score_sd = float(np.std(inputs.scores)) or 1.0
 
+    # A grid with a hole in it does not raise, it degrades: the pace term goes
+    # NaN, argsort returns an arbitrary order, and 10,000 runs of that average
+    # into a near-uniform field. The output still looks like probabilities -
+    # every driver on about the same chance - so nothing downstream notices.
+    # This is the shape of the bug that published a 26% favourite with a 9%
+    # podium, so it fails here instead.
+    grid_given = None
+    if inputs.grid is not None:
+        grid_given = np.asarray(inputs.grid, dtype=float)
+        if not np.isfinite(grid_given).all():
+            missing = int((~np.isfinite(grid_given)).sum())
+            raise ValueError(
+                f"grid has {missing} missing entries of {n}. A race that has not run yet "
+                "carries no grid in results - fill it from qualifying before simulating."
+            )
+
     for i in range(n_sims):
         # Grid: known after qualifying, sampled from the quali model before it.
         if inputs.grid is not None:
-            grid = inputs.grid.astype(float)
+            grid = grid_given
         elif inputs.grid_scores is not None:
             order = _softmax_sample_order(rng, inputs.grid_scores, temperature)
             grid = np.empty(n, dtype=float)
