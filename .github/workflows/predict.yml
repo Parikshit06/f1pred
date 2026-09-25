@@ -109,6 +109,19 @@ jobs:
       - name: Ingest
         run: python -m f1pred.cli ingest-jolpica --seasons 2018-2026
 
+      # Ingest applies the current finished/retired rule to rows it writes, but
+      # rows already in the database keep whatever rule was in force when they
+      # were written - and a seeded snapshot is exactly that. repair recomputes
+      # the flag from the stored status text, which is the fact; the flag is
+      # only a label. Idempotent, and it logs what it changed, so drift shows up
+      # here rather than silently in the forecast.
+      #
+      # It does not weaken `validate`: repair aligns the flag with the current
+      # rule, validate independently checks the flag against laps completed. A
+      # genuinely new status word still fails, which is the point.
+      - name: Repair status flags
+        run: python -m f1pred.cli repair
+
       - name: Validate
         run: python -m f1pred.cli validate
 
