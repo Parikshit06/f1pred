@@ -40,12 +40,57 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
-      - name: Restore data cache
+      # The DATABASE is cached, not just the HTTP responses. jolpica's ingest
+      # skips any season already in the ingest_log except the current one, and
+      # that log lives in the database - so with only data/cache restored the
+      # log was empty on every run and all nine seasons were walked again at
+      # ~0.8 requests a second. That is the difference between a run taking
+      # ninety minutes and taking a few.
+      #
+      # 2026 is re-fetched every time regardless, so a restored database can be
+      # stale about the current season but never wrong about it, and `validate`
+      # runs before anything is published either way.
+      - name: Restore data
         uses: actions/cache@v5
         with:
-          path: data/cache
-          key: jolpica-${{ github.run_id }}
-          restore-keys: jolpica-
+          path: |
+            data/cache
+            data/f1.duckdb*
+          key: f1data-${{ github.run_id }}
+          restore-keys: f1data-
+
+      # Cold start without this means walking 2018-2026 at 0.8 requests a
+      # second, stalling on jolpica's hourly budget somewhere in 2025 and
+      # waiting for the window to reset: about ninety minutes. The seasons
+      # before the current one never change, so they do not have to be
+      # re-derived from the API every time the cache expires - a published
+      # snapshot of the database is enough, and 2026 is re-fetched regardless.
+      #
+      # The snapshot lives on a release rather than in git: it is a 10MB binary
+      # that would sit in every clone forever. Publish a new one with
+      #   gh release upload data-snapshot data/f1.duckdb --clobber
+      # or just attach the file to the release in the web UI. If it is missing
+      # the run still works, it is only slow.
+      - name: Seed the database if the cache was empty
+        run: |
+          if [ -f data/f1.duckdb ]; then
+            echo "database restored from cache"; exit 0
+          fi
+          mkdir -p data
+          base=https://github.com/${{ github.repository }}/releases/download/data-snapshot
+          # Zipped first: GitHub's own upload form refuses some extensions, so
+          # a .zip is the one shape that is always accepted. Raw second, for
+          # whichever of the two actually got published.
+          if curl -fsSL "$base/f1.duckdb.zip" -o /tmp/snap.zip; then
+            unzip -o -j /tmp/snap.zip -d data/ >/dev/null
+            echo "seeded from $base/f1.duckdb.zip"
+          elif curl -fsSL "$base/f1.duckdb" -o data/f1.duckdb; then
+            echo "seeded from $base/f1.duckdb"
+          else
+            echo "no snapshot published - falling back to a full ingest"
+            rm -f data/f1.duckdb
+          fi
+          test -f data/f1.duckdb && ls -la data/f1.duckdb || true
 
       - name: Ingest
         run: python -m f1pred.cli ingest-jolpica --seasons 2018-2026
