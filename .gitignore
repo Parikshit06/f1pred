@@ -37,3 +37,9 @@ PUSH-TO-GITHUB.md
 # personal working notes - the plain-English explainer and resume text. Kept on
 # disk, deliberately not published.
 docs/
+
+# Generated every run and deployed from the Pages artifact, not from the repo.
+# Tracking them meant two runs could edit the same file and collide, and a
+# content conflict in a generated file never auto-resolves - it just wedged the
+# rebase and lost the forecast that had already been computed.
+reports/*.html

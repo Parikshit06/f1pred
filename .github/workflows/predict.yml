@@ -166,7 +166,12 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add predictions reports
+          # predictions/ is the audit trail and reports/*.json are the measured
+          # figures the README is checked against. The HTML is generated output
+          # that Pages serves from the artifact above, so committing it bought
+          # nothing and collided with every concurrent run.
+          git add predictions
+          git add reports/*.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "nothing new to commit"
             exit 0
@@ -176,12 +181,20 @@ jobs:
           # fix, another workflow, a rewritten history. Rebase and retry
           # instead of failing a run that has already done its work.
           for attempt in 1 2 3; do
-            if git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push; then
+            # A rebase left half-applied by a previous attempt makes every
+            # later one fail with "unmerged files" rather than retrying
+            # anything. Clear it first so each attempt starts from a clean
+            # tree. -X theirs keeps this run's freshly generated files when
+            # the two sides touch the same one; the forecast being published
+            # is newer than whatever it is landing on top of.
+            git rebase --abort 2>/dev/null || true
+            if git pull --rebase -X theirs --autostash origin "$GITHUB_REF_NAME" && git push; then
               exit 0
             fi
             echo "push attempt $attempt was rejected; retrying"
             sleep 5
           done
+          git rebase --abort 2>/dev/null || true
           echo "could not push the forecast after three attempts" >&2
           exit 1
 
