@@ -203,10 +203,8 @@ def main(argv: list[str] | None = None) -> int:
                     f"numbers are the ones the settings were chosen on"
                 )
                 raise SystemExit(parser_error)
-            # The tuner is bounded at both ends. Without the upper bound it
-            # walks forward past tune_season all the way to the last race in
-            # the data, which means it fits the settings on the very races the
-            # table below reports - the settings become part of the answer.
+            # Bounded at both ends so the settings are never fitted on the races the
+            # table then reports.
             tune_end = args.start_season - 1
             print(f"Fitting temperature, blend and recency on {tune_season}-{tune_end}...")
             temperature = backtest.tune_temperature(df, tune_season, end_season=tune_end)
@@ -283,6 +281,8 @@ def main(argv: list[str] | None = None) -> int:
         rnd = args.round if not args.next else None
         p = predict.run(season=season, rnd=rnd, n_sims=args.sims)
         path = p.save(force=getattr(args, "force_log", False))
+        if p.season_outlook:
+            config.SEASON_NOW.write_text(json.dumps(p.season_outlook, default=str))
 
         stage = "grid known" if p.grid_known else "before qualifying"
         if path is None:
@@ -307,7 +307,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "bias":
         from . import diagnostics
 
-        print(diagnostics.report(args.start_season, args.retrain_every))
+        result = diagnostics.measure(args.start_season, args.retrain_every)
+        out = config.REPORTS / "bias.json"
+        out.write_text(json.dumps(result, indent=2))
+        print(diagnostics.report(result))
+        print(f"\nwrote {out}")
         return 0
 
     if args.command == "verify":
@@ -352,29 +356,26 @@ def main(argv: list[str] | None = None) -> int:
             out.write_text(
                 _json.dumps(
                     {
-                        "sweep": result["sweep"].to_dict("records"),
+                        "sweep": result["sweep"].round(3).to_dict("records"),
                         "best": result["best"],
+                        "driver_sweep": result["driver_sweep"].round(3).to_dict("records"),
+                        "best_driver": result["best_driver"],
                         "fit_seasons": list(spread_calibration.FIT_SEASONS),
                         "grade_seasons": list(spread_calibration.GRADE_SEASONS),
-                        "held_out": {
-                            label: {
-                                "coverage": float(frame["inside"].mean()),
-                                "width": float(frame["width"].mean()),
-                                "n": len(frame),
-                            }
-                            for label, frame in result["graded"].items()
-                        },
+                        "held_out": spread_calibration.held_out(result),
                         "in_use": config.SEASON_PACE_UNCERTAINTY,
+                        "driver_in_use": config.SEASON_DRIVER_UNCERTAINTY,
                     },
                     indent=1,
                 )
             )
             print(f"\nwrote {out}")
-            if abs(result["best"] - config.SEASON_PACE_UNCERTAINTY) > 1e-9:
-                print(
-                    f"note: config.SEASON_PACE_UNCERTAINTY is {config.SEASON_PACE_UNCERTAINTY}, "
-                    f"this run picked {result['best']:.1f}"
-                )
+            for name, picked in (
+                ("SEASON_PACE_UNCERTAINTY", result["best"]),
+                ("SEASON_DRIVER_UNCERTAINTY", result["best_driver"]),
+            ):
+                if abs(picked - getattr(config, name)) > 1e-9:
+                    print(f"note: config.{name} is {getattr(config, name)}, this run picked {picked:.1f}")
         return 0
 
     if args.command == "dashboard":
@@ -386,6 +387,10 @@ def main(argv: list[str] | None = None) -> int:
         preds = report.load_predictions()
         if preds:
             prediction = max(preds, key=lambda p: p["generated_at_utc"])
+        # The race and qualifying boards are the logged forecast and never
+        # change. The championship panel shows the latest projection instead.
+        if prediction and config.SEASON_NOW.exists():
+            prediction = {**prediction, "season_outlook": json.loads(config.SEASON_NOW.read_text())}
 
         summary = calibration = None
         params = None

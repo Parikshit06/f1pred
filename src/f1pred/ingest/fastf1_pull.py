@@ -136,13 +136,9 @@ def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = 
     with connect() as con:
         status = ingest_status(con, "fastf1", scope)
 
-    # "empty" covers two different things: a session that does not exist for
-    # this weekend - no sprint, no FP3 - and a session that has not been run
-    # yet, because the round loop walks the whole calendar including races
-    # still to come. Treating both as settled meant one ingest mid-season was
-    # enough to leave practice pace missing for every remaining round, with
-    # nothing in the logs to say so. For the live season an empty answer is
-    # provisional, and FP1 costs one skipped load a round to re-ask.
+    # For the live season an empty session may just not have run yet, so it isn't
+    # recorded as done. Otherwise one mid-season ingest would leave practice pace
+    # missing for every remaining round.
     settled = status == "ok" or (status == "empty" and season != config.CURRENT_SEASON)
     if not force and settled:
         return 0

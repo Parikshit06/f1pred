@@ -1,25 +1,12 @@
-"""Is the model biased toward particular drivers?
+"""Per-driver bias, corrected for where each driver sits on the grid.
 
-The obvious way to ask is to average, per driver, how far the predicted rank
-sits from the actual one. That answer is wrong, and wrong in a way that looks
-convincing: it says the model badly over-rates every front-runner.
+Raw bias (mean predicted rank minus mean actual) says every front-runner is
+over-rated. That's an artefact: a fast driver who retires is classified near
+last, dragging their mean result down, while slow drivers inherit places.
+The gradient that creates runs the length of the grid.
 
-It does not. Finishing position is noisy in one direction at each end of the
-grid. A fast driver who retires is classified near last, so their *mean* result
-sits well below their true pace; a slow driver inherits places when quicker
-cars break, so theirs sits above. Comparing a deterministic ranking against a
-mean that has been pulled toward the middle manufactures a bias gradient
-running the length of the grid.
-
-That gradient explains most of the variance in per-driver bias. The exact share
-is not written down here on purpose: it moves with the window and with every
-change to the model, and the last copy of it in this docstring ended up
-disagreeing with the README about the same measurement. `f1pred.cli bias`
-prints the live figure, and `verify.audit_bias` puts it in the audit.
-
-So this module fits the trend and reports the residual - what is left once
-position on the grid is accounted for. That residual is the part that is
-actually about the driver.
+So the trend against predicted rank is fitted and removed; the residual is
+the part that's actually about the driver. `f1pred.cli bias` prints it.
 """
 
 from __future__ import annotations
@@ -89,7 +76,10 @@ def driver_bias(entries: pd.DataFrame, min_races: int = MIN_RACES) -> pd.DataFra
         g["driver_specific_bias"] = np.nan
         return g.sort_values("raw_bias")
 
-    slope, intercept = np.polyfit(g["avg_predicted"], g["raw_bias"], 1)
+    if g["avg_predicted"].nunique() > 1:
+        slope, intercept = np.polyfit(g["avg_predicted"], g["raw_bias"], 1)
+    else:  # everyone at the same rank: no trend to remove
+        slope, intercept = 0.0, float(g["raw_bias"].mean())
     g["expected_from_rank"] = slope * g["avg_predicted"] + intercept
     g["driver_specific_bias"] = g["raw_bias"] - g["expected_from_rank"]
     return g.sort_values("driver_specific_bias")
@@ -108,27 +98,39 @@ def trend_strength(entries: pd.DataFrame, min_races: int = MIN_RACES) -> dict:
     return {"r": r, "variance_explained": r**2, "n_drivers": len(g)}
 
 
-def report(start_season: int = 2024, retrain_every: int = 3) -> str:
+def measure(start_season: int = 2024, retrain_every: int = 3) -> dict:
+    """Run the walk-forward and return the bias figures, ready to save."""
     entries = collect(features.load(), start_season, retrain_every)
     bias = driver_bias(entries)
     trend = trend_strength(entries)
+    cols = ["races", "avg_predicted", "avg_actual", "raw_bias", "driver_specific_bias"]
+    return {
+        "start_season": start_season,
+        "entries": int(entries["round"].size),
+        "r": round(float(trend["r"]), 3),
+        "variance_explained": round(float(trend["variance_explained"]), 3),
+        "mae": round(float(entries["error"].abs().mean()), 2),
+        "drivers": bias[cols].round(2).reset_index().to_dict("records"),
+    }
 
-    lines = [
-        f"Driver bias, {start_season}+ walk-forward ({entries['round'].size} entries)",
-        "",
-        (
-            f"Apparent bias correlates {trend['r']:.3f} with predicted rank, so "
-            f"{trend['variance_explained'] * 100:.0f}% of it is an artifact of"
-        ),
-        "comparing a fixed ranking against a mean pulled toward the middle by retirements.",
-        "The column that matters is driver_specific_bias - what survives that correction.",
-        "",
-        "negative = model rates them better than they finish",
-        "",
-        bias[["races", "avg_predicted", "avg_actual", "raw_bias", "driver_specific_bias"]]
-        .round(2)
-        .to_string(),
-        "",
-        f"field mean absolute error: {entries['error'].abs().mean():.2f} positions",
-    ]
-    return "\n".join(lines)
+
+def report(result: dict) -> str:
+    table = pd.DataFrame(result["drivers"]).set_index("driver_id")
+    return "\n".join(
+        [
+            f"Driver bias, {result['start_season']}+ walk-forward ({result['entries']} entries)",
+            "",
+            (
+                f"Apparent bias correlates {result['r']:.3f} with predicted rank, so "
+                f"{result['variance_explained']:.0%} of it is an artefact of comparing a fixed"
+            ),
+            "ranking against a mean pulled toward the middle by retirements.",
+            "driver_specific_bias is what survives that correction.",
+            "",
+            "negative = rated better than they finish",
+            "",
+            table.to_string(),
+            "",
+            f"field mean absolute error: {result['mae']:.2f} positions",
+        ]
+    )

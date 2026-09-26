@@ -1,8 +1,5 @@
-"""Which race the scheduled run forecasts.
-
-Every claim this project makes rests on the files in predictions/ having been
-written before their sessions ran, so the one failure mode worth a test file of
-its own is publishing a pre-race forecast for a race that has already started.
+"""Which race the scheduled run forecasts. The failure worth guarding is a
+"pre-race" forecast written for a race that has already started.
 """
 
 from __future__ import annotations
@@ -20,12 +17,8 @@ def _calendar(rows: list[tuple[int, int, object, object]]) -> pd.DataFrame:
 
 
 def test_it_skips_a_race_that_has_already_started():
-    """Results arrive through a volunteer-run API that can lag a race by hours.
-    In that window the finished race still shows no results, and selecting on
-    results alone would forecast it after the fact.
-
-    Baku 2026 is the concrete case: the only Saturday race of the season, so a
-    Saturday-evening job reaches it while the results table is still empty.
+    """jolpica can lag a race by hours, so a finished race may still show no
+    results. Selecting on results alone would forecast it after the fact.
     """
     now = datetime.now(UTC)
     df = _calendar(

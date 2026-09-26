@@ -13,13 +13,13 @@
     },
     {
       "method": "model",
-      "top5_overlap": 3.887,
-      "podium_overlap": 1.919,
-      "top1_hit": 0.548,
-      "ndcg5": 0.89,
-      "spearman": 0.661,
-      "logloss": 1.169,
-      "brier": 0.572,
+      "top5_overlap": 3.871,
+      "podium_overlap": 1.968,
+      "top1_hit": 0.613,
+      "ndcg5": 0.894,
+      "spearman": 0.663,
+      "logloss": 1.164,
+      "brier": 0.566,
       "n_races": 62
     },
     {
@@ -72,11 +72,11 @@
       "season": 2024,
       "approach": "This model",
       "top 5": 4.083,
-      "podium": 1.667,
-      "winner": 0.417,
-      "ndcg@5": 0.871,
-      "log loss": 1.581,
-      "brier": 0.706,
+      "podium": 1.708,
+      "winner": 0.5,
+      "ndcg@5": 0.876,
+      "log loss": 1.577,
+      "brier": 0.696,
       "races": 24
     },
     {
@@ -93,12 +93,12 @@
     {
       "season": 2025,
       "approach": "This model",
-      "top 5": 3.958,
-      "podium": 2.208,
-      "winner": 0.583,
-      "ndcg@5": 0.915,
-      "log loss": 0.928,
-      "brier": 0.51,
+      "top 5": 3.917,
+      "podium": 2.25,
+      "winner": 0.667,
+      "ndcg@5": 0.922,
+      "log loss": 0.918,
+      "brier": 0.506,
       "races": 24
     },
     {
@@ -116,44 +116,44 @@
       "season": 2026,
       "approach": "This model",
       "top 5": 3.429,
-      "podium": 1.857,
+      "podium": 1.929,
       "winner": 0.714,
-      "ndcg@5": 0.878,
-      "log loss": 0.875,
-      "brier": 0.447,
+      "ndcg@5": 0.877,
+      "log loss": 0.876,
+      "brier": 0.446,
       "races": 14
     }
   ],
   "calibration": [
     {
-      "bucket": "(-0.001, 0.189]",
-      "predicted": "0.164",
+      "bucket": "(-0.001, 0.191]",
+      "predicted": "0.173",
       "actual": "0.0",
-      "n": "1"
+      "n": "2"
     },
     {
-      "bucket": "(0.189, 0.378]",
-      "predicted": "0.32",
-      "actual": "0.333",
-      "n": "12"
+      "bucket": "(0.191, 0.381]",
+      "predicted": "0.323",
+      "actual": "0.3",
+      "n": "10"
     },
     {
-      "bucket": "(0.378, 0.567]",
-      "predicted": "0.481",
-      "actual": "0.652",
-      "n": "23"
+      "bucket": "(0.381, 0.572]",
+      "predicted": "0.493",
+      "actual": "0.8",
+      "n": "25"
     },
     {
-      "bucket": "(0.567, 0.756]",
-      "predicted": "0.649",
-      "actual": "0.471",
+      "bucket": "(0.572, 0.762]",
+      "predicted": "0.668",
+      "actual": "0.529",
       "n": "17"
     },
     {
-      "bucket": "(0.756, 0.945]",
-      "predicted": "0.866",
-      "actual": "0.778",
-      "n": "9"
+      "bucket": "(0.762, 0.953]",
+      "predicted": "0.862",
+      "actual": "0.75",
+      "n": "8"
     }
   ],
   "params": {

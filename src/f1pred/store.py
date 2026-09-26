@@ -1,10 +1,7 @@
 """DuckDB schema and load helpers.
 
-One file, real SQL, no server. Every table is rebuildable from the HTTP cache,
-so the database is disposable - that is why it is gitignored.
-
-Naming rule: raw_* tables are a faithful copy of what the source gave us.
-Derived tables (features, predictions) never overwrite raw_*.
+raw_* tables hold what the sources returned; derived tables never overwrite
+them. Everything rebuilds from the HTTP cache, so the database is gitignored.
 """
 
 from __future__ import annotations
@@ -172,17 +169,10 @@ CREATE TABLE IF NOT EXISTS ingest_log (
 
 
 def database_exists() -> bool:
-    """Whether there is anything to read yet.
+    """Whether there's a database to read yet.
 
-    A read-only connect to a missing file raises rather than creating one. That
-    is right for the pipeline - `build-features` on a machine with no data
-    should fail loudly and say so - but wrong for the two readers that only
-    decorate a rendered page: the track record and the driver-surname lookup.
-    Those have a sensible empty answer, and a fresh clone has no database
-    because `data/*.duckdb` is rebuildable and therefore not committed.
-
-    This is what CI caught on its first run: three tests rendered a page, the
-    page reached for the database, and there was none.
+    A fresh clone has none. The page-rendering readers use this to fall back to
+    an empty answer instead of raising; the pipeline still fails loudly.
     """
     return config.DB_PATH.exists()
 
@@ -273,13 +263,8 @@ def table_counts() -> pd.DataFrame:
 def repair_status_flags() -> pd.DataFrame:
     """Recompute finished/dnf from the stored status text.
 
-    The status vocabulary upstream changed in 2023 and the parser's rule went
-    stale, so rows already in the database carry the wrong flag. The raw status
-    text was stored, which means this is repairable in place - nine seasons do
-    not need re-downloading over a 450-request hourly budget.
-
-    Idempotent. Run it after any change to the finished/retired rule; the
-    ingest path applies the same rule to new rows.
+    Needed after any change to the finished/retired rule - rows already stored
+    keep the old flag. Idempotent, and no re-download needed.
     """
     from .ingest.jolpica import is_finished
 

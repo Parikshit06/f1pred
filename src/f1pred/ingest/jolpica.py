@@ -23,21 +23,10 @@ log = logging.getLogger(__name__)
 
 _TIME_RE = re.compile(r"^(?:(\d+):)?(\d+)\.(\d+)$")
 
-# Statuses that mean "was still running at the flag", everything else is a
-# retirement. This looks like trivia and is not: the flag it sets feeds recent
-# form, the reliability features and the simulation's retirement hazard.
-#
-# It was originally just ("Finished", "+"), on the reasoning that Ergast writes
-# a lapped finisher as "+1 Lap". True until 2022. From 2023 the upstream API
-# writes "Lapped" instead, the prefix stopped matching, and 398 races' worth of
-# perfectly ordinary finishes were silently reclassified as retirements -
-# roughly a third of every finish in the modern seasons, concentrated in
-# exactly the midfield cars that get lapped. Nothing failed; the numbers just
-# got quietly wrong.
-#
-# Matching is now on an explicit vocabulary, and validate() cross-checks the
-# result against lap counts so the next wording change is caught rather than
-# absorbed.
+# Statuses that mean the car was running at the flag; anything else is a
+# retirement. The flag feeds form, reliability and the simulator's retirement
+# hazard. From 2023 a lapped car reads "Lapped" rather than "+1 Lap", so this is
+# an explicit list and validate() cross-checks it against laps covered.
 _FINISHED_PREFIXES = ("Finished", "+")
 _FINISHED_EXACT = frozenset({"lapped"})
 
@@ -77,18 +66,10 @@ def _to_float(value: Any) -> float | None:
 
 
 def _race_start_utc(date_str: str | None, time_str: str | None) -> datetime | None:
-    """Session start as a NAIVE datetime that is UTC by contract.
+    """Session start as a naive datetime that is UTC by convention.
 
-    The API always sends UTC - the trailing Z in "14:00:00Z" is part of the
-    format string, not something to be parsed into an offset - and every
-    timestamp column in the database is naive UTC. Attaching a timezone here
-    only to strip it again before storage was what the previous version did,
-    and a round trip that returns its input is worse than no round trip: it
-    reads as a conversion that is happening when nothing is.
-
-    So the values stay naive, and the invariant lives in the name and here.
-    A date with no time is midnight UTC, which is what a race without a
-    published start time means in this data.
+    The API always sends UTC and every timestamp column is stored naive, so no
+    timezone is attached. A date with no time means midnight UTC.
     """
     if not date_str:
         return None
@@ -165,12 +146,8 @@ def parse_results(races: list[dict]) -> pd.DataFrame:
                     "driver_id": res.get("Driver", {}).get("driverId"),
                     "constructor_id": res.get("Constructor", {}).get("constructorId"),
                     "grid": _to_int(res.get("grid")),
-                    # Ergast always populates `position` with the classification
-                    # order, including retirements (ranked by laps completed).
-                    # positionText carries R/D/E/W/F/N for the non-classified.
-                    # Keep both: position is the ranking label, classified is
-                    # the DNF flag. Nulling position here would throw away the
-                    # ordering the ranker trains on.
+                    # position is the classified order, retirements included - it's the ranking
+                    # label. The DNF flag is separate, so position is never nulled here.
                     "position": _to_int(res.get("position")),
                     "classified": position_text.isdigit(),
                     "position_text": position_text,
@@ -336,14 +313,8 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
 
             url = f"{config.JOLPICA_BASE}/{season}/{suffix}.json?limit={{limit}}&offset={{offset}}"
             try:
-                # The live season is re-read every run, so it must come off
-                # the wire and not out of the response cache. It did not: the
-                # skip below is bypassed for the current season, but the fetch
-                # underneath it hit a cache keyed on URL, and the season-wide
-                # results URL never changes. So "always refresh the current
-                # season" re-parsed the same bytes every time and the results
-                # of a race that had since been run were never ingested at all
-                # until something cleared the cache.
+                # The live season is refetched every run, so it has to bypass the response
+                # cache: the season-wide results URL never changes.
                 records = session.paginate(url, key_path, refresh=force or season == config.CURRENT_SEASON)
                 df = parser(records)
                 n = upsert(con, table, df, keys)
@@ -369,17 +340,9 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
                 scope = f"{season}:{rnd}"
                 status = ingest_status(con, source, scope)
 
-                # `rounds` is the whole calendar, including races that have not
-                # happened yet, and asking for those returns an empty 200. Left
-                # alone that empty answer gets recorded as done and cached by
-                # URL, so the round is never asked about again - the standings
-                # for the back half of a live season stay permanently missing,
-                # and with them champ_*_before and the entire championship
-                # projection, which quietly returns nothing once the last
-                # ingested round is behind the race being predicted.
-                #
-                # So an empty round of the live season is a "come back later",
-                # and coming back has to bypass the response cache too.
+                # Future rounds return an empty 200. In the live season that means "not yet",
+                # so it isn't marked done or served from cache next time - otherwise the back
+                # half of the standings never arrives and the projection comes back empty.
                 stale = status == "empty" and season == config.CURRENT_SEASON
                 if not force and status in ("ok", "empty") and not stale:
                     continue

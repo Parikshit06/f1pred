@@ -1,18 +1,10 @@
-"""Turning ranking scores into probabilities.
+"""Ranking scores to probabilities, two ways.
 
-Two routes, deliberately different, then blended:
-
-  Plackett-Luce   closed form. Treats each driver's score as a strength and
-                  reads off the probability of finishing first. Fast, smooth,
-                  and blind to anything the ranker did not see.
-
-  Monte Carlo     simulates the race. Adds the things a ranker structurally
-                  cannot express: pace varies race to race, cars break, safety
-                  cars compress the field, and before qualifying the grid
-                  itself is unknown.
-
-The blend weight is not a taste decision - backtest.tune_blend() picks it by
-minimising log loss on held-out races.
+Plackett-Luce is the closed form: each score is a strength, read off the
+chance of finishing first. The Monte Carlo simulates the race and adds what
+a ranking can't express - pace varying on the day, retirements, safety cars,
+and an unknown grid before qualifying. Win probability blends the two, with
+the weight fitted by log loss (backtest.tune_blend).
 """
 
 from __future__ import annotations
@@ -108,21 +100,14 @@ def simulate(
     n = len(inputs.driver_ids)
     positions = np.zeros((n, n), dtype=np.int32)  # [driver, finishing position]
 
-    # How much a circuit lets pace express itself. At a track where nobody
-    # overtakes, the grid dominates the result; at one where they do, race
-    # pace matters more. This is the mechanism the reel's flat "track score"
-    # feature was reaching for.
+    # How much a track lets pace show: where nobody overtakes, the grid decides.
     ot = 3.0 if not np.isfinite(inputs.overtaking_score) else float(inputs.overtaking_score)
     grid_pull = float(np.clip(1.6 - ot / 8.0, 0.15, 1.4))
 
     score_sd = float(np.std(inputs.scores)) or 1.0
 
-    # A grid with a hole in it does not raise, it degrades: the pace term goes
-    # NaN, argsort returns an arbitrary order, and 10,000 runs of that average
-    # into a near-uniform field. The output still looks like probabilities -
-    # every driver on about the same chance - so nothing downstream notices.
-    # This is the shape of the bug that published a 26% favourite with a 9%
-    # podium, so it fails here instead.
+    # A grid with gaps doesn't raise on its own - pace goes NaN and the simulation
+    # averages into a near-uniform field. Fail instead.
     grid_given = None
     if inputs.grid is not None:
         grid_given = np.asarray(inputs.grid, dtype=float)
@@ -181,18 +166,11 @@ def rolling_temperature(
     fallback: float,
     window: int = ADAPTIVE_WINDOW,
 ) -> float:
-    """Temperature fitted on the most recent races only.
+    """Plackett-Luce temperature fitted on a trailing window of finished races.
 
-    A single fixed temperature cannot be right across eras. On 2022-23, when
-    one car was dominant, the sharpest setting tested (0.5) minimised log loss
-    - being decisive paid. Carried into 2024-26, where the field is closer,
-    that same setting is overconfident: races it called at 29% happened 10% of
-    the time.
-
-    So confidence is re-fitted from a trailing window instead of frozen. This
-    uses finished races only, so it stays honest in a walk-forward, and it is
-    what a live system would do anyway - the model should get less sure when
-    the season stops being predictable.
+    One fixed value doesn't hold across eras: 0.5 was best on 2022-23 with one
+    dominant car, and overconfident on the closer 2024-26 field. Refitting from
+    recent races lets confidence drop when a season gets less predictable.
     """
     if len(score_groups) < MIN_CALIBRATION_RACES:
         return fallback

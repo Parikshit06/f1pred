@@ -43,3 +43,6 @@ docs/
 # content conflict in a generated file never auto-resolves - it just wedged the
 # rebase and lost the forecast that had already been computed.
 reports/*.html
+
+# Latest season projection, rebuilt every run.
+data/season.json
