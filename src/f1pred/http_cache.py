@@ -38,14 +38,9 @@ class RateLimitedSession:
         self.min_interval = min_interval
         self.hourly_limit = hourly_limit
         self._last_call = 0.0
-        # Wall-clock timestamps of real network calls in the last hour, for the
-        # sliding window below. Cache hits are deliberately not counted.
-        #
-        # Persisted to disk because the server's hourly budget is per-IP and
-        # spans process restarts. A fresh run that starts with an empty window
-        # thinks it has full quota, immediately overruns whatever the previous
-        # run consumed, and gets throttled from the first request - which is
-        # exactly what happens when you iterate on a script and rerun it.
+        # Timestamps of real network calls in the last hour; cache hits don't count.
+        # Persisted because jolpica's budget is per IP and outlives the process - an
+        # empty window after a restart would overrun it immediately.
         self._window_path = cache_dir / "_rate_window.json"
         self._window: deque[float] = deque(self._load_window())
         self._session = requests.Session()

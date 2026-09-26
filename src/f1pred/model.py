@@ -24,10 +24,9 @@ from . import config, features
 
 log = logging.getLogger(__name__)
 
-# rank:ndcg rather than rank:pairwise. We report NDCG@5, so optimising it
-# directly is the consistent choice - and it measurably beat pairwise on the
-# 2021 hold-out (NDCG@5 0.892 vs 0.804, winner hit rate 64% vs 23%). Pairwise
-# spends capacity separating 15th from 16th, which nobody cares about.
+# rank:ndcg rather than pairwise: it optimises the metric that's reported, and
+# beat pairwise on the 2021 hold-out (NDCG@5 0.892 vs 0.804). Pairwise spends
+# effort separating 15th from 16th.
 PARAMS = {
     "objective": "rank:ndcg",
     "eval_metric": "ndcg@5",
@@ -44,11 +43,8 @@ PARAMS = {
 }
 
 
-# Averaging several seeds measured as accuracy-neutral on the 2021 hold-out
-# (NDCG@5 0.894 single vs 0.894 at seven seeds), so it is kept for a different
-# reason: a published prediction should not move because the model was re-run.
-# Subsampling makes a single fit non-deterministic across environments; the
-# average is stable. Cheap at this data size.
+# Seed averaging was accuracy-neutral on the 2021 hold-out. It stays so a
+# published forecast doesn't change just because the model was refit.
 N_SEEDS = 5
 
 

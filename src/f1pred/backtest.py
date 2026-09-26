@@ -1,12 +1,8 @@
 """Walk-forward evaluation.
 
-For every race in the test window: train on races strictly before it, predict
-it, score the prediction. No shuffled splits - those let the model see the
-future, which is the most common way a sports model flatters its author.
-
-Everything is scored against baselines. A metric without a baseline is
-decoration: "we got 38% of winners right" only means something next to "the
-pole sitter won 41% of the time".
+Each race in the test window is predicted by a model trained only on earlier
+races, then scored. Everything is compared against baselines that need no
+model - the pole sitter's win rate is the bar, not zero.
 """
 
 from __future__ import annotations
@@ -117,23 +113,14 @@ class BacktestResult:
         return out.sort_values("ndcg5", ascending=False)
 
     def calibration(self, bins: int = 5) -> pd.DataFrame:
-        # Guard the frame before the column, the way summary() does. A run that
-        # graded nothing returns a DataFrame with no columns at all, and
-        # `self.races.method` on one of those raises AttributeError - which is
-        # how `verify` turned "the backtest produced no races" into a traceback
-        # instead of the FAIL it had already written.
+        # A run that graded nothing has no columns at all; check before indexing.
         if self.races.empty or "method" not in self.races.columns:
             return pd.DataFrame()
         d = self.races[self.races.method == "model"]
         if d.empty:
             return pd.DataFrame()
-        # Edges have to span the column being binned. They were built from
-        # p_winner - the probability given to whoever actually won - while the
-        # cut is on p_top_pick, the probability given to the model's own pick.
-        # p_top_pick is the larger of the two whenever the favourite lost, so
-        # the top edge sat below the data and pd.cut returned NaN for the most
-        # confident races, which then vanished from the table: 61 of 62 races
-        # reported, with the missing one exactly the kind you most want graded.
+        # Edges must span p_top_pick, the column being cut. p_winner is smaller
+        # whenever the favourite lost, and building edges from it dropped those races.
         edges = np.linspace(0, max(0.6, float(d["p_top_pick"].max())), bins + 1)
         d = d.assign(bucket=pd.cut(d["p_top_pick"], edges, include_lowest=True))
         g = d.groupby("bucket", observed=True).agg(

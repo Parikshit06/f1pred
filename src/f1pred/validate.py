@@ -412,14 +412,11 @@ def run(con: duckdb.DuckDBPyConnection | None = None) -> Report:
 
 @check
 def retirement_flag_matches_laps(con) -> list[Finding]:
-    """Cross-check the finished/retired flag against distance actually covered.
+    """Check the finished/retired flag against laps actually covered.
 
-    The flag is derived from a free-text status field owned by someone else,
-    and that text has already changed wording once mid-dataset ("+1 Lap"
-    becoming "Lapped" in 2023), which silently turned a third of all finishes
-    into retirements. Laps completed is a fact rather than a label, so it makes
-    an independent witness: anyone within two laps of the winner was running at
-    the flag, whatever the status string happens to say this year.
+    The flag comes from free-text status that has changed wording before ("+1
+    Lap" became "Lapped" in 2023). Laps completed doesn't depend on wording:
+    anyone within two laps of the winner was running at the flag.
     """
     df = _q(
         con,
@@ -437,10 +434,8 @@ def retirement_flag_matches_laps(con) -> list[Finding]:
     if df.empty:
         return []
 
-    # Discriminate between the two things this can catch. A car that stops on
-    # the last lap genuinely looks like a finisher on laps alone and is a
-    # handful of rows; a changed status vocabulary hits one status string
-    # hundreds of times. Only the second is a defect.
+    # A car stopping on the last lap looks like a finisher and is a few rows; a
+    # changed status wording hits one string hundreds of times. Only that's an error.
     by_status = df.groupby("status", as_index=False)["rows"].sum().sort_values("rows", ascending=False)
     systematic = by_status[by_status["rows"] >= 20]
     if systematic.empty:
