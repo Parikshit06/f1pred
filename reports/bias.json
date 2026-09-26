@@ -1,209 +1,217 @@
 {
   "start_season": 2024,
-  "entries": 1266,
-  "r": 0.832,
-  "variance_explained": 0.692,
-  "mae": 3.42,
+  "entries": 1288,
+  "r": 0.828,
+  "variance_explained": 0.686,
+  "mae": 3.39,
   "drivers": [
     {
       "driver_id": "tsunoda",
       "races": 51,
-      "avg_predicted": 10.39,
+      "avg_predicted": 10.24,
       "avg_actual": 12.8,
-      "raw_bias": -2.41,
-      "driver_specific_bias": -2.27
-    },
-    {
-      "driver_id": "bottas",
-      "races": 38,
-      "avg_predicted": 16.58,
-      "avg_actual": 16.84,
-      "raw_bias": -0.26,
-      "driver_specific_bias": -2.09
+      "raw_bias": -2.57,
+      "driver_specific_bias": -2.41
     },
     {
       "driver_id": "perez",
-      "races": 38,
-      "avg_predicted": 10.74,
-      "avg_actual": 12.39,
-      "raw_bias": -1.66,
-      "driver_specific_bias": -1.62
+      "races": 39,
+      "avg_predicted": 10.77,
+      "avg_actual": 12.46,
+      "raw_bias": -1.69,
+      "driver_specific_bias": -1.71
     },
     {
-      "driver_id": "hadjar",
-      "races": 35,
-      "avg_predicted": 9.49,
-      "avg_actual": 10.91,
-      "raw_bias": -1.43,
-      "driver_specific_bias": -0.99
+      "driver_id": "bottas",
+      "races": 39,
+      "avg_predicted": 17.23,
+      "avg_actual": 16.82,
+      "raw_bias": 0.41,
+      "driver_specific_bias": -1.67
     },
     {
       "driver_id": "stroll",
-      "races": 61,
-      "avg_predicted": 15.21,
-      "avg_actual": 14.69,
-      "raw_bias": 0.52,
-      "driver_specific_bias": -0.87
+      "races": 62,
+      "avg_predicted": 14.79,
+      "avg_actual": 14.81,
+      "raw_bias": -0.02,
+      "driver_specific_bias": -1.32
     },
     {
       "driver_id": "ricciardo",
       "races": 18,
-      "avg_predicted": 13.33,
+      "avg_predicted": 13.0,
       "avg_actual": 13.39,
-      "raw_bias": -0.06,
-      "driver_specific_bias": -0.85
+      "raw_bias": -0.39,
+      "driver_specific_bias": -1.12
+    },
+    {
+      "driver_id": "hadjar",
+      "races": 36,
+      "avg_predicted": 9.31,
+      "avg_actual": 10.69,
+      "raw_bias": -1.39,
+      "driver_specific_bias": -0.94
     },
     {
       "driver_id": "alonso",
-      "races": 62,
-      "avg_predicted": 11.77,
-      "avg_actual": 12.29,
-      "raw_bias": -0.52,
-      "driver_specific_bias": -0.81
+      "races": 63,
+      "avg_predicted": 12.25,
+      "avg_actual": 12.43,
+      "raw_bias": -0.17,
+      "driver_specific_bias": -0.67
     },
     {
       "driver_id": "antonelli",
-      "races": 38,
-      "avg_predicted": 5.05,
-      "avg_actual": 7.5,
-      "raw_bias": -2.45,
-      "driver_specific_bias": -0.6
-    },
-    {
-      "driver_id": "albon",
-      "races": 62,
-      "avg_predicted": 14.31,
-      "avg_actual": 13.61,
-      "raw_bias": 0.69,
-      "driver_specific_bias": -0.41
-    },
-    {
-      "driver_id": "sainz",
-      "races": 61,
-      "avg_predicted": 9.48,
-      "avg_actual": 10.28,
-      "raw_bias": -0.8,
-      "driver_specific_bias": -0.37
+      "races": 39,
+      "avg_predicted": 4.92,
+      "avg_actual": 7.44,
+      "raw_bias": -2.51,
+      "driver_specific_bias": -0.66
     },
     {
       "driver_id": "gasly",
-      "races": 62,
-      "avg_predicted": 13.61,
-      "avg_actual": 12.9,
-      "raw_bias": 0.71,
-      "driver_specific_bias": -0.17
+      "races": 63,
+      "avg_predicted": 13.46,
+      "avg_actual": 12.98,
+      "raw_bias": 0.48,
+      "driver_specific_bias": -0.4
+    },
+    {
+      "driver_id": "albon",
+      "races": 63,
+      "avg_predicted": 14.83,
+      "avg_actual": 13.71,
+      "raw_bias": 1.11,
+      "driver_specific_bias": -0.2
     },
     {
       "driver_id": "zhou",
       "races": 24,
-      "avg_predicted": 17.54,
+      "avg_predicted": 17.58,
       "avg_actual": 15.5,
-      "raw_bias": 2.04,
-      "driver_specific_bias": -0.1
+      "raw_bias": 2.08,
+      "driver_specific_bias": -0.11
     },
     {
-      "driver_id": "leclerc",
+      "driver_id": "sainz",
       "races": 62,
-      "avg_predicted": 4.35,
-      "avg_actual": 5.98,
-      "raw_bias": -1.63,
-      "driver_specific_bias": 0.44
-    },
-    {
-      "driver_id": "russell",
-      "races": 62,
-      "avg_predicted": 4.11,
-      "avg_actual": 5.76,
-      "raw_bias": -1.65,
-      "driver_specific_bias": 0.5
+      "avg_predicted": 10.15,
+      "avg_actual": 10.27,
+      "raw_bias": -0.13,
+      "driver_specific_bias": 0.05
     },
     {
       "driver_id": "piastri",
-      "races": 62,
+      "races": 63,
       "avg_predicted": 3.94,
-      "avg_actual": 5.61,
-      "raw_bias": -1.68,
-      "driver_specific_bias": 0.53
+      "avg_actual": 5.75,
+      "raw_bias": -1.81,
+      "driver_specific_bias": 0.36
     },
     {
       "driver_id": "norris",
-      "races": 62,
-      "avg_predicted": 3.02,
-      "avg_actual": 4.9,
-      "raw_bias": -1.89,
-      "driver_specific_bias": 0.61
-    },
-    {
-      "driver_id": "max_verstappen",
-      "races": 62,
-      "avg_predicted": 2.85,
-      "avg_actual": 4.73,
-      "raw_bias": -1.87,
-      "driver_specific_bias": 0.68
+      "races": 63,
+      "avg_predicted": 3.05,
+      "avg_actual": 5.13,
+      "raw_bias": -2.08,
+      "driver_specific_bias": 0.37
     },
     {
       "driver_id": "hulkenberg",
-      "races": 62,
-      "avg_predicted": 14.4,
-      "avg_actual": 12.58,
-      "raw_bias": 1.82,
-      "driver_specific_bias": 0.69
-    },
-    {
-      "driver_id": "hamilton",
-      "races": 62,
-      "avg_predicted": 6.53,
-      "avg_actual": 7.16,
-      "raw_bias": -0.63,
-      "driver_specific_bias": 0.75
-    },
-    {
-      "driver_id": "bearman",
-      "races": 41,
-      "avg_predicted": 14.66,
+      "races": 63,
+      "avg_predicted": 14.02,
       "avg_actual": 12.56,
-      "raw_bias": 2.1,
-      "driver_specific_bias": 0.88
+      "raw_bias": 1.46,
+      "driver_specific_bias": 0.41
     },
     {
-      "driver_id": "lawson",
-      "races": 44,
-      "avg_predicted": 13.61,
-      "avg_actual": 11.8,
-      "raw_bias": 1.82,
-      "driver_specific_bias": 0.93
-    },
-    {
-      "driver_id": "colapinto",
-      "races": 41,
-      "avg_predicted": 16.68,
-      "avg_actual": 13.83,
-      "raw_bias": 2.85,
-      "driver_specific_bias": 0.99
+      "driver_id": "leclerc",
+      "races": 63,
+      "avg_predicted": 4.37,
+      "avg_actual": 5.95,
+      "raw_bias": -1.59,
+      "driver_specific_bias": 0.45
     },
     {
       "driver_id": "bortoleto",
-      "races": 38,
-      "avg_predicted": 16.08,
-      "avg_actual": 13.34,
-      "raw_bias": 2.74,
-      "driver_specific_bias": 1.07
+      "races": 39,
+      "avg_predicted": 15.36,
+      "avg_actual": 13.33,
+      "raw_bias": 2.03,
+      "driver_specific_bias": 0.54
+    },
+    {
+      "driver_id": "lawson",
+      "races": 45,
+      "avg_predicted": 13.11,
+      "avg_actual": 11.8,
+      "raw_bias": 1.31,
+      "driver_specific_bias": 0.55
+    },
+    {
+      "driver_id": "russell",
+      "races": 63,
+      "avg_predicted": 4.16,
+      "avg_actual": 5.68,
+      "raw_bias": -1.52,
+      "driver_specific_bias": 0.57
+    },
+    {
+      "driver_id": "hamilton",
+      "races": 63,
+      "avg_predicted": 6.48,
+      "avg_actual": 7.14,
+      "raw_bias": -0.67,
+      "driver_specific_bias": 0.69
+    },
+    {
+      "driver_id": "max_verstappen",
+      "races": 63,
+      "avg_predicted": 2.89,
+      "avg_actual": 4.68,
+      "raw_bias": -1.79,
+      "driver_specific_bias": 0.71
+    },
+    {
+      "driver_id": "colapinto",
+      "races": 42,
+      "avg_predicted": 16.67,
+      "avg_actual": 13.9,
+      "raw_bias": 2.76,
+      "driver_specific_bias": 0.86
     },
     {
       "driver_id": "kevin_magnussen",
       "races": 22,
-      "avg_predicted": 16.36,
+      "avg_predicted": 16.14,
       "avg_actual": 13.36,
-      "raw_bias": 3.0,
-      "driver_specific_bias": 1.24
+      "raw_bias": 2.77,
+      "driver_specific_bias": 1.04
+    },
+    {
+      "driver_id": "arvid_lindblad",
+      "races": 15,
+      "avg_predicted": 12.07,
+      "avg_actual": 10.47,
+      "raw_bias": 1.6,
+      "driver_specific_bias": 1.17
+    },
+    {
+      "driver_id": "bearman",
+      "races": 42,
+      "avg_predicted": 15.76,
+      "avg_actual": 12.48,
+      "raw_bias": 3.29,
+      "driver_specific_bias": 1.67
     },
     {
       "driver_id": "ocon",
-      "races": 61,
-      "avg_predicted": 17.07,
-      "avg_actual": 13.23,
-      "raw_bias": 3.84,
-      "driver_specific_bias": 1.85
+      "races": 62,
+      "avg_predicted": 16.87,
+      "avg_actual": 13.15,
+      "raw_bias": 3.73,
+      "driver_specific_bias": 1.76
     }
   ]
 }

@@ -46,3 +46,7 @@ reports/*.html
 
 # Latest season projection, rebuilt every run.
 data/season.json
+
+# Offline demo output (make demo), rebuilt from a seed every run.
+data/demo/
+.coverage

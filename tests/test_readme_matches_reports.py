@@ -30,12 +30,20 @@ def _readme() -> str:
     return README.read_text()
 
 
-def _summary(method: str) -> dict:
-    for row in _load("backtest.json").get("summary", []):
+def _summary(method: str, section: str | None = None) -> dict:
+    data = _load("backtest.json")
+    rows = (data.get(section) or {}).get("summary", []) if section else data.get("summary", [])
+    for row in rows:
         if row["method"] == method:
             return row
     pytest.skip(f"no {method} row in backtest.json")
     raise AssertionError  # unreachable, keeps the type checker happy
+
+
+def _comparison(key: str, section: str | None = None) -> dict:
+    data = _load("backtest.json")
+    rows = (data.get(section) or {}).get(key, []) if section else data.get(key, [])
+    return {r["metric"]: r for r in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -44,19 +52,28 @@ def _summary(method: str) -> dict:
 @pytest.mark.parametrize(
     "method,column,fmt",
     [
-        ("model", "logloss", "{:.3f}"),
-        ("model", "brier", "{:.3f}"),
-        ("model", "top5_overlap", "{:.2f}"),
-        ("grid", "logloss", "{:.3f}"),
-        ("grid", "top5_overlap", "{:.2f}"),
+        ("model", "win_logloss", "{:.3f}"),
+        ("grid", "win_logloss", "{:.3f}"),
+        ("model", "ndcg3", "{:.3f}"),
+        ("grid", "ndcg3", "{:.3f}"),
+        ("model", "ndcg5", "{:.3f}"),
+        ("grid", "ndcg5", "{:.3f}"),
+        ("model", "podium_brier", "{:.3f}"),
+        ("championship", "win_logloss", "{:.3f}"),
     ],
 )
 def test_headline_accuracy_figures_appear_in_the_readme(method, column, fmt):
     value = fmt.format(_summary(method)[column])
     assert value in _readme(), (
         f"backtest.json says {method} {column} is {value}, which is not in the README. "
-        "Re-run the evaluation and update the accuracy table."
+        "Re-run the evaluation and update the results table."
     )
+
+
+@pytest.mark.parametrize("method", ["model", "grid", "championship"])
+def test_winner_rates_are_current(method):
+    rate = f"{_summary(method)['winner_hit'] * 100:.0f}%"
+    assert rate in _readme(), f"{method} called {rate} of winners"
 
 
 def test_the_race_count_is_current():
@@ -64,16 +81,55 @@ def test_the_race_count_is_current():
     assert f"{n} races" in _readme(), f"the backtest covers {n} races; the README says otherwise"
 
 
-def test_the_readme_does_not_claim_to_match_the_grid_on_winners_unless_it_does():
-    """The one claim that is an interpretation rather than a number, and the one
-    that quietly stopped being true when a re-run moved the model from 58% to
-    55% while the grid stayed at 58%."""
-    model, grid = _summary("model")["top1_hit"], _summary("grid")["top1_hit"]
-    claims_parity = "Matches the grid on winners" in _readme()
-    if claims_parity:
-        assert abs(model - grid) < 0.005, (
-            f"the README claims parity on winners but the model is {model:.1%} against the grid's {grid:.1%}"
-        )
+def test_the_log_loss_interval_against_the_grid_is_quoted():
+    ll = _comparison("comparison_vs_grid").get("win_logloss")
+    if not ll:
+        pytest.skip("no paired comparison recorded")
+    text = _readme()
+    assert f"{abs(ll['difference']):.3f}" in text
+    assert f"{ll['ci_low']:.2f} to {ll['ci_high']:+.2f}" in text, (
+        "the interval quoted is not the measured one"
+    )
+
+
+def test_the_readme_claims_no_lead_over_the_grid_the_evidence_lacks():
+    """The claim that is an interpretation rather than a number, and the one
+    most tempting to overstate. It may only say the model beats the grid on a
+    metric whose paired interval excludes zero."""
+    comp = _comparison("comparison_vs_grid")
+    if not comp:
+        pytest.skip("no paired comparison recorded")
+    text = _readme().lower()
+    clear_wins = [m for m, r in comp.items() if r["better"] == "model"]
+    for phrase in ("beats the grid", "better than the grid", "outperforms the grid"):
+        if phrase in text:
+            assert clear_wins, f"the README says the model {phrase!r}, but no paired interval supports it"
+    if not clear_wins:
+        assert "nothing is statistically clear" in text, "the README no longer admits the grid is level"
+
+
+@pytest.mark.parametrize(
+    "section,key,metric",
+    [
+        ("pre_quali", "comparison_vs_championship", "win_logloss"),
+        ("qualifying", "comparison", "pole_logloss"),
+        ("qualifying", "comparison", "ndcg5"),
+    ],
+)
+def test_the_clear_wins_are_quoted_with_their_intervals(section, key, metric):
+    r = _comparison(key, section).get(metric)
+    if not r:
+        pytest.skip(f"no {section} {metric} comparison")
+    quoted = f"{r['difference']:+.3f} ({r['ci_low']:+.3f} to {r['ci_high']:+.3f})"
+    assert quoted in _readme(), f"{section} {metric} should read {quoted}"
+
+
+def test_calibration_errors_are_current():
+    ece = _load("backtest.json").get("calibration_error") or {}
+    text = _readme()
+    for event in ("win", "podium", "top10"):
+        if event in ece:
+            assert f"{ece[event] * 100:.1f}%" in text, f"{event} calibration error is {ece[event]:.1%}"
 
 
 # ---------------------------------------------------------------------------
@@ -128,48 +184,39 @@ def test_the_shortfall_is_still_admitted():
 
 
 # ---------------------------------------------------------------------------
-# Driver bias
+# Experiments
 # ---------------------------------------------------------------------------
-def test_driver_bias_figures_are_current():
-    bias = _load("bias.json")
+def _experiments() -> dict:
+    return _load("experiments.json")
+
+
+def test_the_calibration_comparison_is_current():
+    rows = {r["variant"]: r for r in _experiments().get("calibration") or []}
+    if not rows:
+        pytest.skip("no calibration experiment recorded")
     text = _readme()
-    assert f"{bias['r']:.3f}" in text, f"bias correlation is {bias['r']:.3f}"
-    assert f"{bias['variance_explained']:.0%}" in text, f"artefact share is {bias['variance_explained']:.0%}"
-    named = {d["driver_id"]: d["driver_specific_bias"] for d in bias["drivers"]}
-    for driver, shown in (
-        ("hamilton", "+{:.2f}"),
-        ("max_verstappen", "+{:.2f}"),
-        ("tsunoda", "\u2212{:.2f}"),
-    ):
-        value = named.get(driver)
-        if value is not None:
-            assert shown.format(abs(value)) in text, f"{driver} is {value:+.2f}"
+    for r in rows.values():
+        assert f"{r['win_logloss']:.3f}" in text, f"{r['variant']}: log loss {r['win_logloss']:.3f}"
 
 
-# ---------------------------------------------------------------------------
-# Counts the README asserts about the repo itself
-# ---------------------------------------------------------------------------
-def test_the_test_count_is_plausible():
-    """Deliberately loose. Collecting the suite from inside it is circular, and
-    a defined `def test_` can expand into several cases through parametrise - 140
-    definitions currently collect as 164. So this only catches the count being
-    stale downwards, which is the direction it drifts: tests get added and the
-    number in the README does not.
-    """
-    import re
-
+def test_the_ablation_headline_is_current():
+    ab = _experiments().get("ablation") or {}
+    tuning = next((rows for w, rows in ab.items() if w.startswith("tuning")), None)
+    if not tuning:
+        pytest.skip("no ablation recorded")
+    rows = {r["variant"]: r for r in tuning}
     text = _readme()
-    claimed = re.search(r"\((\d+) tests\)", text)
-    if not claimed:
-        pytest.skip("the README does not state a test count")
-    defined = sum(
-        len(re.findall(r"^def test_", p.read_text(), re.MULTILINE))
-        for p in (ROOT / "tests").glob("test_*.py")
-    )
-    if not defined:
-        pytest.skip("no test files found from here")
-    stated = int(claimed.group(1))
-    assert stated >= defined, (
-        f"the README claims {stated} tests but {defined} are defined before parametrisation, "
-        "so the figure is stale"
-    )
+    assert f"{rows['full model']['win_logloss']:.3f}" in text
+    grid = rows["grid only"]
+    assert f"{grid['win_logloss']:.3f}" in text
+    assert f"{grid['win_logloss_ci'][0]:+.3f} to {grid['win_logloss_ci'][1]:+.3f}" in text
+
+
+def test_the_practice_result_is_current():
+    practice = _experiments().get("practice") or {}
+    with_practice = next((r for r in practice.get("qualifying") or [] if r.get("pole_logloss_ci")), None)
+    if not with_practice:
+        pytest.skip("no practice experiment recorded")
+    lo, hi = with_practice["pole_logloss_ci"]
+    assert f"{with_practice['pole_logloss_diff']:+.3f} ({lo:+.3f} to {hi:+.3f})" in _readme()
+    assert f"{practice['weekends_with_practice']} weekends" in _readme()

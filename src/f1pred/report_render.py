@@ -104,6 +104,9 @@ def pct(x: float, dp: int = 1) -> str:
     floor = 10**-dp
     if 0 < x * 100 < floor / 2 or (x == 0):
         return f"&lt;{floor:g}%"
+    # The mirror image: short of certain never prints as 100%.
+    if x < 1 and x * 100 >= 100 - floor / 2:
+        return f"&gt;{100 - floor:g}%"
     return f"{x * 100:.{dp}f}%"
 
 
@@ -306,7 +309,7 @@ section > .body{min-width:0}
 
 /* ---- track record strip ------------------------------------------------ */
 .strip{margin-bottom:18px}
-.strip svg{display:block; width:100%; max-width:520px; height:auto; overflow:visible}
+.strip svg{display:block; max-width:100%; height:auto; overflow:visible}
 .strip .rec rect{transition:opacity .15s}
 .strip .rec.hit rect{fill:var(--good)}
 .strip .rec.miss rect{fill:none; stroke:var(--ink-3); stroke-width:1}
@@ -401,6 +404,92 @@ footer{border-top:2px solid var(--rule); margin-top:8px; padding:20px 0 56px;
   text-transform:uppercase; color:var(--ink-3)}
 footer a{color:var(--ink-2)}
 
+/* ---- status chips under the title ---------------------------------------- */
+.status{display:flex; flex-wrap:wrap; gap:8px; margin-top:20px}
+.chip{display:inline-flex; align-items:center; gap:7px; padding:4px 10px 4px 9px;
+  border:1px solid var(--hair); border-radius:999px; background:var(--paper);
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--ink-2)}
+.chip i{width:7px; height:7px; border-radius:50%; background:var(--ink-3); flex:none}
+.chip.ok i{background:var(--good)}
+.chip.warn i{background:#c98a00}
+.chip.live i{background:var(--accent)}
+.chip b{color:var(--ink); font-weight:600}
+
+/* ---- headline facts ------------------------------------------------------ */
+.headline{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:18px 30px;
+  margin-top:26px; padding-top:18px; border-top:1px solid var(--hair)}
+.headline dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3)}
+.headline dd{margin:4px 0 0; font-size:1.02rem; font-weight:600; line-height:1.3}
+.headline dd .big{font-family:var(--mono); font-size:1.6rem; font-weight:600;
+  letter-spacing:-.02em; margin-right:8px; font-variant-numeric:tabular-nums}
+.headline dd small{display:block; font-weight:400; color:var(--ink-3); font-size:.8rem; margin-top:2px}
+
+/* ---- the race board: every column read off one distribution -------------- */
+.grid6{display:grid;
+  grid-template-columns:28px 3px minmax(120px,1.6fr) 58px 104px 56px 56px 56px 54px 16px;
+  align-items:center; gap:0 10px}
+.board details{border-bottom:1px solid var(--hair)}
+.board details:last-child{border-bottom:0}
+.board summary{list-style:none; cursor:pointer; border-bottom:0}
+.board summary::-webkit-details-marker{display:none}
+.board summary:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.board .row{border-bottom:0}
+.twist{font-family:var(--mono); font-size:12px; color:var(--ink-3); text-align:center;
+  transition:transform .18s}
+.board details[open] .twist{transform:rotate(90deg); color:var(--ink)}
+.start small{display:block; font-size:9px; color:var(--ink-3); letter-spacing:.02em}
+.winc{display:flex; flex-direction:column; align-items:flex-end; gap:4px}
+.pbar{display:block; width:100%; height:3px; border-radius:2px; background:var(--chip); overflow:hidden}
+.pbar i{display:block; height:100%; border-radius:2px; background:var(--tc,var(--ink));
+  transform-origin:left; animation:grow .7s cubic-bezier(.2,.7,.3,1) backwards;
+  animation-delay:calc(var(--i,0) * 35ms + 120ms)}
+@keyframes grow{from{transform:scaleX(0)}}
+.why{padding:4px 0 16px 41px; display:grid; grid-template-columns:minmax(0,1fr); gap:10px}
+.why p{color:var(--ink-2); font-size:.88rem}
+.contrib{display:grid; grid-template-columns:minmax(120px,190px) 1fr 52px; gap:6px 12px;
+  align-items:center; max-width:560px; font-size:.8rem}
+.contrib span{color:var(--ink-2)}
+.contrib .axis{position:relative; height:10px; border-left:0}
+.contrib .axis::before{content:""; position:absolute; left:50%; top:-3px; bottom:-3px;
+  width:1px; background:var(--hair)}
+.contrib .axis i{position:absolute; top:1px; height:8px; border-radius:2px}
+.contrib .axis i.up{left:50%; background:var(--good)}
+.contrib .axis i.down{right:50%; background:var(--bad)}
+.contrib em{font-family:var(--mono); font-style:normal; font-size:.76rem; text-align:right;
+  color:var(--ink-3); font-variant-numeric:tabular-nums}
+.why .note{font-size:.76rem; color:var(--ink-3)}
+@media (max-width:860px){
+  .grid6{grid-template-columns:26px 3px minmax(96px,1fr) 50px 92px 52px 50px 14px}
+  .grid6 > .c-top5, .grid6 > .c-top10{display:none}
+}
+@media (max-width:480px){
+  .grid6{grid-template-columns:18px 3px minmax(64px,1fr) 38px 70px 44px 40px 10px; gap:0 7px}
+  .why{padding-left:0}
+  .contrib{grid-template-columns:minmax(90px,1fr) 1fr 42px}
+}
+
+/* ---- empty and notice states --------------------------------------------- */
+.notice{border:1px solid var(--hair); border-left:3px solid var(--ink-3); padding:14px 16px;
+  color:var(--ink-2); font-size:.9rem; max-width:64ch; background:var(--paper)}
+.notice b{color:var(--ink)}
+
+/* ---- method page: figures -------------------------------------------------- */
+.figs{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:26px 34px; margin:6px 0 10px}
+.fig-rel svg{display:block; width:100%; height:auto; max-width:420px}
+.fig-rel h4{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-2); margin:0 0 8px; font-weight:600}
+.fig-rel .diag{stroke:var(--ink-3); stroke-dasharray:3 4; stroke-width:1}
+.fig-rel .frame{stroke:var(--hair); fill:none}
+.fig-rel .ci{stroke:var(--ink-2); stroke-width:1.2}
+.fig-rel .dot{fill:var(--accent); stroke:var(--paper); stroke-width:1.5}
+.fig-rel text{font-family:var(--mono); font-size:9.5px; fill:var(--ink-3)}
+.verdicts{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px}
+.pill{font-family:var(--mono); font-size:10.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--hair); color:var(--ink-2)}
+.pill.model{border-color:color-mix(in srgb,var(--good) 55%,var(--hair)); color:var(--good)}
+.pill.grid{border-color:color-mix(in srgb,var(--bad) 55%,var(--hair)); color:var(--bad)}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important; transition:none!important}
 }
@@ -437,26 +526,87 @@ def _row_head(i: int, r: dict) -> str:
     )
 
 
-def race_board(rows: list[dict]) -> str:
-    out = [
-        (
-            "<div class='colhead grid5'><span></span><span></span><span>Driver</span>"
-            "<span>Start</span><span>Win</span><span>Podium</span><span>Points</span></div>"
+def _start_cell(r: dict) -> str:
+    """Where the car starts, and where it qualified when a penalty moved it."""
+    grid, quali = r.get("grid"), r.get("quali_position")
+    if not isinstance(grid, (int, float)):
+        return "<div class='v dim start'>&mdash;</div>"
+    moved = isinstance(quali, (int, float)) and int(quali) != int(grid)
+    note = f"<small>Q{int(quali)}</small>" if moved else ""
+    return f"<div class='v dim start'>P{int(grid)}{note}</div>"
+
+
+def contributions(detail: dict | None, scale: float) -> str:
+    """Grouped SHAP contributions as diverging bars: right pushes the driver up
+    the order, left down. Values are in the same units as the ranking score."""
+    if not detail:
+        return ""
+    rows = []
+    for label, value in detail.items():
+        width = min(abs(float(value)) / scale, 1.0) * 50 if scale > 0 else 0.0
+        cls = "up" if value > 0 else "down"
+        rows.append(
+            f"<span>{esc(label)}</span>"
+            f"<div class='axis'><i class='{cls}' style='width:{width:.1f}%'></i></div>"
+            f"<em>{float(value):+.2f}</em>"
         )
+    return "<div class='contrib'>" + "".join(rows) + "</div>"
+
+
+def race_board(rows: list[dict], details: dict[str, dict] | None = None) -> str:
+    """The race forecast. Every figure in a row is read off the same finishing
+    distribution, so win <= podium <= top 5 <= top 10 always holds.
+
+    Each row opens to say why: the SHAP contributions behind the driver's
+    score, grouped so near-duplicate features don't split the credit.
+    """
+    details = details or {}
+    scale = max(
+        (abs(float(v)) for d in details.values() for v in (d or {}).values()),
+        default=0.0,
+    )
+    out = [
+        "<div class='board'>",
+        (
+            "<div class='colhead grid6'><span></span><span></span><span>Driver</span>"
+            "<span>Start</span><span>Win</span><span>Podium</span><span class='c-top5'>Top 5</span>"
+            "<span class='c-top10'>Top 10</span><span>Exp.</span><span></span></div>"
+        ),
     ]
     for i, r in enumerate(rows):
-        grid = r.get("grid")
-        start = f"P{int(grid)}" if isinstance(grid, (int, float)) else "&mdash;"
+        p = float(r.get("p_win") or 0)
+        exp = r.get("exp_position")
+        why = r.get("why") or ""
+        detail = details.get(r.get("driver_id"))
         out.append(
-            f"<div class='row grid5{' podium' if i < 3 else ''}' "
+            f"<details><summary class='row grid6{' podium' if i < 3 else ''}' "
             f'style="--i:{i}; --tc:{team_colour(r.get("team"))}">'
             + _row_head(i, r)
-            + f"<div class='v dim c-start'>{start}</div>"
-            + f"<div class='v lead' data-count>{pct(r.get('p_win') or 0)}</div>"
+            + _start_cell(r)
+            + f"<div class='v lead winc'><span data-count>{pct(p)}</span>"
+            + f"<span class='pbar'><i style='width:{min(p, 1.0) * 100:.1f}%'></i></span></div>"
             + f"<div class='v'>{pct(r.get('p_podium') or 0, 0)}</div>"
-            + f"<div class='v dim c-points'>{pct(r.get('p_top10') or 0, 0)}</div>"
-            + "</div>"
+            + f"<div class='v dim c-top5'>{pct(r.get('p_top5') or 0, 0)}</div>"
+            + f"<div class='v dim c-top10'>{pct(r.get('p_top10') or 0, 0)}</div>"
+            + (
+                f"<div class='v dim'>{float(exp):.1f}</div>"
+                if isinstance(exp, (int, float))
+                else "<div class='v dim'>&mdash;</div>"
+            )
+            + "<div class='twist' aria-hidden='true'>&rsaquo;</div>"
+            + "</summary>"
+            + "<div class='why'>"
+            + (f"<p>{esc(why)}.</p>" if why else "<p>No explanation was logged with this forecast.</p>")
+            + contributions(detail, scale)
+            + (
+                "<p class='note'>What the model leaned on for this forecast (SHAP, relative to the "
+                "field average) &mdash; not what causes a result.</p>"
+                if detail
+                else ""
+            )
+            + "</div></details>"
         )
+    out.append("</div>")
     return "".join(out)
 
 
@@ -775,8 +925,11 @@ def record_strip(board) -> str:
             f"<g class='{cls}'><title>{esc(label)}</title>"
             f"<rect x='{x:.1f}' y='{h - bh:.1f}' width='{w}' height='{bh:.1f}' rx='1.5'/></g>"
         )
+    # Drawn at its own pixel size: scaled to the column, four races became four
+    # giant pills and a band of empty page.
     return (
         f"<div class='strip'><svg viewBox='0 0 {max(width, 1):.0f} {h + 12:.0f}' "
+        f"width='{max(width, 1):.0f}' height='{h + 12:.0f}' "
         f"preserveAspectRatio='xMinYMid meet' role='img' "
         f"aria-label='Winner called or missed, per graded race'>"
         + "".join(bars)
@@ -1020,3 +1173,48 @@ def json_payload(obj) -> str:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def reliability_chart(rows: list[dict], title: str, size: int = 260) -> str:
+    """Stated probability against how often it happened, one dot per bucket,
+    with its 95% interval. On the diagonal is calibrated; below it, over-confident.
+
+    Axes are square-root scaled so the long tail of small probabilities -
+    where most of a 22-car field lives - isn't crushed into a corner.
+    """
+    if not rows:
+        return ""
+    pad, plot = 30, size - 40
+
+    def sc(v: float) -> float:
+        return float(max(v, 0.0)) ** 0.5
+
+    def X(v: float) -> float:
+        return pad + sc(v) * plot
+
+    def Y(v: float) -> float:
+        return 10 + plot - sc(v) * plot
+
+    parts = [
+        f"<rect class='frame' x='{pad}' y='10' width='{plot}' height='{plot}'/>",
+        f"<line class='diag' x1='{X(0)}' y1='{Y(0)}' x2='{X(1)}' y2='{Y(1)}'/>",
+    ]
+    for t in (0.05, 0.25, 0.5, 1.0):
+        parts.append(f"<text x='{X(t):.1f}' y='{size - 14}' text-anchor='middle'>{t:.0%}</text>")
+        parts.append(f"<text x='{pad - 4}' y='{Y(t) + 3:.1f}' text-anchor='end'>{t:.0%}</text>")
+    for r in rows:
+        stated, observed = float(r["stated"]), float(r["observed"])
+        lo, hi, n = float(r["ci_low"]), float(r["ci_high"]), int(r["n"])
+        parts.append(
+            f"<g><title>stated {stated:.1%}, happened {observed:.1%} (n={n}, 95% interval "
+            f"{lo:.0%}-{hi:.0%})</title>"
+            f"<line class='ci' x1='{X(stated):.1f}' x2='{X(stated):.1f}' y1='{Y(lo):.1f}' y2='{Y(hi):.1f}'/>"
+            f"<circle class='dot' cx='{X(stated):.1f}' cy='{Y(observed):.1f}' r='{2.5 + min(n, 400) ** 0.5 / 4:.1f}'/></g>"
+        )
+    parts.append(f"<text x='{pad + plot / 2}' y='{size - 1}' text-anchor='middle'>stated</text>")
+    return (
+        f"<figure class='fig-rel'><h4>{esc(title)}</h4>"
+        f"<svg viewBox='0 0 {size} {size + 4}' role='img' aria-label='{esc(title)} reliability'>"
+        + "".join(parts)
+        + "</svg></figure>"
+    )

@@ -39,6 +39,13 @@ JOLPICA_BACKOFF_GROWTH = 1.5
 JOLPICA_MAX_INTERVAL = 6.0
 JOLPICA_PAGE_SIZE = 100
 
+# OpenF1: official starting grids and per-session driver lists, 2023 onward.
+# The free tier allows about 30 requests a minute; one every 2.1s stays under.
+OPENF1_BASE = "https://api.openf1.org/v1"
+OPENF1_FIRST_SEASON = 2023
+OPENF1_MIN_INTERVAL = 2.1
+OPENF1_HOURLY_LIMIT = 1500
+
 OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 
@@ -47,20 +54,22 @@ OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 FIRST_SEASON = 2018
 CURRENT_SEASON = 2026
 
-# The next three are fitted on 2022-23, before the reported window:
-#   make backtest   (backtest --start-season 2024 --tune --tune-season 2022)
-DEFAULT_CURRENT_SEASON_WEIGHT = 2.0  # training weight on current-season races
-DEFAULT_TEMPERATURE = 0.4  # Plackett-Luce sharpness; <1 is more decisive
-DEFAULT_BLEND_WEIGHT = 0.6  # closed-form ranking vs simulation, for p_win
+# Fallbacks only: `make backtest` fits these on 2022-23 and writes them to
+# reports/backtest.json, which the live forecast reads (backtest.load_settings).
+DEFAULT_CURRENT_SEASON_WEIGHT = 1.5  # training weight on current-season races
+DEFAULT_TEMPERATURE = 0.35  # Plackett-Luce sharpness; <1 is more decisive
+DEFAULT_BLEND_WEIGHT = 0.6  # Plackett-Luce vs simulation in the mixture
+DEFAULT_QUALI_TEMPERATURE = 0.5  # the qualifying model's own Plackett-Luce temperature
 
 # How far a team's true pace can sit from the model's estimate over a full
 # remaining season, in finishing positions. Mostly model error rather than
 # development, and unlike race-to-race noise it doesn't average out.
 # Chosen by coverage of the projection's 10th-90th band: make calibrate-spread
-SEASON_PACE_UNCERTAINTY = 8.0
+SEASON_PACE_UNCERTAINTY = 6.0
 # The same for a driver against their own teammate. Chosen by coverage of the
-# teammate points gap.
-SEASON_DRIVER_UNCERTAINTY = 5.0
+# teammate points gap on 2019-22, where scoring each driver on their own recent
+# weekends (championship.season_strength) already covers it: the sweep picks 0.
+SEASON_DRIVER_UNCERTAINTY = 0.0
 
 # Finishing positions per unit of score spread, measured in the simulator.
 # Converts the constant above from positions into score.
@@ -73,5 +82,10 @@ TOP_N = 10  # rows published per board; the full field is still modelled
 # so the record holds race-week calls rather than whatever the scheduler ran
 # while grading the previous weekend.
 LOG_WINDOW_DAYS = 5.0
+# Within that window, the pre-qualifying call waits for the weekend's practice
+# pace - it measurably improves the qualifying forecast - but never beyond this
+# many hours before qualifying, so a practice-data outage can't cost the record
+# a race.
+PRACTICE_WAIT_HOURS = 6.0
 
 RANDOM_SEED = 20260913

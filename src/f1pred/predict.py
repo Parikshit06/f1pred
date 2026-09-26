@@ -8,17 +8,15 @@ overwritten - that folder is the track record.
 
 from __future__ import annotations
 
-import itertools
 import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
-from . import championship, config, features, model, simulate
+from . import backtest, championship, config, features, model, probability, provenance, simulate, weekend
 from .store import connect
 
 log = logging.getLogger(__name__)
@@ -54,6 +52,7 @@ class Prediction:
     position_matrix: list[list[float]] = field(default_factory=list)
     season_outlook: dict = field(default_factory=dict)
     meta: dict = field(default_factory=dict)
+    quali_start_utc: str | None = None
 
     def path(self) -> Path:
         stamp = self.generated_at_utc.replace(":", "").replace("-", "")[:15]
@@ -68,12 +67,15 @@ class Prediction:
 
     def days_out(self) -> float | None:
         """How far ahead of the race this forecast is being made."""
-        if not self.race_start_utc:
-            return None
-        start = pd.to_datetime(self.race_start_utc, errors="coerce", utc=True)
-        if pd.isna(start):
-            return None
-        return float((start - pd.Timestamp(datetime.now(UTC))).total_seconds()) / 86400
+        return _days_until(self.race_start_utc)
+
+    def waiting_for_practice(self) -> bool:
+        """A pre-qualifying call made before practice, with qualifying still
+        more than PRACTICE_WAIT_HOURS away: worth holding for the pace data."""
+        if self.grid_known or self.meta.get("practice_data"):
+            return False
+        to_quali = _days_until(self.quali_start_utc)
+        return to_quali is not None and to_quali * 24 > config.PRACTICE_WAIT_HOURS
 
     def save(self, force: bool = False) -> Path | None:
         """Write the forecast unless this race already has one at this stage.
@@ -105,10 +107,23 @@ class Prediction:
             )
             return None
 
+        if not force and self.waiting_for_practice():
+            log.info("not logging %d r%d yet: waiting for practice pace", self.season, self.round)
+            return None
+
         p = self.path()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(asdict(self), indent=2, default=str))
         return p
+
+
+def _days_until(stamp: str | None) -> float | None:
+    if not stamp:
+        return None
+    when = pd.to_datetime(stamp, errors="coerce", utc=True)
+    if pd.isna(when):
+        return None
+    return float((when - pd.Timestamp(datetime.now(UTC))).total_seconds()) / 86400
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +166,16 @@ def next_race(df: pd.DataFrame) -> tuple[int, int]:
 
 
 def grid_is_known(race: pd.DataFrame) -> bool:
-    return bool(race["quali_position"].notna().sum() >= len(race) * 0.8)
+    """Post-qualifying once nearly every car has a slot from qualifying or the
+    official grid (weekend.resolve_grid). The projected order is never enough."""
+    if "grid_source" in race:
+        return bool(race["grid_source"].notna().sum() >= len(race) * weekend.MIN_GRID_COVERAGE)
+    return bool(race["quali_position"].notna().sum() >= len(race) * weekend.MIN_GRID_COVERAGE)
+
+
+def _dominant(series: pd.Series) -> str | None:
+    values = series.dropna()
+    return str(values.mode().iloc[0]) if not values.empty else None
 
 
 def feature_labels() -> dict[str, str]:
@@ -166,7 +190,7 @@ def feature_labels() -> dict[str, str]:
         "quali_gap_to_pole_pct": "pace gap to pole",
         "quali_gap_to_teammate_pct": "gap to teammate in qualifying",
         "drv_avg_finish_3": "recent finishing form",
-        "drv_avg_finish_5": "form over five races",
+        "drv_avg_finish_5": "typical finish over five races",
         "drv_avg_grid_5": "recent qualifying form",
         "drv_points_rate_5": "recent points scoring",
         "drv_dnf_rate_10": "reliability record",
@@ -265,6 +289,7 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
         "n_races": out["n_races"],
         "n_sims": out["n_sims"],
         "points_available": out["points_available"],
+        "sprints_left": out.get("sprints_left", 0),
         "lead": out["lead"],
         "clinch_in": out["clinch_in"],
         "clinched": out["clinched"],
@@ -272,80 +297,86 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
     }
 
 
-def explain(ranker: model.Ranker, race: pd.DataFrame, top_k: int = 2) -> list[str]:
-    """One plain sentence per driver, from SHAP contributions.
+# Near-duplicate features split credit, sometimes with opposite signs, which
+# reads as a contradiction ("helped by grid, held back by qualifying"). They are
+# summed within these groups before anything is said about them.
+EXPLANATION_GROUPS = {
+    "grid": "grid",
+    "quali_position": "grid",
+    "drv_avg_grid_5": "quali_form",
+    "drv_avg_quali_3": "quali_form",
+    "drv_avg_quali_5": "quali_form",
+    "drv_pole_rate_10": "quali_form",
+    "drv_avg_finish_3": "race_form",
+    "drv_avg_finish_5": "race_form",
+    "drv_points_rate_5": "race_form",
+    "drv_podium_rate_10": "race_form",
+    "drv_top10_rate_10": "race_form",
+    "team_avg_finish_3": "team_form",
+    "team_avg_finish_5": "team_form",
+    "team_points_rate_5": "team_form",
+    "drv_pace_gap_pct": "one_lap_pace",
+    "team_pace_gap_pct": "one_lap_pace",
+    "quali_gap_to_pole_pct": "one_lap_pace",
+    "team_avg_quali_5": "one_lap_pace",
+    "champ_position_before": "championship",
+    "champ_points_before": "championship",
+    "drv_dnf_rate_10": "reliability",
+    "team_dnf_rate_10": "reliability",
+    "quali_gap_to_teammate_pct": "teammate",
+    "drv_teammate_quali_edge": "teammate",
+}
+GROUP_LABELS = {
+    "grid": "starting position",
+    "quali_form": "recent qualifying form",
+    "race_form": "recent race results",
+    "team_form": "the team's recent results",
+    "one_lap_pace": "one-lap pace",
+    "championship": "championship position",
+    "reliability": "reliability record",
+    "teammate": "head-to-head against a teammate",
+}
 
-    A ranking score tells you nothing on its own. "The model liked this driver
-    mostly because of the car's recent pace, despite a poor grid slot" is
-    something a reader can disagree with, which is the point.
+
+def grouped_contributions(ranker: model.Ranker, race: pd.DataFrame) -> pd.DataFrame:
+    """SHAP contributions to each driver's score, summed within feature groups.
+
+    Rows are drivers (race order), columns are groups; each row sums to the
+    driver's score relative to the field. See model.Ranker.contributions.
     """
-    try:
-        import shap
-    except ImportError:
-        return [""] * len(race)
+    phi = pd.DataFrame(ranker.contributions(race), columns=ranker.feature_names)
+    groups = [EXPLANATION_GROUPS.get(f, f) for f in ranker.feature_names]
+    return phi.T.groupby(groups, sort=False).sum().T
 
-    labels = feature_labels()
-    unlabelled = [f for f in ranker.feature_names if f not in labels]
+
+def explain(ranker: model.Ranker, race: pd.DataFrame) -> tuple[list[str], list[dict]]:
+    """One plain sentence per driver, plus the numbers behind it.
+
+    "Helped by" the largest group pushing the driver up the order, "held back
+    by" the largest pulling them down. SHAP says what the model leaned on for
+    this forecast; it is not a claim about what causes a result.
+    """
+    labels = {**feature_labels(), **GROUP_LABELS}
+    unlabelled = [f for f in ranker.feature_names if EXPLANATION_GROUPS.get(f, f) not in labels]
     if unlabelled:
         log.warning("no plain-English label for: %s", ", ".join(unlabelled))
 
-    try:
-        explainer = shap.TreeExplainer(ranker.booster)
-        values = explainer.shap_values(race[ranker.feature_names])
-    except Exception as exc:  # noqa: BLE001
-        log.debug("SHAP unavailable: %s", exc)
-        return [""] * len(race)
-
-    # Near-duplicate features split credit with opposite signs, which reads as a
-    # contradiction ("helped by grid, held back by qualifying"). Group them.
-    synonyms = {
-        "grid": "grid",
-        "quali_position": "grid",
-        "drv_avg_grid_5": "quali_form",
-        "drv_avg_quali_3": "quali_form",
-        "drv_avg_quali_5": "quali_form",
-        "drv_avg_finish_3": "race_form",
-        "drv_avg_finish_5": "race_form",
-        "team_avg_finish_3": "team_form",
-        "team_avg_finish_5": "team_form",
-        "drv_pace_gap_pct": "one_lap_pace",
-        "team_pace_gap_pct": "one_lap_pace",
-    }
-
-    def pick(order, sign, used: set[str]) -> list[int]:
-        """Strongest contributors in one direction, one per synonym group."""
-        chosen = []
-        for i in order:
-            if sign * row[i] <= 0:
-                continue
-            name = ranker.feature_names[i]
-            group = synonyms.get(name, name)
-            if group in used:
-                continue
-            used.add(group)
-            chosen.append(i)
-            if len(chosen) >= (top_k - 1 if sign > 0 else 1):
-                break
-        return chosen
-
-    out = []
-    for row in values:
-        # Lead with the strongest thing in the driver's favour, then the
-        # strongest thing against. Taking the top-k by magnitude regardless of
-        # sign made every line read the same when one feature dominated.
-        used: set[str] = set()
-        helped = pick(np.argsort(-row), 1, used)
-        hurt = pick(np.argsort(row), -1, used)
-
-        parts = [f"helped by {labels.get(ranker.feature_names[i], ranker.feature_names[i])}" for i in helped]
-        parts += [
-            f"held back by {labels.get(ranker.feature_names[i], ranker.feature_names[i])}" for i in hurt
-        ]
+    grouped = grouped_contributions(ranker, race)
+    lines, details = [], []
+    for _, row in grouped.iterrows():
+        up = row[row > 0].sort_values(ascending=False)
+        down = row[row < 0].sort_values()
+        parts = []
+        if not up.empty:
+            parts.append(f"helped by {labels.get(up.index[0], up.index[0])}")
+        if not down.empty:
+            parts.append(f"held back by {labels.get(down.index[0], down.index[0])}")
         line = "; ".join(parts)
-        # Not .capitalize() - that lowercases the rest, turning "Sunday" into
-        # "sunday" halfway through the sentence.
-        out.append(line[:1].upper() + line[1:] if line else "")
-    return out
+        # Not .capitalize(): that lowercases the rest of the sentence.
+        lines.append(line[:1].upper() + line[1:] if line else "")
+        top = row.reindex(row.abs().sort_values(ascending=False).index).head(4)
+        details.append({labels.get(k, k): round(float(v), 3) for k, v in top.items()})
+    return lines, details
 
 
 # ---------------------------------------------------------------------------
@@ -353,9 +384,18 @@ def run(
     season: int | None = None,
     rnd: int | None = None,
     n_sims: int = config.N_SIMULATIONS,
-    temperature: float = config.DEFAULT_TEMPERATURE,
-    blend_weight: float = config.DEFAULT_BLEND_WEIGHT,
+    settings: backtest.Settings | None = None,
 ) -> Prediction:
+    """Forecast one race with the pipeline the walk-forward grades.
+
+    Before qualifying: the qualifying model forecasts the grid, the race model
+    scores the projected weekend, and every simulated race draws its own grid.
+    After qualifying: the official grid (or, until it is published, the
+    qualifying order - recorded as such) and the real qualifying result go to
+    the race model. The qualifying forecast is then shown for comparison only;
+    it never stands in for the result.
+    """
+    s = settings or backtest.load_settings()
     df = features.build(include_upcoming=True)
     features.save(df)
 
@@ -365,94 +405,50 @@ def run(
     race = df[(df.season == season) & (df["round"] == rnd)].copy().reset_index(drop=True)
     if race.empty:
         raise RuntimeError(f"No entries for {season} round {rnd}")
+    seq = int(race["race_seq"].iloc[0])
 
-    history = df[df["race_seq"] < race["race_seq"].iloc[0]]
-    if history["race_seq"].nunique() < 20:
+    history = df[df["race_seq"] < seq]
+    if history["race_seq"].nunique() < backtest.MIN_TRAIN_RACES:
         raise RuntimeError("Not enough completed races to train on")
 
-    quali_model = model.train_quali(history)
-    race_model = model.train_race(history)
-
     known_grid = grid_is_known(race)
+    stage = "post_quali" if known_grid else "pre_quali"
+    quali_model = backtest.quali_trainer(s)(history)
+    race_model = backtest.race_trainer(s)(history)
+    t_race, t_quali = backtest.trailing_temperatures(df, seq, s, stage)
 
     # ---- qualifying ------------------------------------------------------
     race["quali_score"] = quali_model.score(race)
-    q_probs = simulate.plackett_luce(race["quali_score"].to_numpy(), temperature)
-    q_sim = simulate.simulate(
-        simulate.SimInputs(
-            driver_ids=race["driver_id"].tolist(),
-            scores=race["quali_score"].to_numpy(),
-            # Qualifying rarely ends a weekend; only a crash or failure does.
-            dnf_prob=np.full(len(race), 0.02),
-            # No grid in qualifying. Passing one here would have applied a
-            # starting-position penalty in dataframe order, which is nonsense -
-            # leaving both None gives every driver the same neutral position.
-            grid=None,
-            grid_scores=None,
-            overtaking_score=8.0,  # nothing to overtake; pace alone decides
-            safety_car_prob=0.10,
-        ),
-        n_sims=n_sims,
-        temperature=temperature,
-    )
-    race["q_p_win"] = simulate.blend(q_probs, q_sim["p_win"].to_numpy(), blend_weight)
-    race["q_p_top5"] = q_sim["p_top5"].to_numpy()
-    race["q_p_top10"] = q_sim["p_points"].to_numpy()
-    race["q_exp_pos"] = q_sim["exp_position"].to_numpy()
+    q = simulate.ranking_forecast(race["driver_id"].tolist(), race["quali_score"].to_numpy(), t_quali)
+    for col in ("p_win", "p_top5", "p_top10", "exp_position"):
+        race[f"q_{col}"] = q.column(col)
 
     # ---- race ------------------------------------------------------------
-    # grid comes from results, which don't exist until the race is run, so after
-    # qualifying it's empty. The starting grid is the qualifying order (grid
-    # penalties aren't modelled).
     if known_grid:
-        g = race["grid"].fillna(race["quali_position"]).to_numpy(dtype=float)
-        if np.isnan(g).any():
-            # grid_is_known only asks for 80% of the field, so a driver who set
-            # no time can still be missing here. In a real race they line up at
-            # the back, which is also the honest default: last, in field order.
-            back = np.nanmax(g) if np.isfinite(g).any() else 0.0
-            g[np.isnan(g)] = back + 1.0 + np.arange(int(np.isnan(g).sum()))
-        race["grid"] = g
-    if not known_grid:
-        # Use the qualifying model's expected order as the grid. Assigned as an array
-        # so it doesn't rely on race's index matching the simulator's.
-        race["grid"] = q_sim["exp_position"].rank(method="first").to_numpy()
-
-    race["score"] = race_model.score(race)
-    # This race is scored on this race - its grid, its track. The rest of the
-    # season is not at this track or from this grid, so it gets a separate
-    # score for an ordinary weekend. See championship.typical_weekend.
-    race["season_score"] = race_model.score(championship.typical_weekend(race, history))
-    r_probs = simulate.plackett_luce(race["score"].to_numpy(), temperature)
-
-    ot = race["circuit_overtaking_score"].iloc[0]
-    sim = simulate.simulate(
-        simulate.SimInputs(
-            driver_ids=race["driver_id"].tolist(),
-            scores=race["score"].to_numpy(),
-            dnf_prob=simulate.dnf_probability(race),
-            grid=race["grid"].to_numpy() if known_grid else None,
-            grid_scores=None if known_grid else race["quali_score"].to_numpy(),
-            overtaking_score=float(ot) if pd.notna(ot) else 3.0,
-            safety_car_prob=float(np.clip(race["circuit_dnf_rate"].iloc[0] * 2, 0.2, 0.7))
-            if pd.notna(race["circuit_dnf_rate"].iloc[0])
-            else 0.35,
-        ),
-        n_sims=n_sims,
-        temperature=temperature,
+        scored = race
+    else:
+        scored = backtest.projected_weekend(race, race["quali_score"].to_numpy())
+        race["grid"] = scored["grid"].to_numpy()  # shown as the projected start
+    race["score"] = race_model.score(scored)
+    inputs = simulate.race_inputs(
+        scored, race["score"].to_numpy(), grid_known=known_grid, quali_scores=race["quali_score"].to_numpy()
     )
-    race["p_win"] = simulate.blend(r_probs, sim["p_win"].to_numpy(), blend_weight)
-    for col in ("p_podium", "p_top5", "exp_position"):
-        race[col] = sim[col].to_numpy()
-    race["p_top10"] = sim["p_points"].to_numpy()
+    # Grids drawn before qualifying use the tuned qualifying temperature, and
+    # the qualifying board its trailing refit: each exactly as it is graded
+    # (backtest.walk_forward and backtest.walk_forward_quali).
+    fc = simulate.forecast(inputs, t_race, s.blend_weight, n_sims, grid_temperature=s.quali_temperature)
+    problems = probability.check_distribution(fc.matrix)
+    if problems:
+        raise RuntimeError(f"forecast is not a coherent distribution: {problems}")
+    for col in ("p_win", "p_podium", "p_top5", "p_top10", "exp_position"):
+        race[col] = fc.column(col)
 
-    # Only p_win is blended with the closed form; the wider bands come straight
-    # from the simulation, so the blend can lift p_win above p_podium. Floor each
-    # band at the one inside it. Blending the whole distribution would be better.
-    bands = ["p_win", "p_podium", "p_top5", "p_top10"]
-    for inner, outer in itertools.pairwise(bands):
-        race[outer] = np.maximum(race[outer].to_numpy(), race[inner].to_numpy())
-    race["why"] = explain(race_model, race)
+    # This race is scored on this race - its grid, its track. The rest of the
+    # season isn't, so each driver's season strength comes from their own
+    # recent weekends instead. See championship.season_strength.
+    race["season_score"] = championship.season_strength(race_model, race, history)
+    race["why"], why_detail = explain(race_model, scored)
+    race["why_detail"] = why_detail
 
     # ---- assemble --------------------------------------------------------
     names = _driver_names()
@@ -480,19 +476,20 @@ def run(
         ]
 
     with connect(read_only=True) as con:
-        race_name = con.execute(
-            "SELECT race_name FROM raw_races WHERE season = ? AND round = ?", [season, rnd]
-        ).fetchone()
+        race_name, quali_start = con.execute(
+            "SELECT race_name, quali_start_utc FROM raw_races WHERE season = ? AND round = ?", [season, rnd]
+        ).fetchone() or (None, None)
 
-    pred = Prediction(
+    return Prediction(
         season=season,
         round=rnd,
-        race_name=race_name[0] if race_name else f"{season} round {rnd}",
+        race_name=race_name or f"{season} round {rnd}",
         circuit_id=str(meta_race["circuit_id"]),
         race_start_utc=str(meta_race["race_start_utc"]) if pd.notna(meta_race["race_start_utc"]) else None,
+        quali_start_utc=str(quali_start) if quali_start is not None and pd.notna(quali_start) else None,
         generated_at_utc=datetime.now(UTC).isoformat(timespec="seconds"),
         grid_known=known_grid,
-        quali_board=lines("q_p_win", "q_p_win", "q_p_top5", "q_p_top5", "q_p_top10", "q_exp_pos"),
+        quali_board=lines("q_p_win", "q_p_win", "q_p_top5", "q_p_top5", "q_p_top10", "q_exp_position"),
         race_board=lines("p_win", "p_win", "p_podium", "p_top5", "p_top10", "exp_position"),
         field_probs=[
             {
@@ -505,24 +502,40 @@ def run(
                 "p_top10": round(float(r.p_top10), 4),
                 "exp_position": round(float(r.exp_position), 2),
                 "grid": int(r.grid) if pd.notna(r.grid) else None,
-                "q_exp_position": round(float(r.q_exp_pos), 2),
+                "quali_position": int(r.quali_position) if pd.notna(r.quali_position) else None,
+                "q_exp_position": round(float(r.q_exp_position), 2),
                 "why": r.why,
+                "why_detail": r.why_detail,
             }
             for r in race.sort_values("p_win", ascending=False).itertuples()
         ],
-        position_matrix=[[round(float(v), 4) for v in row] for row in sim["position_dist"]],
+        position_matrix=[[round(float(v), 4) for v in row] for row in fc.matrix],
         season_outlook=_season_outlook(race, names, season, rnd),
         meta={
+            "stage": stage,
+            "grid_source": _dominant(race["grid_source"]) if known_grid else "projected",
+            "entry_source": _dominant(race["entry_source"]),
             "trained_through": list(race_model.trained_through),
             "n_training_races": int(history["race_seq"].nunique()),
             "n_simulations": n_sims,
-            "temperature": temperature,
-            "blend_weight": blend_weight,
+            "temperature": t_race,
+            "quali_temperature": t_quali,
+            "blend_weight": s.blend_weight,
+            "recency_weight": s.recency,
             "practice_data": bool(race["practice_available"].max() > 0),
-            "circuit_seen_before": bool(pd.notna(ot)),
+            "circuit_seen_before": bool(pd.notna(meta_race["circuit_overtaking_score"])),
             # position_matrix rows follow this order, which is the order the
             # simulation ran in - not the sorted output order.
             "matrix_driver_ids": race["driver_id"].tolist(),
+            "provenance": provenance.record(
+                model_version=provenance.model_version(
+                    race_model.feature_names, model.PARAMS, features.FEATURE_VERSION
+                ),
+                quali_model_version=provenance.model_version(
+                    quali_model.feature_names, model.PARAMS, features.FEATURE_VERSION
+                ),
+                feature_version=features.FEATURE_VERSION,
+                training_cutoff=list(race_model.trained_through),
+            ),
         },
     )
-    return pred

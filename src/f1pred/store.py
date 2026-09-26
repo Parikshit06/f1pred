@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS raw_races (
     race_date       DATE,
     race_time       VARCHAR,
     race_start_utc  TIMESTAMP,
+    quali_start_utc TIMESTAMP,
+    sprint_start_utc TIMESTAMP,       -- null on a weekend without a sprint
     PRIMARY KEY (season, round)
 );
 
@@ -157,6 +159,37 @@ CREATE TABLE IF NOT EXISTS raw_forecast (
     PRIMARY KEY (season, round, session, fetched_at_utc)
 );
 
+-- Official starting grid from OpenF1, used when jolpica's results carry no grid
+-- (it lags, and before the race it has none at all). Raw as fetched, mapped to
+-- driver_id; weekend.starting_grid() decides whether it is trustworthy.
+CREATE TABLE IF NOT EXISTS raw_openf1_grid (
+    season          INTEGER NOT NULL,
+    round           INTEGER NOT NULL,
+    driver_id       VARCHAR NOT NULL,
+    position        INTEGER,
+    driver_number   INTEGER,
+    session_key     INTEGER,
+    session_start_utc TIMESTAMP,
+    fetched_at_utc  TIMESTAMP NOT NULL,
+    PRIMARY KEY (season, round, driver_id)
+);
+
+-- Who took part in a session of a race weekend, from OpenF1. Before qualifying
+-- this is the best evidence of who is actually racing: a replacement or a
+-- returning driver shows up here days before any result does.
+CREATE TABLE IF NOT EXISTS raw_openf1_entries (
+    season          INTEGER NOT NULL,
+    round           INTEGER NOT NULL,
+    session         VARCHAR NOT NULL,   -- FP1 FP2 FP3 SQ S Q
+    driver_id       VARCHAR NOT NULL,
+    constructor_id  VARCHAR,
+    team_name       VARCHAR,
+    driver_number   INTEGER,
+    session_start_utc TIMESTAMP,
+    fetched_at_utc  TIMESTAMP NOT NULL,
+    PRIMARY KEY (season, round, session, driver_id)
+);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     source          VARCHAR NOT NULL,
     scope           VARCHAR NOT NULL,   -- e.g. "2024" or "2024:12:FP2"
@@ -186,9 +219,19 @@ def connect(read_only: bool = False) -> Iterator[duckdb.DuckDBPyConnection]:
         con.close()
 
 
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS leaves an
+# existing table alone, so a database built before them needs them added.
+MIGRATIONS = [
+    "ALTER TABLE raw_races ADD COLUMN IF NOT EXISTS quali_start_utc TIMESTAMP",
+    "ALTER TABLE raw_races ADD COLUMN IF NOT EXISTS sprint_start_utc TIMESTAMP",
+]
+
+
 def init_db() -> None:
     with connect() as con:
         con.execute(SCHEMA)
+        for statement in MIGRATIONS:
+            con.execute(statement)
     log.info("Schema ready at %s", config.DB_PATH)
 
 

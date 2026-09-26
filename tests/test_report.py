@@ -242,21 +242,21 @@ def test_wilson_interval_widens_at_small_n():
     """The point of using Wilson: 5/9 and 500/900 are the same proportion but
     nothing like the same evidence, and a calibration audit must not treat
     them alike."""
-    from f1pred import verify
+    from f1pred import metrics
 
-    small = verify._wilson(5, 9)
-    large = verify._wilson(500, 900)
+    small = metrics.wilson(5, 9)
+    large = metrics.wilson(500, 900)
     assert (small[1] - small[0]) > (large[1] - large[0]) * 3
     assert small[0] < 5 / 9 < small[1]
 
 
 def test_wilson_handles_degenerate_counts():
-    from f1pred import verify
+    from f1pred import metrics
 
-    assert verify._wilson(0, 0) == (0.0, 1.0)
-    lo, hi = verify._wilson(0, 10)
+    assert metrics.wilson(0, 0) == (0.0, 1.0)
+    lo, hi = metrics.wilson(0, 10)
     assert lo == 0.0 and 0 < hi < 0.5
-    lo, hi = verify._wilson(10, 10)
+    lo, hi = metrics.wilson(10, 10)
     assert hi == 1.0 and 0.5 < lo < 1.0
 
 
@@ -534,31 +534,63 @@ def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeyp
     assert "2025 r9 favoured Piastri at 61.0%" in html
 
 
-def test_the_pooled_calibration_line_adds_up_the_buckets(tmp_path, monkeypatch):
-    """The pooled figure is the n-weighted sum of the buckets shown."""
+def test_the_calibration_section_is_drawn_from_the_report(tmp_path, monkeypatch):
+    """Reliability charts and the calibration error come off backtest.json,
+    so the page can't show a calibration nobody measured."""
     import json
 
     from f1pred import config, method_page
 
     monkeypatch.setattr(config, "REPORTS", tmp_path)
+    bucket = {
+        "bucket": "(0.2, 0.35]",
+        "stated": 0.27,
+        "observed": 0.31,
+        "n": 40,
+        "ci_low": 0.19,
+        "ci_high": 0.46,
+    }
     (tmp_path / "backtest.json").write_text(
         json.dumps(
             {
                 "summary": [],
-                "by_season": [],
-                "calibration": [
-                    {"bucket": "(0.0, 0.5]", "predicted": "0.400", "actual": "0.500", "n": "10"},
-                    {"bucket": "(0.5, 1.0]", "predicted": "0.800", "actual": "0.900", "n": "30"},
-                ],
-                "params": {},
+                "reliability": {"win": [bucket], "podium": [bucket]},
+                "calibration_error": {"win": 0.0123, "podium": 0.0456},
             }
         )
     )
     html = method_page.build()
-    assert "Pooled over 40 races" in html
-    assert "stated 70%, observed 80%" in html
-    assert "under-confident" in html
-    assert "Buckets hold 10&ndash;30 races" in html
+    assert "win 0.012" in html and "podium 0.046" in html
+    assert html.count("<figure class='fig-rel'>") == 2
+    assert "stated 27.0%, happened 31.0% (n=40" in html
+
+
+def test_an_old_forecast_without_the_new_fields_still_renders():
+    """Logged forecasts are never rewritten, so the page must read every vintage."""
+    old = {
+        "season": 2026,
+        "round": 1,
+        "race_name": "Old Grand Prix",
+        "circuit_id": "old",
+        "grid_known": False,
+        "race_board": [
+            {
+                "name": "A Driver",
+                "short": "Driver",
+                "team": "ferrari",
+                "p_win": 0.3,
+                "p_podium": 0.6,
+                "p_top5": 0.8,
+                "p_top10": 0.95,
+                "exp_position": 3.2,
+                "grid": None,
+            }
+        ],
+        "quali_board": [],
+        "field_probs": [],
+    }
+    html = report.build(prediction=old)
+    assert "Old Grand Prix" in html and "30.0%" in html
 
 
 def test_a_column_heading_is_aligned_the_same_way_as_its_own_cells():
@@ -606,21 +638,19 @@ def test_the_emphasised_row_starts_where_every_other_row_starts():
     )
 
 
-def test_probability_buckets_are_published_as_ranges_not_pandas_intervals():
-    from f1pred.method_page import _band
-
-    assert _band("(0.189, 0.378]") == "19–38%"
-    assert _band("(-0.001, 0.189]") == "0–19%", "a negative edge leaked into the page"
-    assert _band("over 95%") == "over 95%", "a label that is already readable was mangled"
-    assert "&ndash;" not in _band("(0.189, 0.378]"), "an HTML entity will be escaped and shown raw"
-
-
 def test_a_probability_too_small_to_print_is_not_shown_as_zero():
     assert rr.pct(0.0) == "&lt;0.1%"
     assert rr.pct(0.0004) == "&lt;0.1%"
     assert rr.pct(0.0006) == "0.1%"
     assert rr.pct(0.004, 0) == "&lt;1%"
     assert rr.pct(0.542) == "54.2%"
+
+
+def test_a_probability_short_of_certain_is_not_shown_as_100():
+    assert rr.pct(0.998, 0) == "&gt;99%"
+    assert rr.pct(0.9996) == "&gt;99.9%"
+    assert rr.pct(0.994, 0) == "99%"
+    assert rr.pct(1.0, 0) == "100%"
 
 
 def test_the_second_car_in_a_garage_is_tinted():

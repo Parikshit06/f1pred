@@ -127,7 +127,9 @@ class RateLimitedSession:
         self._cache_path(url).write_text(json.dumps(payload))
 
     # -- fetch -------------------------------------------------------------
-    def get_json(self, url: str, *, max_retries: int = 6, refresh: bool = False) -> dict[str, Any]:
+    def get_json(
+        self, url: str, *, max_retries: int = 6, refresh: bool = False, not_found: Any = None
+    ) -> Any:
         """Fetch a URL, serving it from disk if we have it.
 
         `refresh` goes back to the network and overwrites the cached copy. It
@@ -136,6 +138,10 @@ class RateLimitedSession:
         with a 200, and caching that by URL means the answer stays empty for
         the rest of the season. Anything whose content can still change has to
         be able to say so.
+
+        `not_found`, when given, is returned for a 404 instead of raising. OpenF1
+        answers "no results yet" with a 404, which is an answer, not a failure.
+        It is never cached, because "not yet" changes.
         """
         cached = None if refresh else self._read_cache(url)
         if cached is not None:
@@ -149,8 +155,19 @@ class RateLimitedSession:
             self._last_call = time.monotonic()
             self._window.append(time.time())
             self._save_window()
-            resp = self._session.get(url, timeout=30)
+            try:
+                resp = self._session.get(url, timeout=30)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                # A dropped connection or a slow response is transient; before this
+                # it ended the whole ingest on the first blip.
+                log.warning("Network error on %s (%s) - retrying in %.0fs", url, type(exc).__name__, backoff)
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+                continue
             self.requests_made += 1
+
+            if resp.status_code == 404 and not_found is not None:
+                return not_found
 
             if resp.status_code == 200:
                 payload = resp.json()

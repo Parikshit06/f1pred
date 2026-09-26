@@ -73,6 +73,8 @@ def scoreboard() -> pd.DataFrame:
                 "winner_hit": int(bool(pred_top5) and pred_top5[0] == winner),
                 "top5_overlap": len(set(pred_top5) & set(actual_top5)),
                 "p_on_winner": next((d["p_win"] for d in p["field_probs"] if d["driver_id"] == winner), 0.0),
+                # What was published for the pick: the strip's bar height.
+                "p_top_pick": float(board[0].get("p_win") or 0.0) if board else 0.0,
             }
         )
     # Every logged prediction may still be for a race that has not run, which
@@ -86,6 +88,82 @@ def scoreboard() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
+GRID_SOURCES = {
+    "results": ("ok", "Official starting grid"),
+    "openf1": ("ok", "Official starting grid"),
+    "qualifying": ("warn", "Provisional grid: qualifying order, penalties not yet published"),
+    "projected": ("", "Before qualifying: grid projected by the qualifying model"),
+}
+ENTRY_SOURCES = {
+    "qualifying": "Field from qualifying",
+    "previous_race": "Field assumed from the last race",
+}
+
+
+def status_chips(prediction: dict) -> str:
+    """What this forecast was built on, in the reader's terms."""
+    meta = prediction.get("meta") or {}
+    stage = meta.get("stage") or ("post_quali" if prediction.get("grid_known") else "pre_quali")
+    grid = meta.get("grid_source") or ("qualifying" if stage == "post_quali" else "projected")
+    cls, label = GRID_SOURCES.get(grid, ("", str(grid)))
+    chips = [f"<span class='chip {cls}'><i></i>{rr.esc(label)}</span>"]
+    entry = meta.get("entry_source")
+    if entry:
+        text = ENTRY_SOURCES.get(entry) or (
+            f"Field from {entry.split(':', 1)[1]}" if entry.startswith("openf1:") else rr.esc(entry)
+        )
+        chips.append(f"<span class='chip {'warn' if entry == 'previous_race' else ''}'><i></i>{text}</span>")
+    trained = meta.get("trained_through")
+    if trained:
+        chips.append(
+            f"<span class='chip'><i></i>Trained on {meta.get('n_training_races', '?')} races "
+            f"to {trained[0]} R{trained[1]}</span>"
+        )
+    return "<div class='status'>" + "".join(chips) + "</div>"
+
+
+def headline(prediction: dict) -> str:
+    """The three things a reader wants before the table."""
+    field = sorted(prediction.get("field_probs") or [], key=lambda r: -(r.get("p_win") or 0))
+    if not field:
+        return ""
+    fav = field[0]
+    podium = sorted(field, key=lambda r: -(r.get("p_podium") or 0))[:3]
+    pole = min(
+        (r for r in field if isinstance(r.get("grid"), (int, float))),
+        key=lambda r: r["grid"],
+        default=None,
+    )
+    cells = [
+        (
+            "Favourite",
+            (
+                f"<span class='big'>{rr.pct(fav.get('p_win') or 0, 0)}</span>{rr.esc(fav.get('name', ''))}"
+                "<small>chance of winning</small>"
+            ),
+        ),
+        (
+            "Most likely podium",
+            " &middot; ".join(rr.esc(r.get("name", "")) for r in podium)
+            + "<small>by each driver's own podium chance</small>",
+        ),
+    ]
+    if pole:
+        started = "starts" if prediction.get("grid_known") else "projected"
+        cells.append(
+            (
+                "From pole" if prediction.get("grid_known") else "Projected pole",
+                (
+                    f"{rr.esc(pole.get('name', ''))}<small>{started} P1; wins "
+                    f"{rr.pct(pole.get('p_win') or 0, 0)} of simulated races</small>"
+                ),
+            )
+        )
+    return (
+        "<dl class='headline'>" + "".join(f"<div><dt>{k}</dt><dd>{v}</dd></div>" for k, v in cells) + "</dl>"
+    )
+
+
 def _section(label: str, caption: str, body: str, note: str = "", band: bool = False) -> str:
     """Label in the margin, content beside it. No cards; alternate sections sit
     on a tinted full-bleed band so the page has rhythm without panels."""
@@ -129,15 +207,36 @@ def build(
         "<p class='sub'>Finishing order as probabilities. Published before the session, "
         "timestamped, graded against the result.</p>"
     )
+    if prediction:
+        s.append(status_chips(prediction))
+        s.append(headline(prediction))
     s.append("</header>")
 
-    if prediction:
+    if not prediction:
         s.append(
             _section(
                 "Race",
-                "10,000 simulated races. <a href='method.html'>How these are calculated</a>.",
-                rr.race_board(prediction["race_board"]),
-                "<span>Top ten of twenty-two</span>",
+                "",
+                "<div class='notice'><b>No forecast published yet.</b> Forecasts are made in race "
+                "week and committed to <code>predictions/</code> before each session; this page "
+                "fills in with the first one.</div>",
+            )
+        )
+    if prediction:
+        # Older logged forecasts carry fewer fields; everything here is optional.
+        field = {r.get("driver_id"): r for r in prediction.get("field_probs") or []}
+        rows = [{**field.get(r.get("driver_id"), {}), **r} for r in prediction.get("race_board") or []]
+        details = {d: f.get("why_detail") for d, f in field.items() if f.get("why_detail")}
+        n = len(prediction.get("field_probs") or []) or len(rows)
+        sims = (prediction.get("meta") or {}).get("n_simulations", 10000)
+        s.append(
+            _section(
+                "Race",
+                f"Every column is read off one finishing-order distribution: {sims:,} simulated "
+                "races mixed with the ranking model's own probabilities. Open a row to see why. "
+                "<a href='method.html'>How these are calculated</a>.",
+                rr.race_board(rows, details),
+                f"<span>Top ten of {n}</span>",
             )
         )
 
@@ -168,9 +267,10 @@ def build(
             s.append(
                 _section(
                     "Championship",
-                    f"{outlook['n_races']} races left, simulated from current form. Mean, with the "
-                    "10th\u201390th percentile beneath it. Sprint points excluded. "
-                    "<a href='method.html'>Method</a>.",
+                    f"{outlook['n_races']} races left"
+                    + (f", {outlook['sprints_left']} with a sprint" if outlook.get("sprints_left") else "")
+                    + ", simulated from current form. Mean, with the 10th\u201390th percentile "
+                    "beneath it. <a href='method.html'>Method</a>.",
                     strip + panels,
                     f"<span>After round {outlook['last_actual_round']}</span>",
                 )

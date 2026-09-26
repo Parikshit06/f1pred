@@ -62,9 +62,9 @@ def test_small_buckets_carry_a_wide_interval():
 
 
 def test_wilson_matches_the_other_implementation():
-    from f1pred import verify
+    from f1pred import metrics
 
-    assert tb._wilson(16, 16) == pytest.approx(verify._wilson(16, 16), abs=1e-3)
+    assert tb._wilson(16, 16) == pytest.approx(metrics.wilson(16, 16), abs=1e-3)
     assert tb._wilson(0, 0) == (0.0, 1.0)
 
 

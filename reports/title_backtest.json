@@ -5,10 +5,10 @@
    "after_round": 12,
    "races_left": 9,
    "favourite": "hamilton",
-   "p_favourite": 0.963,
+   "p_favourite": 0.999,
    "champion": "hamilton",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.963
+   "p_on_actual_champion": 0.999
   },
   {
    "season": 2019,
@@ -35,20 +35,20 @@
    "after_round": 6,
    "races_left": 11,
    "favourite": "hamilton",
-   "p_favourite": 0.801,
+   "p_favourite": 0.878,
    "champion": "hamilton",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.801
+   "p_on_actual_champion": 0.878
   },
   {
    "season": 2020,
    "after_round": 9,
    "races_left": 8,
    "favourite": "hamilton",
-   "p_favourite": 0.94,
+   "p_favourite": 0.999,
    "champion": "hamilton",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.94
+   "p_on_actual_champion": 0.999
   },
   {
    "season": 2020,
@@ -64,71 +64,71 @@
    "season": 2020,
    "after_round": 15,
    "races_left": 2,
-   "favourite": "bottas",
-   "p_favourite": 0.735,
+   "favourite": "hamilton",
+   "p_favourite": 1.0,
    "champion": "hamilton",
-   "favourite_was_right": 0,
-   "p_on_actual_champion": 0.0
+   "favourite_was_right": 1,
+   "p_on_actual_champion": 1.0
   },
   {
    "season": 2021,
    "after_round": 8,
    "races_left": 14,
-   "favourite": "hamilton",
-   "p_favourite": 0.472,
+   "favourite": "max_verstappen",
+   "p_favourite": 0.61,
    "champion": "max_verstappen",
-   "favourite_was_right": 0,
-   "p_on_actual_champion": 0.373
+   "favourite_was_right": 1,
+   "p_on_actual_champion": 0.61
   },
   {
    "season": 2021,
    "after_round": 12,
    "races_left": 10,
    "favourite": "max_verstappen",
-   "p_favourite": 0.609,
+   "p_favourite": 0.714,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.609
+   "p_on_actual_champion": 0.714
   },
   {
    "season": 2021,
    "after_round": 16,
    "races_left": 6,
-   "favourite": "hamilton",
-   "p_favourite": 0.585,
+   "favourite": "max_verstappen",
+   "p_favourite": 0.545,
    "champion": "max_verstappen",
-   "favourite_was_right": 0,
-   "p_on_actual_champion": 0.415
+   "favourite_was_right": 1,
+   "p_on_actual_champion": 0.545
   },
   {
    "season": 2021,
    "after_round": 20,
    "races_left": 2,
    "favourite": "max_verstappen",
-   "p_favourite": 0.471,
+   "p_favourite": 0.701,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.471
+   "p_on_actual_champion": 0.701
   },
   {
    "season": 2022,
    "after_round": 8,
    "races_left": 14,
    "favourite": "max_verstappen",
-   "p_favourite": 0.475,
+   "p_favourite": 0.784,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.475
+   "p_on_actual_champion": 0.784
   },
   {
    "season": 2022,
    "after_round": 12,
    "races_left": 10,
    "favourite": "max_verstappen",
-   "p_favourite": 0.953,
+   "p_favourite": 0.992,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.953
+   "p_on_actual_champion": 0.992
   },
   {
    "season": 2022,
@@ -155,10 +155,10 @@
    "after_round": 8,
    "races_left": 14,
    "favourite": "max_verstappen",
-   "p_favourite": 0.852,
+   "p_favourite": 0.988,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.852
+   "p_on_actual_champion": 0.988
   },
   {
    "season": 2023,
@@ -175,10 +175,10 @@
    "after_round": 16,
    "races_left": 6,
    "favourite": "max_verstappen",
-   "p_favourite": 1.0,
+   "p_favourite": 0.999,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 1.0
+   "p_on_actual_champion": 0.999
   },
   {
    "season": 2023,
@@ -195,30 +195,30 @@
    "after_round": 8,
    "races_left": 16,
    "favourite": "max_verstappen",
-   "p_favourite": 0.566,
+   "p_favourite": 0.814,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.566
+   "p_on_actual_champion": 0.814
   },
   {
    "season": 2024,
    "after_round": 13,
    "races_left": 11,
    "favourite": "max_verstappen",
-   "p_favourite": 0.796,
+   "p_favourite": 0.834,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.796
+   "p_on_actual_champion": 0.834
   },
   {
    "season": 2024,
    "after_round": 18,
    "races_left": 6,
    "favourite": "max_verstappen",
-   "p_favourite": 0.887,
+   "p_favourite": 0.904,
    "champion": "max_verstappen",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.887
+   "p_on_actual_champion": 0.904
   },
   {
    "season": 2024,
@@ -235,75 +235,67 @@
    "after_round": 8,
    "races_left": 16,
    "favourite": "piastri",
-   "p_favourite": 0.341,
+   "p_favourite": 0.598,
    "champion": "norris",
    "favourite_was_right": 0,
-   "p_on_actual_champion": 0.318
+   "p_on_actual_champion": 0.163
   },
   {
    "season": 2025,
    "after_round": 13,
    "races_left": 11,
    "favourite": "piastri",
-   "p_favourite": 0.586,
+   "p_favourite": 0.612,
    "champion": "norris",
    "favourite_was_right": 0,
-   "p_on_actual_champion": 0.347
+   "p_on_actual_champion": 0.374
   },
   {
    "season": 2025,
    "after_round": 18,
    "races_left": 6,
    "favourite": "piastri",
-   "p_favourite": 0.723,
+   "p_favourite": 0.708,
    "champion": "norris",
    "favourite_was_right": 0,
-   "p_on_actual_champion": 0.241
+   "p_on_actual_champion": 0.28
   },
   {
    "season": 2025,
    "after_round": 22,
    "races_left": 2,
    "favourite": "norris",
-   "p_favourite": 0.837,
+   "p_favourite": 0.692,
    "champion": "norris",
    "favourite_was_right": 1,
-   "p_on_actual_champion": 0.837
+   "p_on_actual_champion": 0.692
   }
  ],
  "calibration": [
   {
-   "bucket": "under 50%",
-   "claimed": "0.44",
-   "happened": "0.5",
-   "n": "4",
-   "ci_low": "0.15",
-   "ci_high": "0.85"
-  },
-  {
    "bucket": "50-80%",
-   "claimed": "0.657",
-   "happened": "0.429",
-   "n": "7",
-   "ci_low": "0.158",
-   "ci_high": "0.75"
+   "claimed": "0.663",
+   "happened": "0.667",
+   "n": "9",
+   "ci_low": "0.354",
+   "ci_high": "0.879"
   },
   {
    "bucket": "80-95%",
-   "claimed": "0.863",
+   "claimed": "0.857",
    "happened": "1.0",
-   "n": "5",
-   "ci_low": "0.566",
+   "n": "4",
+   "ci_low": "0.51",
    "ci_high": "1.0"
   },
   {
    "bucket": "over 95%",
-   "claimed": "0.992",
+   "claimed": "0.998",
    "happened": "1.0",
-   "n": "11",
-   "ci_low": "0.741",
+   "n": "14",
+   "ci_low": "0.785",
    "ci_high": "1.0"
   }
  ],
- "brier": 0.11607348148148147
+ "brier": 0.07376744444444444
 }

@@ -380,6 +380,109 @@ def practice_predates_race(con) -> list[Finding]:
     return [Finding("practice_predates_race", ERROR, f"{len(df)} practice session(s) after the race", df)]
 
 
+@check
+def practice_predates_qualifying(con) -> list[Finding]:
+    """Practice pace is a pre-qualifying feature, so it must come from before it."""
+    df = _q(
+        con,
+        """
+        SELECT p.season, p.round, p.session, p.session_start_utc, r.quali_start_utc
+        FROM raw_session_pace p JOIN raw_races r USING (season, round)
+        WHERE p.session IN ('FP1','FP2','FP3')
+          AND p.session_start_utc IS NOT NULL AND r.quali_start_utc IS NOT NULL
+          AND p.session_start_utc > r.quali_start_utc
+        LIMIT 50
+        """,
+    )
+    if df.empty:
+        return []
+    return [
+        Finding("practice_predates_qualifying", ERROR, f"{len(df)} practice session(s) after qualifying", df)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Starting grid
+# ---------------------------------------------------------------------------
+@check
+def grid_slots_unique(con) -> list[Finding]:
+    """Two cars in one grid slot is a data error; 0 (pit lane) may repeat."""
+    df = _q(
+        con,
+        """
+        SELECT season, round, grid, count(*) n FROM raw_results
+        WHERE grid > 0 GROUP BY 1,2,3 HAVING count(*) > 1 ORDER BY 1,2
+        """,
+    )
+    if df.empty:
+        return []
+    return [Finding("grid_slots_unique", ERROR, f"{len(df)} duplicated grid slot(s)", df)]
+
+
+@check
+def grid_present_for_completed_races(con) -> list[Finding]:
+    """jolpica has published results without the grid. The official grid from
+    OpenF1 covers it (weekend.resolve_grid); this says which races needed it."""
+    df = _q(
+        con,
+        """
+        SELECT r.season, r.round, count(*) AS entries, count(r.grid) AS with_grid,
+               (SELECT count(*) FROM raw_openf1_grid g
+                 WHERE g.season = r.season AND g.round = r.round) AS openf1_rows
+        FROM raw_results r GROUP BY 1,2
+        HAVING count(r.grid) < 0.9 * count(*)
+        ORDER BY 1,2
+        """,
+    )
+    if df.empty:
+        return []
+    uncovered = df[df["openf1_rows"] == 0]
+    if not uncovered.empty:
+        return [
+            Finding(
+                "grid_present_for_completed_races",
+                WARN,
+                f"{len(uncovered)} completed race(s) with no grid from jolpica or OpenF1 - "
+                "the qualifying order stands in, without penalties",
+                uncovered,
+            )
+        ]
+    return [
+        Finding(
+            "grid_present_for_completed_races",
+            WARN,
+            f"{len(df)} race(s) without a jolpica grid, covered by OpenF1's official grid",
+            df,
+        )
+    ]
+
+
+@check
+def openf1_grid_matches_the_field(con) -> list[Finding]:
+    """An OpenF1 grid naming a driver who didn't race belongs to another session."""
+    df = _q(
+        con,
+        """
+        SELECT g.season, g.round, g.driver_id
+        FROM raw_openf1_grid g
+        WHERE EXISTS (SELECT 1 FROM raw_results r WHERE r.season = g.season AND r.round = g.round)
+          AND NOT EXISTS (
+              SELECT 1 FROM raw_results r
+              WHERE r.season = g.season AND r.round = g.round AND r.driver_id = g.driver_id)
+        """,
+    )
+    if df.empty:
+        return []
+    return [
+        Finding(
+            "openf1_grid_matches_the_field",
+            WARN,
+            f"{len(df)} OpenF1 grid row(s) for drivers not in the race - that grid will be refused",
+            df,
+        )
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Ingest health
 # ---------------------------------------------------------------------------

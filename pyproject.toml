@@ -2,7 +2,9 @@
 name = "f1pred"
 version = "0.1.0"
 description = "Probabilistic forecasts for Formula 1 qualifying, races and the championship"
-requires-python = ">=3.11"
+# Bounded to the versions CI tests: uv resolves the lock for every version in
+# the range, and a range open at the top resolves for Pythons nobody has run.
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
@@ -11,12 +13,16 @@ dependencies = [
     "fastf1>=3.4",
     "xgboost>=2.1",
     "scikit-learn>=1.5",  # XGBRanker is xgboost's sklearn interface
-    "shap>=0.46",
+    "scipy>=1.11",  # rank correlations in evaluation
+    "matplotlib>=3.8",  # reliability and evaluation figures in reports/figures
 ]
+# No shap package: SHAP values come from XGBoost's own TreeSHAP
+# (pred_contribs=True), which gives identical numbers to shap.TreeExplainer
+# without the numba/llvmlite chain that made installs fail.
 
 [project.optional-dependencies]
 # ruff is pinned: its default rules grow between minor versions.
-dev = ["pytest>=8.3", "ruff==0.16.6"]
+dev = ["pytest>=8.3", "pytest-cov>=5.0", "ruff==0.16.6"]
 
 [build-system]
 requires = ["hatchling"]
@@ -32,3 +38,6 @@ target-version = "py311"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["f1pred"]

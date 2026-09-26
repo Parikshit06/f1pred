@@ -2,109 +2,109 @@
  "sweep": [
   {
    "spread": 0.0,
-   "coverage": 0.54,
-   "width": 37.836
+   "coverage": 0.6,
+   "width": 38.016
   },
   {
    "spread": 1.0,
-   "coverage": 0.533,
-   "width": 39.675
+   "coverage": 0.6,
+   "width": 39.909
   },
   {
    "spread": 2.0,
-   "coverage": 0.573,
-   "width": 44.375
+   "coverage": 0.647,
+   "width": 44.657
   },
   {
    "spread": 3.0,
-   "coverage": 0.6,
-   "width": 50.61
+   "coverage": 0.68,
+   "width": 50.936
   },
   {
    "spread": 4.0,
-   "coverage": 0.633,
-   "width": 57.533
+   "coverage": 0.707,
+   "width": 58.209
   },
   {
    "spread": 5.0,
-   "coverage": 0.707,
-   "width": 64.911
+   "coverage": 0.773,
+   "width": 65.873
   },
   {
    "spread": 6.0,
-   "coverage": 0.76,
-   "width": 72.313
+   "coverage": 0.793,
+   "width": 73.549
   },
   {
    "spread": 7.0,
-   "coverage": 0.787,
-   "width": 79.619
+   "coverage": 0.82,
+   "width": 81.145
   },
   {
    "spread": 8.0,
-   "coverage": 0.813,
-   "width": 86.776
+   "coverage": 0.84,
+   "width": 88.681
   },
   {
    "spread": 9.0,
-   "coverage": 0.827,
-   "width": 93.66
+   "coverage": 0.88,
+   "width": 95.793
   }
  ],
- "best": 8.0,
+ "best": 6.0,
  "driver_sweep": [
   {
    "spread": 0.0,
-   "coverage": 0.727,
-   "width": 42.243
+   "coverage": 0.84,
+   "width": 41.979
   },
   {
    "spread": 1.0,
-   "coverage": 0.74,
-   "width": 43.11
+   "coverage": 0.847,
+   "width": 42.989
   },
   {
    "spread": 2.0,
-   "coverage": 0.753,
-   "width": 45.715
+   "coverage": 0.847,
+   "width": 45.835
   },
   {
    "spread": 3.0,
-   "coverage": 0.773,
-   "width": 49.482
+   "coverage": 0.86,
+   "width": 49.883
   },
   {
    "spread": 4.0,
-   "coverage": 0.787,
-   "width": 53.885
+   "coverage": 0.867,
+   "width": 54.618
   },
   {
    "spread": 5.0,
-   "coverage": 0.807,
-   "width": 58.575
+   "coverage": 0.867,
+   "width": 59.669
   },
   {
    "spread": 6.0,
-   "coverage": 0.84,
-   "width": 63.592
+   "coverage": 0.867,
+   "width": 65.009
   },
   {
    "spread": 7.0,
-   "coverage": 0.86,
-   "width": 68.687
+   "coverage": 0.873,
+   "width": 70.39
   },
   {
    "spread": 8.0,
-   "coverage": 0.88,
-   "width": 73.649
+   "coverage": 0.893,
+   "width": 75.73
   },
   {
    "spread": 9.0,
-   "coverage": 0.893,
-   "width": 78.494
+   "coverage": 0.9,
+   "width": 80.925
   }
  ],
- "best_driver": 5.0,
+ "best_driver": 0.0,
  "fit_seasons": [
   2019,
   2020,
@@ -118,20 +118,20 @@
  ],
  "held_out": {
   "before": {
-   "coverage": 0.5416666666666666,
-   "width": 38.22833333333334,
+   "coverage": 0.5583333333333333,
+   "width": 38.7425,
    "n": 120,
-   "teammate_coverage": 0.6470588235294118,
+   "teammate_coverage": 0.6890756302521008,
    "teammate_n": 119
   },
   "after": {
-   "coverage": 0.8333333333333334,
-   "width": 114.42583333333337,
+   "coverage": 0.8,
+   "width": 95.61916666666669,
    "n": 120,
-   "teammate_coverage": 0.773109243697479,
+   "teammate_coverage": 0.7226890756302521,
    "teammate_n": 119
   }
  },
- "in_use": 8.0,
- "driver_in_use": 5.0
+ "in_use": 6.0,
+ "driver_in_use": 0.0
 }

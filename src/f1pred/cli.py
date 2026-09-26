@@ -1,7 +1,8 @@
 """Command line entry point.
 
 python -m f1pred.cli ingest-jolpica --seasons 2018-2026
-python -m f1pred.cli ingest-fastf1  --seasons 2024-2026
+python -m f1pred.cli ingest-openf1  --seasons 2026
+python -m f1pred.cli ingest-fastf1  --next
 python -m f1pred.cli validate
 python -m f1pred.cli build-features
 python -m f1pred.cli backtest --start-season 2024 --tune --tune-season 2022
@@ -53,8 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seasons", default=default_range)
     p.add_argument("--force", action="store_true")
 
-    p = sub.add_parser("ingest-fastf1", help="practice/quali pace and session weather (slow)")
-    p.add_argument("--seasons", default=default_range)
+    p = sub.add_parser("ingest-openf1", help="official starting grids and weekend entry lists (2023+)")
+    p.add_argument("--seasons", default=str(config.CURRENT_SEASON))
+    p.add_argument("--force", action="store_true")
+
+    p = sub.add_parser("ingest-fastf1", help="practice pace per driver (FP1-FP3 aggregates)")
+    p.add_argument("--seasons", default="2024-2026")
+    p.add_argument("--next", action="store_true", help="only the race weekend in progress")
     p.add_argument("--force", action="store_true")
 
     p = sub.add_parser("forecast", help="Open-Meteo forecast for upcoming sessions")
@@ -72,16 +78,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="recompute finished/retired flags from stored status text (idempotent)",
     )
 
-    p = sub.add_parser("backtest", help="walk-forward evaluation against baselines")
-    p.add_argument("--start-season", type=int, default=2022)
+    p = sub.add_parser("backtest", help="tune on earlier seasons, then walk-forward evaluation")
+    p.add_argument("--start-season", type=int, default=2024)
+    p.add_argument("--tune-season", type=int, default=2022, help="first season settings are fitted on")
     p.add_argument("--retrain-every", type=int, default=1)
-    p.add_argument("--tune", action="store_true", help="fit temperature, blend and recency first")
-    p.add_argument(
-        "--tune-season",
-        type=int,
-        help="season to fit settings on; must precede --start-season (default: the season before)",
-    )
     p.add_argument("--sims", type=int, default=3000)
+
+    p = sub.add_parser("experiments", help="ablation, calibration, practice, form and stability experiments")
+    p.add_argument("--start-season", type=int, default=2024)
+    p.add_argument("--tune-season", type=int, default=2022)
+    p.add_argument("--only", help="comma-separated subset; others keep their saved results")
 
     p = sub.add_parser("predict", help="forecast a race and log it")
     p.add_argument(
@@ -116,12 +122,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sims", type=int, default=6000)
 
     sub.add_parser("dashboard", help="render reports/index.html and reports/method.html")
+    sub.add_parser("demo", help="the whole pipeline on a synthetic championship, offline")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(args.verbose)
+    if args.command == "demo":
+        from . import demo
+
+        demo.run()
+        return 0
+
     store.init_db()
 
     if args.command == "init":
@@ -141,12 +154,22 @@ def main(argv: list[str] | None = None) -> int:
         print(store.table_counts().to_string(index=False))
         return 0
 
+    if args.command == "ingest-openf1":
+        from .ingest import openf1
+
+        counts = openf1.ingest(_parse_seasons(args.seasons), force=args.force)
+        print(f"openf1: {counts['grid']} grid rows, {counts['entries']} entry rows")
+        return 0
+
     if args.command == "ingest-fastf1":
         from .ingest import fastf1_pull
 
-        seasons = _parse_seasons(args.seasons)
-        print(f"FastF1: {seasons[0]}-{seasons[-1]}. Slow; cache goes to {config.FASTF1_CACHE}")
-        fastf1_pull.ingest(seasons, force=args.force)
+        if args.next:
+            fastf1_pull.ingest_next_weekend()
+        else:
+            seasons = _parse_seasons(args.seasons)
+            print(f"FastF1: {seasons[0]}-{seasons[-1]}. Cache goes to {config.FASTF1_CACHE}")
+            fastf1_pull.ingest(seasons, force=args.force)
         print(store.table_counts().to_string(index=False))
         return 0
 
@@ -184,94 +207,40 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "backtest":
-        from . import backtest, features
+        from . import evaluation, features
 
-        df = features.load()
-        temperature = config.DEFAULT_TEMPERATURE
-        blend_weight = config.DEFAULT_BLEND_WEIGHT
-        recency = config.DEFAULT_CURRENT_SEASON_WEIGHT
-        tune_season = args.tune_season or (args.start_season - 1)
-
-        if args.tune:
-            # Deliberately an EARLIER season than the one being reported.
-            # Fitting and reporting on the same races makes the settings part
-            # of the answer, and the table stops being out-of-sample.
-            if tune_season >= args.start_season:
-                parser_error = (
-                    f"--tune-season ({tune_season}) must be earlier than "
-                    f"--start-season ({args.start_season}), or the reported "
-                    f"numbers are the ones the settings were chosen on"
-                )
-                raise SystemExit(parser_error)
-            # Bounded at both ends so the settings are never fitted on the races the
-            # table then reports.
-            tune_end = args.start_season - 1
-            print(f"Fitting temperature, blend and recency on {tune_season}-{tune_end}...")
-            temperature = backtest.tune_temperature(df, tune_season, end_season=tune_end)
-            blend_weight = backtest.tune_blend(df, tune_season, temperature, end_season=tune_end)
-            recency = backtest.tune_recency(df, tune_season, end_season=tune_end)
-            print(
-                f"  temperature={temperature:.3f}  blend={blend_weight:.2f}  recency={recency:.1f}\n"
-                f"Reporting on {args.start_season}+, which the tuner never saw."
-            )
-
-        res = backtest.walk_forward(
-            df,
+        result = evaluation.run_backtest(
+            features.load(),
             args.start_season,
-            retrain_every=args.retrain_every,
+            args.tune_season,
             n_sims=args.sims,
-            blend_weight=blend_weight,
-            temperature=temperature,
-            current_season_weight=recency,
+            retrain_every=args.retrain_every,
         )
-        summary = res.summary()
-        print("\n" + summary.to_string())
-        print("\ncalibration:")
-        print(res.calibration().to_string(index=False))
-
-        # Split by season as well as pooled: a good average can hide a bad
-        # year, and the live season is the one a reader cares about most.
-        names = {"model": "This model", "grid": "Grid order"}
-        sub = res.races[res.races.method.isin(names)]
-        by_season = (
-            sub.groupby(["season", "method"])[
-                ["top5_overlap", "podium_overlap", "top1_hit", "ndcg5", "logloss", "brier"]
-            ]
-            .mean()
-            .reset_index()
-        )
-        by_season["races"] = sub.groupby(["season", "method"]).size().values
-        by_season["method"] = by_season["method"].map(names)
-        by_season = by_season.rename(
-            columns={
-                "method": "approach",
-                "top5_overlap": "top 5",
-                "podium_overlap": "podium",
-                "top1_hit": "winner",
-                "ndcg5": "ndcg@5",
-                "logloss": "log loss",
-            }
-        ).round(3)
-
         out = config.REPORTS / "backtest.json"
-        out.write_text(
-            json.dumps(
-                {
-                    "summary": summary.reset_index().to_dict("records"),
-                    "by_season": by_season.to_dict("records"),
-                    "calibration": res.calibration().astype(str).to_dict("records"),
-                    "params": {
-                        "temperature": temperature,
-                        "blend_weight": blend_weight,
-                        "recency_weight": recency,
-                        "start_season": args.start_season,
-                        "tuned_on_season": tune_season if args.tune else None,
-                    },
-                },
-                indent=2,
-            )
-        )
+        out.write_text(json.dumps(result, indent=1, default=str))
+        print(evaluation.render_backtest(result))
         print(f"\nwrote {out}")
+        return 0
+
+    if args.command == "experiments":
+        from . import backtest, evaluation, features
+
+        out = config.REPORTS / "experiments.json"
+        only = [x.strip() for x in args.only.split(",")] if args.only else None
+        saved = json.loads(out.read_text()) if (only and out.exists()) else {}
+
+        def save(partial: dict) -> None:
+            out.write_text(json.dumps({**saved, **partial}, indent=1, default=str))
+
+        evaluation.run_experiments(
+            features.load(),
+            backtest.load_settings(),
+            args.start_season,
+            args.tune_season,
+            only=only,
+            save=save,
+        )
+        print(f"wrote {out}")
         return 0
 
     if args.command == "predict":
@@ -379,8 +348,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "dashboard":
-        import pandas as pd
-
         from . import report
 
         prediction = None
@@ -392,16 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         if prediction and config.SEASON_NOW.exists():
             prediction = {**prediction, "season_outlook": json.loads(config.SEASON_NOW.read_text())}
 
-        summary = calibration = None
-        params = None
-        bt = config.REPORTS / "backtest.json"
-        if bt.exists():
-            data = json.loads(bt.read_text())
-            summary = pd.DataFrame(data["summary"]).set_index("method")
-            calibration = pd.DataFrame(data["calibration"])
-            params = data.get("params")
-
-        path = report.write(prediction, summary, calibration, params)
+        path = report.write(prediction)
         print(f"wrote {path}")
 
         from . import method_page

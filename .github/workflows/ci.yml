@@ -8,13 +8,33 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+
+      # Installs from uv.lock, so CI runs the exact versions the reports were
+      # generated with rather than whatever resolves on the day.
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: ruff check src tests
-      - run: ruff format --check src tests
-      - run: pytest -q
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --extra dev --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: |
+          uv run --no-sync ruff check src tests
+          uv run --no-sync ruff format --check src tests
+
+      # No database in CI: the pipeline tests run on the synthetic fixture in
+      # f1pred.demo, so features, training, simulation and the backtest are all
+      # exercised without touching an external API.
+      - name: Test
+        run: uv run --no-sync pytest -q --cov --cov-report=term --cov-report=xml
+
+      - name: Offline demo
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync python -m f1pred.cli demo

@@ -13,16 +13,22 @@ different slices:
     GRID      known only after qualifying (grid slot, quali gaps)
 
     quali model : BASE + PRACTICE          -> predicts the grid
-    race model  : BASE + PRACTICE + GRID   -> predicts the finish
+    race model  : BASE + GRID              -> predicts the finish
+
+Two columns that are easy to conflate are kept apart: `quali_position` is the
+qualifying classification and `grid` is where the car actually started, after
+penalties. The grid comes from weekend.resolve_grid, which records its source.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
+from . import weekend
 from .store import connect
 
 log = logging.getLogger(__name__)
@@ -30,7 +36,6 @@ log = logging.getLogger(__name__)
 BASE_FEATURES = [
     "drv_avg_finish_3",
     "drv_avg_finish_5",
-    "drv_avg_grid_5",
     "drv_points_rate_5",
     "drv_dnf_rate_10",
     "drv_experience",
@@ -44,12 +49,10 @@ BASE_FEATURES = [
     "team_circuit_avg_finish",
     "circuit_overtaking_score",
     "circuit_dnf_rate",
-    "drv_teammate_quali_edge",
     "season_progress",
     # Car pace: rolling qualifying gap to pole, the cleanest public signal of
     # how fast the car is. Without these the model inferred pace from results.
     "team_pace_gap_pct",
-    "drv_pace_gap_pct",
     "team_pace_trend",
     # Racecraft, separated from pace: who actually gains places on Sunday.
     "drv_positions_gained_5",
@@ -57,8 +60,6 @@ BASE_FEATURES = [
     "drv_top10_rate_10",
     "drv_circuit_starts",
     "circuit_pole_win_rate",
-    "drv_avg_quali_5",
-    "drv_pole_rate_10",
     "team_avg_quali_5",
 ]
 
@@ -76,6 +77,12 @@ BASE_FEATURES = [
 #                                                50.0% either way
 #   team pit-stop gap, 5-race                  better on two metrics, worse on three
 #                                                including log loss
+#
+# And measured with race-paired bootstrap intervals (reports/experiments.json):
+#   teammate qualifying gap in the race model  win log loss +0.007 on 2022-23,
+#                                                interval -0.047 to +0.060: nothing
+#   teammate gap in the same session, signed   no difference from the best-lap one
+#   median instead of mean recent form         2022-23 gain's interval spans zero
 
 PRACTICE_FEATURES = [
     "fp_long_run_gap_pct",
@@ -87,13 +94,27 @@ GRID_FEATURES = [
     "grid",
     "quali_position",
     "quali_gap_to_pole_pct",
-    "quali_gap_to_teammate_pct",
 ]
 
+# Measured and left out of the race model: the teammate qualifying gap, this
+# weekend's and its five-race average. Removing them changed win log loss by
+# -0.005 on 2022-23 and +0.001 on 2024-, both intervals straddling zero
+# (reports/experiments.json, ablation). drv_teammate_quali_edge still feeds the
+# qualifying model, where head-to-head record is direct one-lap evidence.
+TEAMMATE_FEATURES = ["quali_gap_to_teammate_pct", "drv_teammate_quali_edge"]
+
+# Also measured and left out of the race model: the driver's own qualifying
+# record. It is the qualifying model's core input, and reaches the race through
+# the grid - projected before qualifying, official after. Inside the race model
+# it counted twice: removing it improved pre-qualifying win log loss on 2022-23
+# by 0.060 (interval 0.020 to 0.104) and cost nothing after qualifying.
+QUALI_FORM_FEATURES = ["drv_avg_grid_5", "drv_avg_quali_5", "drv_pole_rate_10", "drv_pace_gap_pct"]
+
 # Practice feeds the qualifying model only and reaches the race through the
-# predicted grid. Simulated on 2025-26 at a realistic FP3-to-qualifying
-# correlation (~0.85), it roughly doubles the pre-qualifying pole rate
-# (18% -> 32%) and does nothing once the real grid is known.
+# predicted grid. Measured on the weekends with practice data
+# (reports/experiments.json, practice): it sharpens the qualifying forecast and
+# adds nothing to the race once the real grid is known.
+
 # Direct one-lap evidence. These lead the qualifying model, because
 # qualifying history predicts qualifying and race results do not: a race
 # outcome bundles strategy, traffic, reliability and incidents on top of pace.
@@ -124,17 +145,40 @@ QUALI_CONTEXT_FEATURES = [
 QUALI_FEATURES = QUALI_HISTORY_FEATURES + QUALI_CONTEXT_FEATURES + PRACTICE_FEATURES
 RACE_FEATURES = BASE_FEATURES + GRID_FEATURES
 
+# Bumped whenever a feature's definition changes, and written into every
+# forecast, so a logged prediction says which definitions produced it.
+FEATURE_VERSION = "2026.09.5"
+
+# How recent finishing form (drv_/team_avg_finish_*) is summarised: "mean" or
+# "median". The median resists one freak result, but it did not earn its place:
+# on the tuning seasons its gain had an interval including zero, and on 2024-
+# it was worse (reports/experiments.json, form_statistic).
+FORM_STAT = "mean"
+
 # Rolling windows never see the current race, so early-career rows are sparse.
 # XGBoost handles NaN natively, so we leave them rather than imputing a value
 # the model would read as real.
 MAX_FIELD = 24
+TEAMMATE_GAP_CLIP = 3.0  # % of a lap
 
 
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
-def _load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """results, qualifying, standings, practice pace - in that order."""
+@dataclass
+class Raw:
+    """The raw tables features are built from."""
+
+    results: pd.DataFrame
+    quali: pd.DataFrame
+    standings: pd.DataFrame
+    pace: pd.DataFrame
+    races: pd.DataFrame
+    openf1_grid: pd.DataFrame
+    openf1_entries: pd.DataFrame
+
+
+def _load() -> Raw:
     with connect(read_only=True) as con:
         results = con.execute(
             """
@@ -148,8 +192,8 @@ def _load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
         quali = con.execute(
             """
-            SELECT season, round, driver_id,
-                   position AS quali_position, best_ms
+            SELECT season, round, driver_id, constructor_id,
+                   position AS quali_position, q1_ms, q2_ms, q3_ms, best_ms
             FROM raw_qualifying
             """
         ).fetchdf()
@@ -162,17 +206,27 @@ def _load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             """
         ).fetchdf()
 
+        # Practice sessions only: all of them run before qualifying.
         pace = con.execute(
             """
             SELECT season, round, driver_id,
-                   min(CASE WHEN session IN ('FP1','FP2','FP3') THEN long_run_ms END) AS fp_long_run_ms,
-                   min(CASE WHEN session IN ('FP1','FP2','FP3') THEN best_lap_ms END)  AS fp_best_ms
+                   min(long_run_ms) AS fp_long_run_ms,
+                   min(best_lap_ms) AS fp_best_ms
             FROM raw_session_pace
-            GROUP BY 1,2,3
+            WHERE session IN ('FP1', 'FP2', 'FP3')
+            GROUP BY 1, 2, 3
             """
         ).fetchdf()
 
-    return results, quali, standings, pace
+        races = con.execute(
+            "SELECT season, round, circuit_id, race_date, race_start_utc FROM raw_races"
+        ).fetchdf()
+        openf1_grid = con.execute("SELECT season, round, driver_id, position FROM raw_openf1_grid").fetchdf()
+        openf1_entries = con.execute(
+            "SELECT season, round, session, driver_id, constructor_id FROM raw_openf1_entries"
+        ).fetchdf()
+
+    return Raw(results, quali, standings, pace, races, openf1_grid, openf1_entries)
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +251,8 @@ def _prior_expanding(df: pd.DataFrame, by: str | list[str], col: str, how: str =
     return grouped.transform(lambda s: getattr(s.shift(1).expanding(min_periods=1), how)())
 
 
-def _roll_over_valid(s: pd.Series, window: int | None) -> pd.Series:
-    """Mean of the last `window` non-null values strictly before each row.
+def _roll_over_valid(s: pd.Series, window: int | None, stat: str = "mean") -> pd.Series:
+    """Mean (or median) of the last `window` non-null values strictly before each row.
 
     Nulls are skipped rather than counted. Rolls over the non-null values only,
     puts each result back at its row, carries it forward across the gaps, then
@@ -208,15 +262,12 @@ def _roll_over_valid(s: pd.Series, window: int | None) -> pd.Series:
     valid = s.dropna()
     if valid.empty:
         return pd.Series(np.nan, index=s.index)
-    roll = (
-        valid.expanding(min_periods=1).mean()
-        if window is None
-        else valid.rolling(window, min_periods=1).mean()
-    )
+    roller = valid.expanding(min_periods=1) if window is None else valid.rolling(window, min_periods=1)
+    roll = getattr(roller, stat)()
     return roll.reindex(s.index).ffill().shift(1)
 
 
-def _prior_pace(df: pd.DataFrame, by: str | list[str], col: str, window: int | None):
+def _prior_pace(df: pd.DataFrame, by: str | list[str], col: str, window: int | None, stat: str = "mean"):
     """Recent finishing form over races the car actually finished.
 
     A retirement is classified near last; averaged in, it reads as slowness when
@@ -226,10 +277,12 @@ def _prior_pace(df: pd.DataFrame, by: str | list[str], col: str, window: int | N
 
     One-row-per-race keys only; see _prior_rolling.
     """
-    return df.groupby(by, sort=False)[col].transform(lambda s: _roll_over_valid(s, window))
+    return df.groupby(by, sort=False)[col].transform(lambda s: _roll_over_valid(s, window, stat))
 
 
-def _prior_pace_by_race(df: pd.DataFrame, group: str, col: str, window: int | None) -> pd.Series:
+def _prior_pace_by_race(
+    df: pd.DataFrame, group: str, col: str, window: int | None, stat: str = "mean"
+) -> pd.Series:
     """_prior_pace for a group fielding several cars. See _prior_rolling_by_race
     for why the per-race collapse has to happen first."""
     per_race = (
@@ -238,7 +291,9 @@ def _prior_pace_by_race(df: pd.DataFrame, group: str, col: str, window: int | No
         .reset_index()
         .sort_values([group, "race_seq"])
     )
-    per_race["_v"] = per_race.groupby(group, sort=False)[col].transform(lambda s: _roll_over_valid(s, window))
+    per_race["_v"] = per_race.groupby(group, sort=False)[col].transform(
+        lambda s: _roll_over_valid(s, window, stat)
+    )
     merged = df[[group, "race_seq"]].merge(
         per_race[[group, "race_seq", "_v"]], on=[group, "race_seq"], how="left"
     )
@@ -327,86 +382,101 @@ def _prior_rolling_by_race(
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
-def _upcoming_entries(results: pd.DataFrame) -> pd.DataFrame:
+def _upcoming_entries(raw: Raw) -> pd.DataFrame:
     """Placeholder rows for races that have not run yet.
 
     The feature frame is driven by results, so a future race has no rows and
-    therefore nothing to predict. We synthesise an entry list from the most
-    recent completed round of that season - which is what a person would do -
-    and leave position/points null so the rows are never used for training.
+    nothing to predict. Its entry list comes from weekend.race_entries: the
+    weekend's own qualifying or session lists when they exist, the previous
+    race's field only as a labelled last resort. Position and points stay null
+    so the rows are never used for training.
     """
-    with connect(read_only=True) as con:
-        scheduled = con.execute(
-            """
-            SELECT ra.season, ra.round, ra.circuit_id, ra.race_date, ra.race_start_utc
-            FROM raw_races ra
-            LEFT JOIN raw_results r USING (season, round)
-            WHERE r.driver_id IS NULL AND ra.race_date >= current_date - 1
-            GROUP BY ALL
-            ORDER BY ra.season, ra.round
-            """
-        ).fetchdf()
+    results, races = raw.results, raw.races
+    if races.empty or results.empty:
+        return pd.DataFrame()
+    run = set(zip(results["season"], results["round"]))
+    today = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
+    dates = pd.to_datetime(races["race_date"])
+    not_run = np.array([(s, r) not in run for s, r in zip(races["season"], races["round"])], dtype=bool)
+    scheduled = races[not_run & (dates >= today - pd.Timedelta(days=1)).to_numpy()].sort_values(
+        ["season", "round"]
+    )
 
-    if scheduled.empty or results.empty:
+    frames = []
+    for race in scheduled.itertuples():
+        season, rnd = int(race.season), int(race.round)
+        entry, source = weekend.race_entries(season, rnd, results, raw.quali, raw.openf1_entries)
+        if entry.empty:
+            continue
+        frames.append(
+            entry.assign(
+                season=season,
+                round=rnd,
+                circuit_id=race.circuit_id,
+                race_date=race.race_date,
+                race_start_utc=race.race_start_utc,
+                entry_source=source,
+            )
+        )
+    if not frames:
         return pd.DataFrame()
 
-    rows = []
-    for _, race in scheduled.iterrows():
-        season = int(race["season"])
-        in_season = results[results["season"] == season]
-        if in_season.empty:
-            continue
-        latest = in_season[in_season["round"] == in_season["round"].max()]
-        entry = latest[["driver_id", "constructor_id"]].drop_duplicates()
-        for _, e in entry.iterrows():
-            rows.append(
-                {
-                    "season": season,
-                    "round": int(race["round"]),
-                    "driver_id": e["driver_id"],
-                    "constructor_id": e["constructor_id"],
-                    "circuit_id": race["circuit_id"],
-                    "race_date": race["race_date"],
-                    "race_start_utc": race["race_start_utc"],
-                    "grid": np.nan,
-                    "position": np.nan,
-                    "classified": None,
-                    "points": np.nan,
-                    "dnf": None,
-                    "laps": np.nan,
-                }
-            )
-
-    out = pd.DataFrame(rows)
-    if not out.empty:
-        log.info(
-            "Added %d placeholder entries for %d upcoming race(s)",
-            len(out),
-            out.groupby(["season", "round"]).ngroups,
-        )
+    out = pd.concat(frames, ignore_index=True)
+    for col, value in (("grid", np.nan), ("position", np.nan), ("points", np.nan), ("laps", np.nan)):
+        out[col] = value
+    out["classified"] = pd.Series([None] * len(out), dtype=object)
+    out["dnf"] = pd.Series([None] * len(out), dtype=object)
+    log.info(
+        "Added %d placeholder entries for %d upcoming race(s); next race's field from %s",
+        len(out),
+        out.groupby(["season", "round"]).ngroups,
+        out["entry_source"].iloc[0],
+    )
     return out
 
 
-def build(include_upcoming: bool = True) -> pd.DataFrame:
-    results, quali, standings, pace = _load()
+def _check_integrity(df: pd.DataFrame) -> None:
+    """Fail loudly on the two mistakes that silently corrupt every rolling feature."""
+    dupes = df.duplicated(["season", "round", "driver_id"])
+    if dupes.any():
+        raise ValueError(f"{int(dupes.sum())} duplicate (season, round, driver) rows")
+    order = df.drop_duplicates("race_seq").sort_values("race_seq")
+    if not (order[["season", "round"]].apply(tuple, axis=1).is_monotonic_increasing):
+        raise ValueError("race_seq is not in (season, round) order")
+
+
+def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.DataFrame:
+    raw = _load()
+    stat = form_stat or FORM_STAT
+    results = raw.results.copy()
     if results.empty:
         raise RuntimeError("raw_results is empty - run the ingest first")
+    results["entry_source"] = "results"
 
     if include_upcoming:
-        upcoming = _upcoming_entries(results)
+        upcoming = _upcoming_entries(raw)
         if not upcoming.empty:
-            results = pd.concat([results, upcoming], ignore_index=True)
+            results = pd.concat([results, upcoming[results.columns]], ignore_index=True)
 
-    df = results.merge(quali, on=["season", "round", "driver_id"], how="left")
-    df = df.merge(pace, on=["season", "round", "driver_id"], how="left")
+    df = results.merge(
+        raw.quali.drop(columns=["constructor_id"]), on=["season", "round", "driver_id"], how="left"
+    )
+    df = df.merge(raw.pace, on=["season", "round", "driver_id"], how="left")
+
+    # Where each car started: the results grid, else the official grid, else
+    # the qualifying order - see weekend.resolve_grid.
+    resolved = weekend.resolve_grid(df[["season", "round", "driver_id", "grid"]], raw.quali, raw.openf1_grid)
+    df["grid"] = resolved["grid"].to_numpy()
+    df["grid_source"] = resolved["grid_source"].to_numpy()
 
     # Chronological ordering drives every rolling window below.
     df = df.sort_values(["season", "round", "position"], na_position="last").reset_index(drop=True)
     df["race_seq"] = df.groupby(["season", "round"], sort=False).ngroup()
+    _check_integrity(df)
 
     # Championship standing going INTO the race = standing after the previous
     # round. Joining on the current round would leak the result we predict.
-    prev = standings.copy()
+    prev = raw.standings.copy()
     prev["round"] = prev["round"] + 1
     df = df.merge(
         prev.rename(
@@ -420,17 +490,21 @@ def build(include_upcoming: bool = True) -> pd.DataFrame:
     df.loc[first_round, "champ_points_before"] = df.loc[first_round, "champ_points_before"].fillna(0.0)
 
     # ---- driver form -----------------------------------------------------
+    ran = df["position"].notna()
     df["finish_or_last"] = df["position"].fillna(MAX_FIELD)
-    df["scored"] = (df["points"] > 0).astype(float)
+    # Outcome flags are null for a race not yet run, not zero: a placeholder
+    # row must never read as a race without points.
+    df["scored"] = (df["points"] > 0).astype(float).where(ran)
     df["dnf_flag"] = df["dnf"].astype(float)
 
     # Finishing position when the car finished; null on a retirement, so a
     # failure doesn't read as slowness. Outcome features and the label still
     # use finish_or_last, because not finishing is a real result.
-    df["finish_when_running"] = df["finish_or_last"].where(~df["dnf"].astype(bool))
+    retired = df["dnf"].astype("boolean").fillna(True).astype(bool)  # unknown counts as not running
+    df["finish_when_running"] = df["finish_or_last"].where(ran & ~retired)
 
-    df["drv_avg_finish_3"] = _prior_pace(df, "driver_id", "finish_when_running", 3)
-    df["drv_avg_finish_5"] = _prior_pace(df, "driver_id", "finish_when_running", 5)
+    df["drv_avg_finish_3"] = _prior_pace(df, "driver_id", "finish_when_running", 3, stat)
+    df["drv_avg_finish_5"] = _prior_pace(df, "driver_id", "finish_when_running", 5, stat)
     df["drv_avg_grid_5"] = _prior_rolling(df, "driver_id", "grid", 5)
     df["drv_points_rate_5"] = _prior_rolling(df, "driver_id", "points", 5)
     df["drv_dnf_rate_10"] = _prior_rolling(df, "driver_id", "dnf_flag", 10)
@@ -439,8 +513,8 @@ def build(include_upcoming: bool = True) -> pd.DataFrame:
     # ---- team form -------------------------------------------------------
     # One number per car per race, collapsed before the window shifts -
     # otherwise one driver's row sees the teammate's result from the same race.
-    df["team_avg_finish_3"] = _prior_pace_by_race(df, "constructor_id", "finish_when_running", 3)
-    df["team_avg_finish_5"] = _prior_pace_by_race(df, "constructor_id", "finish_when_running", 5)
+    df["team_avg_finish_3"] = _prior_pace_by_race(df, "constructor_id", "finish_when_running", 3, stat)
+    df["team_avg_finish_5"] = _prior_pace_by_race(df, "constructor_id", "finish_when_running", 5, stat)
     df["team_points_rate_5"] = _prior_rolling_by_race(df, "constructor_id", "points", 5, race_agg="sum")
     df["team_dnf_rate_10"] = _prior_rolling_by_race(df, "constructor_id", "dnf_flag", 10)
 
@@ -460,23 +534,21 @@ def build(include_upcoming: bool = True) -> pd.DataFrame:
     df = _add_practice_features(df)
 
     # ---- season context --------------------------------------------------
-    rounds_per_season = df.groupby("season")["round"].transform("max")
-    df["season_progress"] = df["round"] / rounds_per_season
+    # Calendar length is known before a season starts. Counting the rounds with
+    # results instead - as this once did - gave the same race a different value
+    # depending on how much of the season had been run when features were built.
+    calendar = raw.races.groupby("season")["round"].max()
+    df["season_progress"] = df["round"] / df["season"].map(calendar).fillna(df["round"])
 
     # ---- labels ----------------------------------------------------------
     # XGBRanker wants higher = better. Retirements keep their classified order,
     # and unrun races stay null so training skips them.
-    df["race_relevance"] = np.where(
-        df["position"].notna(), (MAX_FIELD - df["finish_or_last"]).clip(lower=0), np.nan
-    )
+    df["race_relevance"] = np.where(ran, (MAX_FIELD - df["finish_or_last"]).clip(lower=0), np.nan)
     df["quali_relevance"] = np.where(
         df["quali_position"].notna(),
         (MAX_FIELD - df["quali_position"].fillna(MAX_FIELD)).clip(lower=0),
         np.nan,
     )
-    # Grid becomes known only after qualifying; before that it is genuinely
-    # unknown and must stay null rather than being filled with a guess.
-    df["grid"] = df["grid"].replace(0, np.nan)  # 0 = pit lane start in Ergast
 
     df = df.sort_values(["season", "round", "driver_id"]).reset_index(drop=True)
     log.info("Built %d rows across %d races", len(df), df["race_seq"].nunique())
@@ -490,7 +562,7 @@ def _add_circuit_profile(df: pd.DataFrame) -> pd.DataFrame:
     which is the honest answer - see cold_start() for how a new track is
     handled at prediction time.
     """
-    df["abs_pos_change"] = (df["grid"] - df["finish_or_last"]).abs()
+    df["abs_pos_change"] = (df["grid"] - df["finish_or_last"]).abs().where(df["position"].notna())
 
     per_race = (
         df.groupby(["circuit_id", "race_seq"], sort=True)
@@ -522,8 +594,7 @@ def _add_quali_features(df: pd.DataFrame) -> pd.DataFrame:
     pole = df.groupby(["season", "round"])["best_ms"].transform("min")
     df["quali_gap_to_pole_pct"] = (df["best_ms"] / pole - 1.0) * 100
 
-    team_best = df.groupby(["season", "round", "constructor_id"])["best_ms"].transform("min")
-    df["quali_gap_to_teammate_pct"] = (df["best_ms"] / team_best - 1.0) * 100
+    df["quali_gap_to_teammate_pct"] = teammate_gap(df)
 
     # Measured from qualifying position, not grid: grid carries penalties, and a
     # driver who takes pole and starts tenth isn't a poor qualifier.
@@ -540,9 +611,27 @@ def _add_quali_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Rolling head-to-head against the other side of the garage. Strong signal:
     # it isolates the driver from the car, which almost nothing else here does.
+    # Over the last five weekends with a comparison; one without isn't a tie.
+    # Clipped at 3%: beyond that the gap is a crash or a failure in Q1, not the
+    # drivers, and one such lap would otherwise dominate a five-race average.
     df = df.sort_values(["season", "round"]).reset_index(drop=True)
-    df["drv_teammate_quali_edge"] = _prior_rolling(df, "driver_id", "quali_gap_to_teammate_pct", 5)
-    return df
+    df["_edge"] = df["quali_gap_to_teammate_pct"].clip(-TEAMMATE_GAP_CLIP, TEAMMATE_GAP_CLIP)
+    df["drv_teammate_quali_edge"] = _prior_pace(df, "driver_id", "_edge", 5)
+    return df.drop(columns="_edge")
+
+
+def teammate_gap(df: pd.DataFrame) -> pd.Series:
+    """Qualifying gap to the teammate, as a % of a lap: each driver's best lap of
+    the day against the team's best, so the faster driver is at 0.
+
+    Null, never 0, when there is no teammate time to compare with: a missing
+    teammate is not a tie. (Filling it with 0 read as "beat the teammate" for 51
+    drivers who had nobody to beat.)
+    """
+    keys = ["season", "round", "constructor_id"]
+    team_best = df.groupby(keys)["best_ms"].transform("min")
+    timed = df.groupby(keys)["best_ms"].transform("count")
+    return ((df["best_ms"] / team_best - 1.0) * 100).where(timed >= 2)
 
 
 def _add_pace_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -574,8 +663,9 @@ def _add_pace_features(df: pd.DataFrame) -> pd.DataFrame:
     df["positions_gained"] = (df["grid"] - df["finish_when_running"]).where(~df["dnf"].astype(bool))
     df["drv_positions_gained_5"] = _prior_pace(df, "driver_id", "positions_gained", 5)
 
-    df["podium_flag"] = (df["position"] <= 3).astype(float)
-    df["top10_flag"] = (df["position"] <= 10).astype(float)
+    ran = df["position"].notna()
+    df["podium_flag"] = (df["position"] <= 3).astype(float).where(ran)
+    df["top10_flag"] = (df["position"] <= 10).astype(float).where(ran)
     df["drv_podium_rate_10"] = _prior_rolling(df, "driver_id", "podium_flag", 10)
     df["drv_top10_rate_10"] = _prior_rolling(df, "driver_id", "top10_flag", 10)
 
@@ -584,7 +674,9 @@ def _add_pace_features(df: pd.DataFrame) -> pd.DataFrame:
     # How reliably pole converts to a win here. Monaco and Monza are opposite
     # ends of this, and it is exactly what "does the grid matter" means.
     pole_won = (
-        df.assign(pole_win=((df["grid"] == 1) & (df["position"] == 1)).astype(float))
+        df.assign(
+            pole_win=((df["grid"] == 1) & (df["position"] == 1)).astype(float).where(df["position"].notna())
+        )
         .groupby(["circuit_id", "race_seq"], sort=True)["pole_win"]
         .max()
         .reset_index()

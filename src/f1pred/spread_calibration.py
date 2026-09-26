@@ -42,24 +42,20 @@ MIN_TRAIN_RACES = 30
 def final_points(season: int) -> tuple[dict[str, float], dict[str, float]]:
     """Final points by driver and by constructor.
 
-    A constructor's total is the sum of its drivers' at the last round, so a
-    mid-season switch counts toward the team the driver ended with.
+    Constructors' points are summed from the results as awarded - a driver who
+    changed team mid-season scored for both - not from the drivers' totals.
     """
     with connect(read_only=True) as con:
         rows = con.execute(
             """
-            SELECT driver_id, constructor_id, points FROM raw_standings
+            SELECT driver_id, points FROM raw_standings
             WHERE season = ? AND round = (SELECT max(round) FROM raw_standings WHERE season = ?)
               AND driver_id IS NOT NULL
             """,
             [season, season],
         ).fetchall()
-    drivers = {d: float(p) for d, _, p in rows}
-    teams: dict[str, float] = {}
-    for _, t, p in rows:
-        if t is not None:
-            teams[t] = teams.get(t, 0.0) + float(p)
-    return drivers, teams
+    drivers = {d: float(p) for d, p in rows}
+    return drivers, championship.constructor_points(season, 10**6)
 
 
 def checkpoints(df: pd.DataFrame, seasons: tuple[int, ...]) -> list[dict]:
@@ -80,7 +76,7 @@ def checkpoints(df: pd.DataFrame, seasons: tuple[int, ...]) -> list[dict]:
             if train["race_seq"].nunique() < MIN_TRAIN_RACES:
                 continue
             race = nxt.copy()
-            race["score"] = model.train_race(train).score(championship.typical_weekend(race, train))
+            race["score"] = championship.season_strength(model.train_race(train), race, train)
             out.append(
                 {
                     "season": season,
