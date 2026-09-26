@@ -235,16 +235,6 @@ def test_chart_accepts_round_numbers_that_came_back_from_json():
     assert "<svg" in out
 
 
-def test_long_odds_are_never_printed_as_certainty():
-    """Nine races out a simulation cannot resolve below 1 in n_sims; printing
-    100% would claim a precision the method does not have."""
-    assert rr._odds(1.0) == "99.9%"
-    assert rr._odds(0.9999) == "99.9%"
-    assert rr._odds(0.0) == "0.0%"
-    assert rr._odds(0.372) == "37.2%"
-    assert "<" not in rr._odds(0.0004) and ">" not in rr._odds(1.0)
-
-
 # ---------------------------------------------------------------------------
 # Verification helpers
 # ---------------------------------------------------------------------------
@@ -694,3 +684,11 @@ def test_the_championship_panel_uses_the_latest_projection(tmp_path, monkeypatch
     cli.main(["dashboard"])
     assert rendered["season_outlook"] == {"marker": "latest"}
     assert rendered["race_board"] == [], "the logged boards must be left as they were"
+
+
+def test_title_odds_say_what_the_simulation_can_and_cannot_resolve():
+    assert rr._odds(0.0) == "&lt;0.1%"  # still mathematically alive
+    assert rr._odds(0.0, alive=False) == "out"
+    assert rr._odds(1.0) == "clinched"
+    assert rr._odds(0.9995) == "99.9%"
+    assert rr._odds(0.008) == "0.8%"

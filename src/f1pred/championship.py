@@ -86,21 +86,21 @@ def simulate_seasons(
     n = len(scores)
     score_sd = float(np.std(scores)) or 1.0
 
-    # Pace belongs to the car, so teammates share one offset (per driver if no
-    # team map is given), scaled by the share of the season still to run.
-    drift_sd = (
-        config.SEASON_PACE_UNCERTAINTY
-        * float(np.clip(season_fraction_left, 0.0, 1.0))
-        / config.POSITIONS_PER_SCORE_SD
-    ) * score_sd
-    if drift_sd > 0:
-        if team_index is not None:
-            per_team = rng.normal(0.0, drift_sd, size=(n_sims, int(team_index.max()) + 1))
-            drift = per_team[:, team_index]
+    # One offset per team, shared by teammates, plus a smaller one per driver so
+    # teammates can still drift apart. Both scale with the share of the season
+    # still to run.
+    left = float(np.clip(season_fraction_left, 0.0, 1.0))
+    to_score = left * score_sd / config.POSITIONS_PER_SCORE_SD
+    team_sd = config.SEASON_PACE_UNCERTAINTY * to_score
+    driver_sd = config.SEASON_DRIVER_UNCERTAINTY * to_score
+    drift = np.zeros((1, n))
+    if team_sd > 0:
+        if team_index is None:
+            drift = drift + rng.normal(0.0, team_sd, size=(n_sims, n))
         else:
-            drift = rng.normal(0.0, drift_sd, size=(n_sims, n))
-    else:
-        drift = np.zeros((1, n))
+            drift = drift + rng.normal(0.0, team_sd, size=(n_sims, int(team_index.max()) + 1))[:, team_index]
+    if driver_sd > 0:
+        drift = drift + rng.normal(0.0, driver_sd, size=(n_sims, n))
 
     totals = np.tile(np.asarray(base_points, dtype=float), (n_sims, 1))
     track = np.zeros((n_races, n))
@@ -120,22 +120,18 @@ def simulate_seasons(
         order = np.argsort(-pace, axis=1)
         awarded = np.zeros((n_sims, n))
         awarded[rows, order[:, :take]] = POINTS[:take]
-        # A car that stopped scores nothing, even if a thin field sorted it
-        # into the points.
+        # A car that stopped scores nothing, even in a thin field.
         awarded = np.where(retired, 0.0, awarded)
 
         np.add.at(wins, order[:, 0], 1)
 
         totals += awarded
         track[r] = totals.mean(axis=0)
-        # The mean line alone reads as a forecast of certainty. Carrying the
-        # 10th and 90th percentile at every round is what lets the chart show
-        # that a leader who retires twice is inside the range, not outside it.
         lo_track[r] = np.percentile(totals, 10, axis=0)
         hi_track[r] = np.percentile(totals, 90, axis=0)
 
-    # One count per simulated race, so dividing by n_sims already gives expected
-    # wins over the remaining calendar, not a per-race rate.
+    # Wins are counted per simulated race, so this is expected wins over the
+    # remaining calendar.
     return totals, track, lo_track, hi_track, wins / n_sims
 
 
@@ -250,6 +246,7 @@ def project(
             "high": np.percentile(totals, 90, axis=0),
             "exp_wins": wins,
             "p_title": title,
+            "alive": alive,
             "p_top3": (rank <= 3).mean(axis=0),
         }
     ).sort_values("projected", ascending=False)
@@ -272,12 +269,32 @@ def project(
             "low": np.percentile(team_totals, 10, axis=0),
             "high": np.percentile(team_totals, 90, axis=0),
             "p_title": allocate_odds(t_raw, t_alive & (t_alive.sum() == 1), team_totals.mean(axis=0)),
+            "alive": t_alive,
         }
     ).sort_values("projected", ascending=False)
+
+    # Points gap between teammates, first-listed minus second. Graded by
+    # calibrate-spread; the team offset cancels here, so only the per-driver
+    # term can widen it.
+    pairs = []
+    for t in team_names:
+        if len(idx[t]) == 2:
+            a, b = idx[t]
+            gap = totals[:, a] - totals[:, b]
+            pairs.append(
+                {
+                    "team": t,
+                    "first": driver_ids[a],
+                    "second": driver_ids[b],
+                    "low": float(np.percentile(gap, 10)),
+                    "high": float(np.percentile(gap, 90)),
+                }
+            )
 
     return {
         "drivers": drivers,
         "constructors": constructors,
+        "teammates": pd.DataFrame(pairs, columns=["team", "first", "second", "low", "high"]),
         "projection": pd.DataFrame(
             track, columns=driver_ids, index=range(after_round + 1, after_round + 1 + n_races)
         ),

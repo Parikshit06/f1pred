@@ -39,23 +39,24 @@ column across seasons rather than the winner column.
 ## Championship projection
 
 **Who wins.** Graded at 27 checkpoints across seven completed seasons: the
-favourite was right 78% of the time, Brier 0.114. Above 95% it is 12 for 12,
-but the 95% interval on 12 from 12 runs down to 0.76, so a published 99.9%
+favourite was right 78% of the time, Brier 0.116. Above 95% it is 11 for 11,
+but the 95% interval on 11 from 11 runs down to 0.74, so a published 99.9%
 means the maths says it's over, not one chance in a thousand. The six misses
 are 2020's Bottas–Hamilton, two checkpoints of 2021, and three of 2025's
 Piastri–Norris.
 
 **How close.** Every points total comes with a 10th–90th percentile range,
-graded against real final constructors' standings on seasons the calibration
-never saw:
+graded on seasons the calibration never saw: against constructors' final
+points, and against the final gap between teammates.
 
-| Projection | Range held | Target | Width |
-|---|---|---|---|
-| Race luck only | 54% | 80% | 38 pts |
-| **Current** | **82%** | 80% | 108 pts |
+| Projection | Teams held | Width | Teammate gap held | Target |
+|---|---|---|---|---|
+| Race luck only | 54% | 38 pts | 65% | 80% |
+| **Current** | **83%** | 114 pts | **77%** | 80% |
 
 Race luck averages out over a season; error in the model's read of a car
-doesn't. Each simulated season draws one pace offset per team, sized by
+doesn't. Each simulated season draws one pace offset per team and a smaller
+one per driver, so teammates can drift apart too. Both are sized by
 `make calibrate-spread` (swept on 2019–22, graded on 2023–25).
 
 ## Bugs that moved the numbers

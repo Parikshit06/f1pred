@@ -1,13 +1,19 @@
 """Calibrate the width of the season projection's 10th-90th band.
 
 The band should contain the real final total eight times in ten. Race luck
-alone averages out over a season, so without an extra term the band was far
-too narrow. Development is real but small (about 1.4 finishing positions a
-season); most of the gap is the model being wrong about a car today, which
+alone averages out over a season, so without an extra term it was far too
+narrow. Most of the gap is the model being wrong about a car today, which
 carries into every remaining race.
 
-config.SEASON_PACE_UNCERTAINTY covers all of it and is chosen by coverage:
-swept on one set of seasons, graded on another.
+Two terms, fitted in order:
+
+    SEASON_PACE_UNCERTAINTY    one offset per team. Graded on constructors'
+                               final points.
+    SEASON_DRIVER_UNCERTAINTY  one offset per driver on top. Graded on the
+                               final points gap between teammates, which the
+                               team term can't move.
+
+Each is swept on one set of seasons and graded on another.
 
     f1pred.cli calibrate-spread
 """
@@ -33,38 +39,37 @@ TARGET_COVERAGE = 0.80
 MIN_TRAIN_RACES = 30
 
 
-def final_constructor_points(season: int) -> dict[str, float]:
-    """Where each team actually finished the season, in points.
+def final_points(season: int) -> tuple[dict[str, float], dict[str, float]]:
+    """Final points by driver and by constructor.
 
-    Constructors' points are the sum of their drivers', taken at the final
-    round - so a mid-season driver switch counts toward the team they ended
-    with, which is how the real table works.
+    A constructor's total is the sum of its drivers' at the last round, so a
+    mid-season switch counts toward the team the driver ended with.
     """
     with connect(read_only=True) as con:
         rows = con.execute(
             """
-            SELECT constructor_id, sum(points) FROM raw_standings
+            SELECT driver_id, constructor_id, points FROM raw_standings
             WHERE season = ? AND round = (SELECT max(round) FROM raw_standings WHERE season = ?)
-              AND constructor_id IS NOT NULL
-            GROUP BY constructor_id
+              AND driver_id IS NOT NULL
             """,
             [season, season],
         ).fetchall()
-    return {r[0]: float(r[1]) for r in rows}
+    drivers = {d: float(p) for d, _, p in rows}
+    teams: dict[str, float] = {}
+    for _, t, p in rows:
+        if t is not None:
+            teams[t] = teams.get(t, 0.0) + float(p)
+    return drivers, teams
 
 
 def checkpoints(df: pd.DataFrame, seasons: tuple[int, ...]) -> list[dict]:
-    """Fit the ranker once per checkpoint.
-
-    Every candidate spread then reuses the same scores, so the only thing that
-    differs between arms is the simulator - and the comparison is paired rather
-    than two independent runs that happen to disagree.
-    """
+    """Fit the ranker once per checkpoint, so every candidate reuses the same
+    scores and the comparison between them is paired."""
     out: list[dict] = []
     for season in seasons:
-        actual = final_constructor_points(season)
+        drivers, teams = final_points(season)
         rounds = sorted(df[df.season == season]["round"].unique())
-        if not actual or len(rounds) < 6:
+        if not teams or len(rounds) < 6:
             continue
         for frac in CHECKPOINTS:
             after = round(len(rounds) * frac)
@@ -82,17 +87,19 @@ def checkpoints(df: pd.DataFrame, seasons: tuple[int, ...]) -> list[dict]:
                     "after": after,
                     "elapsed": after / len(rounds),
                     "race": race,
-                    "actual": actual,
+                    "actual": teams,
+                    "drivers": drivers,
                 }
             )
             log.info("fitted %d after r%d", season, after)
     return out
 
 
-def coverage(points: list[dict], spread: float, n_sims: int = 6000) -> pd.DataFrame:
-    """One row per team per checkpoint: did the band contain the real total?"""
-    original = config.SEASON_PACE_UNCERTAINTY
-    config.SEASON_PACE_UNCERTAINTY = spread
+def coverage(points: list[dict], team: float, driver: float = 0.0, n_sims: int = 6000) -> pd.DataFrame:
+    """One row per team and per teammate pair at each checkpoint: did the band
+    contain what really happened?"""
+    saved = config.SEASON_PACE_UNCERTAINTY, config.SEASON_DRIVER_UNCERTAINTY
+    config.SEASON_PACE_UNCERTAINTY, config.SEASON_DRIVER_UNCERTAINTY = team, driver
     rows: list[dict] = []
     try:
         for cp in points:
@@ -108,64 +115,109 @@ def coverage(points: list[dict], spread: float, n_sims: int = 6000) -> pd.DataFr
             )
             if not out:
                 continue
-            for _, team in out["constructors"].iterrows():
-                if team["team"] not in cp["actual"]:
-                    continue
-                truth = cp["actual"][team["team"]]
-                rows.append(
-                    {
-                        "season": cp["season"],
-                        "elapsed": cp["elapsed"],
-                        "team": team["team"],
-                        "truth": truth,
-                        "inside": int(team["low"] <= truth <= team["high"]),
-                        "width": team["high"] - team["low"],
-                    }
-                )
+            base = {"season": cp["season"], "elapsed": cp["elapsed"]}
+            for t in out["constructors"].itertuples():
+                if t.team in cp["actual"]:
+                    truth = cp["actual"][t.team]
+                    rows.append(
+                        {
+                            **base,
+                            "kind": "team",
+                            "inside": int(t.low <= truth <= t.high),
+                            "width": t.high - t.low,
+                        }
+                    )
+            drivers = cp.get("drivers", {})
+            for p in out.get("teammates", pd.DataFrame()).itertuples():
+                if p.first in drivers and p.second in drivers:
+                    truth = drivers[p.first] - drivers[p.second]
+                    rows.append(
+                        {
+                            **base,
+                            "kind": "gap",
+                            "inside": int(p.low <= truth <= p.high),
+                            "width": p.high - p.low,
+                        }
+                    )
     finally:
-        config.SEASON_PACE_UNCERTAINTY = original
-    return pd.DataFrame(rows)
+        config.SEASON_PACE_UNCERTAINTY, config.SEASON_DRIVER_UNCERTAINTY = saved
+    return pd.DataFrame(rows, columns=["season", "elapsed", "kind", "inside", "width"])
+
+
+def _sweep(frames: dict[float, pd.DataFrame], kind: str) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "spread": c,
+                "coverage": float(f.loc[f.kind == kind, "inside"].mean()),
+                "width": float(f.loc[f.kind == kind, "width"].mean()),
+            }
+            for c, f in frames.items()
+        ]
+    )
+
+
+def _closest(sweep: pd.DataFrame) -> float:
+    return float(sweep.loc[(sweep["coverage"] - TARGET_COVERAGE).abs().idxmin(), "spread"])
 
 
 def run(df: pd.DataFrame, n_sims: int = 6000) -> dict:
-    """Sweep on the fit window, grade the winner on the held-out one."""
+    """Sweep the team term, then the driver term with the team term fixed, on
+    the fit window; grade both on the held-out one."""
     fit_points = checkpoints(df, FIT_SEASONS)
     grade_points = checkpoints(df, GRADE_SEASONS)
     if not fit_points or not grade_points:
         return {}
 
-    sweep = []
-    for candidate in CANDIDATES:
-        frame = coverage(fit_points, candidate, n_sims)
-        sweep.append(
-            {
-                "spread": candidate,
-                "coverage": float(frame["inside"].mean()),
-                "width": float(frame["width"].mean()),
-            }
-        )
-    sweep = pd.DataFrame(sweep)
-    best = float(sweep.loc[(sweep["coverage"] - TARGET_COVERAGE).abs().idxmin(), "spread"])
+    sweep = _sweep({c: coverage(fit_points, c, 0.0, n_sims) for c in CANDIDATES}, "team")
+    best = _closest(sweep)
+    driver_sweep = _sweep({c: coverage(fit_points, best, c, n_sims) for c in CANDIDATES}, "gap")
+    best_driver = _closest(driver_sweep)
 
     graded = {
-        "before": coverage(grade_points, 0.0, n_sims),
-        "after": coverage(grade_points, best, n_sims),
+        "before": coverage(grade_points, 0.0, 0.0, n_sims),
+        "after": coverage(grade_points, best, best_driver, n_sims),
     }
-    return {"sweep": sweep, "best": best, "graded": graded, "n_checkpoints": len(grade_points)}
+    return {
+        "sweep": sweep,
+        "best": best,
+        "driver_sweep": driver_sweep,
+        "best_driver": best_driver,
+        "graded": graded,
+        "n_checkpoints": len(grade_points),
+    }
+
+
+def held_out(result: dict) -> dict:
+    """The graded figures, as saved to reports/spread_calibration.json."""
+    out = {}
+    for label, frame in result["graded"].items():
+        team, gap = frame[frame.kind == "team"], frame[frame.kind == "gap"]
+        out[label] = {
+            "coverage": float(team["inside"].mean()),
+            "width": float(team["width"].mean()),
+            "n": len(team),
+            "teammate_coverage": float(gap["inside"].mean()),
+            "teammate_n": len(gap),
+        }
+    return out
 
 
 def report(result: dict) -> str:
-    """The table this prints is the one the method page quotes."""
     if not result:
         return "not enough completed seasons to calibrate."
 
-    out = [
-        f"Calibration sweep on {FIT_SEASONS[0]}-{FIT_SEASONS[-1]}",
-        f"{'spread (positions)':<20}{'coverage':>10}{'band width':>12}",
-    ]
-    for _, r in result["sweep"].iterrows():
-        out.append(f"{r['spread']:<20.1f}{r['coverage']:>9.1%}{r['width']:>12.1f}")
-    out.append(f"closest to {TARGET_COVERAGE:.0%}: {result['best']:.1f}")
+    out = [f"Fit on {FIT_SEASONS[0]}-{FIT_SEASONS[-1]}"]
+    for title, sweep, best in (
+        ("team term, graded on constructors", result["sweep"], result["best"]),
+        ("driver term, graded on teammate gaps", result.get("driver_sweep"), result.get("best_driver")),
+    ):
+        if sweep is None:
+            continue
+        out += ["", title, f"{'spread (positions)':<20}{'coverage':>10}{'band width':>12}"]
+        for _, r in sweep.iterrows():
+            out.append(f"{r['spread']:<20.1f}{r['coverage']:>9.1%}{r['width']:>12.1f}")
+        out.append(f"closest to {TARGET_COVERAGE:.0%}: {best:.1f}")
 
     out += [
         "",
@@ -173,25 +225,17 @@ def report(result: dict) -> str:
             f"Held out: {GRADE_SEASONS[0]}-{GRADE_SEASONS[-1]}, "
             f"{result['n_checkpoints']} checkpoints, never seen by the sweep"
         ),
-        f"{'':<20}{'coverage':>10}{'band width':>12}",
+        f"{'':<20}{'teams':>10}{'width':>10}{'teammates':>12}",
     ]
     for label, frame in (
-        ("fixed pace", result["graded"]["before"]),
-        (f"calibrated ({result['best']:.1f})", result["graded"]["after"]),
-    ):
-        out.append(f"{label:<20}{frame['inside'].mean():>9.1%}{frame['width'].mean():>12.1f}")
-    out.append(f"{'target':<20}{TARGET_COVERAGE:>9.1%}")
-
-    # Coverage by how far into the season the call was made. The old band was
-    # worst early, which is the whole reason this exists, so the breakdown is
-    # part of the result rather than a footnote.
-    out += ["", "Coverage by how much of the season had been run:"]
-    cols = sorted(result["graded"]["after"]["elapsed"].round(2).unique())
-    out.append(f"{'':<20}" + "".join(f"{c:>8.0%}" for c in cols))
-    for label, frame in (
-        ("fixed pace", result["graded"]["before"]),
+        ("race luck only", result["graded"]["before"]),
         ("calibrated", result["graded"]["after"]),
     ):
-        by = frame.groupby(frame["elapsed"].round(2))["inside"].mean()
-        out.append(f"{label:<20}" + "".join(f"{by.get(c, np.nan):>8.0%}" for c in cols))
+        team = frame[frame.kind == "team"] if "kind" in frame else frame
+        gap = frame[frame.kind == "gap"] if "kind" in frame else frame.iloc[0:0]
+        out.append(
+            f"{label:<20}{team['inside'].mean():>9.1%}{team['width'].mean():>10.1f}"
+            f"{gap['inside'].mean() if len(gap) else np.nan:>11.1%}"
+        )
+    out.append(f"{'target':<20}{TARGET_COVERAGE:>9.1%}")
     return "\n".join(out)

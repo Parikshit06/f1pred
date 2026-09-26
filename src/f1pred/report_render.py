@@ -492,14 +492,20 @@ def quali_board(rows: list[dict], qualified: bool = False) -> str:
     return "".join(out)
 
 
-def _odds(p: float) -> str:
-    """Title odds, clamped away from certainty.
+def _odds(p: float, alive: bool = True) -> str:
+    """Title odds, held between <0.1% and 99.9%.
 
-    A 10,000-run simulation cannot resolve below 1 in 10,000, and the real
-    uncertainty nine races out is the assumption that current form holds - not
-    the sampling. So the column never prints 100%: it tops out at 99.9%.
+    10,000 simulated seasons can't resolve 1 in 10,000, so a driver who can
+    still win it mathematically is never shown at 0 or 100. allocate_odds only
+    hands out 100% once the title is settled.
     """
-    return f"{min(max(p, 0.0), 0.999) * 100:.1f}%"
+    if not alive:
+        return "out"
+    if p >= 1.0:
+        return "clinched"
+    if p < 0.0005:
+        return "&lt;0.1%"
+    return f"{min(p, 0.999) * 100:.1f}%"
 
 
 def championship_panel(title: str, rows: list[dict], name_key: str, sub_key: str | None) -> str:
@@ -528,7 +534,7 @@ def championship_panel(title: str, rows: list[dict], name_key: str, sub_key: str
                 else ""
             )
             + "</div>"
-            + f"<div class='v'>{_odds(r['p_title'])}</div>"
+            + f"<div class='v'>{_odds(r['p_title'], r.get('alive', True))}</div>"
             + "</div>"
         )
     return "".join(out) + "</div>"

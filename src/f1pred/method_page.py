@@ -71,9 +71,12 @@ def _range_block(sc: dict) -> str:
         [
             {
                 "projection": label,
-                "range held": f"{held[key]['coverage']:.0%}",
-                "should be": "80%",
+                "teams held": f"{held[key]['coverage']:.0%}",
                 "width": f"{held[key]['width']:.0f} pts",
+                "teammate gap held": (
+                    f"{held[key]['teammate_coverage']:.0%}" if "teammate_coverage" in held[key] else "–"
+                ),
+                "should be": "80%",
             }
             for label, key in (("Race luck only", "before"), ("Current", "after"))
         ]
@@ -81,11 +84,13 @@ def _range_block(sc: dict) -> str:
     return (
         "<p class='cap' style='margin-top:26px'><b>How close.</b> Every points total is "
         "published with a range the real answer should land inside eight times in ten. "
-        "Graded one team at a time against final constructors' standings:</p>"
+        "Graded against constructors' final points, and against the final gap between "
+        "teammates:</p>"
         + rr.table(rows)
         + "<p class='cap'>Race luck averages out over a dozen races. What doesn't is the model "
         "being wrong about a car <em>now</em>, which carries into every remaining race, so each "
-        "simulated season draws one pace offset per team."
+        "simulated season draws one pace offset per team, and a smaller one per driver so "
+        "teammates can drift apart."
         + (" Still short of 80%." if held["after"]["coverage"] < 0.80 else "")
         + "</p>"
     )

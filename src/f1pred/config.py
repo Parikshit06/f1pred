@@ -58,6 +58,9 @@ DEFAULT_BLEND_WEIGHT = 0.6  # closed-form ranking vs simulation, for p_win
 # development, and unlike race-to-race noise it doesn't average out.
 # Chosen by coverage of the projection's 10th-90th band: make calibrate-spread
 SEASON_PACE_UNCERTAINTY = 8.0
+# The same for a driver against their own teammate. Chosen by coverage of the
+# teammate points gap.
+SEASON_DRIVER_UNCERTAINTY = 5.0
 
 # Finishing positions per unit of score spread, measured in the simulator.
 # Converts the constant above from positions into score.

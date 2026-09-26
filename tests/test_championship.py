@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from f1pred import championship as champ
+from f1pred import config
 
 
 def _sim(scores, dnf=None, base=None, races=5, sims=2000):
@@ -310,3 +311,21 @@ def test_one_qualifying_session_does_not_move_the_season_projection():
     assert not t1.isna().any().any(), "a weekend feature was left empty"
     # And the typical weekend is still the drivers' own: a qualifies ahead of b.
     assert t1.loc[3766, "grid"] < t1.loc[3767, "grid"]
+
+
+def test_a_teammate_can_still_beat_a_stronger_teammate(monkeypatch):
+    """With only a team offset, two drivers in one car can't drift apart, and a
+    teammate 80 points back prints as a flat zero. The driver term fixes that."""
+    scores = np.array([2.0, 1.4, 1.0, 0.0, -0.5, -1.0])
+    teams = np.array([0, 0, 1, 1, 2, 2])
+    base = np.array([292.0, 211.0, 191.0, 186.0, 145.0, 100.0])
+    dnf = np.full(6, 0.05)
+
+    def title_share(driver_sd):
+        monkeypatch.setattr(config, "SEASON_DRIVER_UNCERTAINTY", driver_sd)
+        totals, *_ = champ.simulate_seasons(
+            scores, dnf, base, 9, team_index=teams, n_sims=20_000, season_fraction_left=9 / 23
+        )
+        return (np.argmax(totals, axis=1) == 1).mean()
+
+    assert title_share(5.0) > title_share(0.0)
