@@ -1,26 +1,11 @@
-"""Where the championship ends up, given how the cars are going now.
+"""Season projection: run the rest of the calendar many times from current form.
 
-A race forecast answers one Sunday. A title projection answers the question
-people actually argue about, and it is a different kind of estimate: nine races
-of compounding luck, where a single retirement is worth more than a tenth of a
-second of pace.
+Each simulated race uses the same noise model as simulate.simulate - pace
+variance, safety cars, per-driver retirement hazard - so title odds stay
+consistent with the published race probabilities.
 
-Method: take the race model's strength for each driver, then run the remaining
-calendar ten thousand times. Each race uses exactly the generative process the
-single-race simulator uses - the same pace variance between Sundays, the same
-safety-car draw, the same per-driver retirement hazard - so a driver's title
-odds are consistent with the win probability published for this weekend. A
-first version drew Gumbel noise instead, which is sharper, and it returned a
-title probability of 1.000. A public page should not print certainty nine races
-out, and the number was an artefact of the noise model rather than a finding.
-
-The assumption, stated plainly because it is the one that matters: current form
-holds. The projection does not re-forecast each weekend, so it cannot see an
-upgrade that lands in three races' time or a car that falls away. It is a
-snapshot of where this season goes if nothing changes, not a prophecy.
-
-Sprint points are not projected. The remaining sprint calendar is not in the
-data, and inventing one would put fabricated points on a public page.
+Assumes current form holds; it can't see an upgrade coming. Sprint points
+are left out because future sprint rounds aren't in the data.
 """
 
 from __future__ import annotations
@@ -87,44 +72,22 @@ def simulate_seasons(
     season_fraction_left: float = 0.0,
     seed: int = config.RANDOM_SEED,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Returns (final totals per sim, and then per round: the mean cumulative
-    points, the 10th percentile, the 90th, and expected wins per driver).
+    """Final totals per simulation, plus per-round mean, 10th and 90th percentile
+    points and expected wins (what the progression chart draws).
 
-    The noise model is lifted from simulate.simulate so the two agree: pace
-    varies between Sundays by 0.55 of the spread in model score, a safety car
-    nearly doubles that, and cars retire at their own hazard rate. The grid
-    term is absent because nine races out there is no grid to know - in the
-    race simulator an unknown grid is a constant that drops out of the
-    ordering anyway.
-
-    One term exists here that has no counterpart in the single-race simulator,
-    because over one afternoon it has nowhere to act: each simulated season
-    gives every team a pace offset, drawn once and held for the rest of the
-    year. It covers the upgrade that works, the one that does not, and - mostly
-    - the plain fact that the ranker's read of the field today is not the
-    field's true pace. Race-to-race noise averages out over a dozen races; that
-    error does not, which is why it dominates and why leaving it out made the
-    published band far too narrow. See config.SEASON_PACE_UNCERTAINTY, which is
-    calibrated on whether the band actually covers.
-
-    It is deliberately not a forecast of WHICH team improves. Nothing in the
-    data supports that, and a projection that guessed would be worse than one
-    that admits the spread.
-
-    The second return value is what the progression chart draws; computing it
-    here rather than extrapolating a per-race average keeps the line and the
-    final standing consistent with each other.
+    Same race noise as simulate.simulate, minus the grid term. On top, each
+    simulated season draws one pace offset per team and holds it all year:
+    race luck averages out over a dozen races, but error in today's read of a
+    car doesn't. Sized by config.SEASON_PACE_UNCERTAINTY. It models how far a
+    team could drift, not which team will.
     """
     rng = np.random.default_rng(seed)
     scores = np.asarray(scores, dtype=float)
     n = len(scores)
     score_sd = float(np.std(scores)) or 1.0
 
-    # Pace belongs to the car, so both cars in a garage move together; without a
-    # team map it falls back to per-driver, which is the same magnitude applied
-    # independently. Scaled by how much of the season is left: with two races to
-    # go there is neither time to develop nor much left for the model to be
-    # wrong about.
+    # Pace belongs to the car, so teammates share one offset (per driver if no
+    # team map is given), scaled by the share of the season still to run.
     drift_sd = (
         config.SEASON_PACE_UNCERTAINTY
         * float(np.clip(season_fraction_left, 0.0, 1.0))
@@ -171,10 +134,8 @@ def simulate_seasons(
         lo_track[r] = np.percentile(totals, 10, axis=0)
         hi_track[r] = np.percentile(totals, 90, axis=0)
 
-    # wins accumulates one count per simulated race, so dividing by the number
-    # of simulations already gives the expected number of wins across the whole
-    # remaining calendar - not a per-race rate. Multiplying by n_races again is
-    # the obvious mistake and the test below pins it.
+    # One count per simulated race, so dividing by n_sims already gives expected
+    # wins over the remaining calendar, not a per-race rate.
     return totals, track, lo_track, hi_track, wins / n_sims
 
 
@@ -183,18 +144,11 @@ def allocate_odds(
     clinched: np.ndarray | None = None,
     rank_by: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Round title probabilities to a tenth of a percent so they still sum to 100.
+    """Round title odds to 0.1% so the column still sums to 100.
 
-    Two things have to hold at once and naive rounding breaks both. The column
-    has to add up - a reader who sees 99.9% across the whole field assumes
-    something leaked. And it must not print 100% for a title that is not
-    mathematically won, because a simulation cannot resolve past 1 in n_sims and
-    the real uncertainty is the assumption that form holds.
-
-    So: largest-remainder apportionment over tenths of a percent, then, if the
-    leader has rounded to a clean 100% without actually clinching, one tenth is
-    moved to their nearest rival. Where the title IS clinched - nobody else can
-    reach the leader even winning out - 100% is the correct and honest number.
+    Largest-remainder rounding, and a leader who hasn't clinched is never shown
+    at 100% - the simulation can't resolve past 1 in n_sims, and the real
+    uncertainty is whether form holds.
     """
     probs = np.asarray(probs, dtype=float)
     total = probs.sum()
@@ -212,9 +166,8 @@ def allocate_odds(
     leader = int(np.argmax(tenths))
     is_clinched = bool(clinched[leader]) if clinched is not None else False
     if tenths[leader] >= 1000 and not is_clinched:
-        # Everyone else is on a simulated zero, so ordering by probability picks
-        # an arbitrary name - which is how the spare tenth once landed on the
-        # ninth-placed constructor. Order by points instead when given them.
+        # Everyone else is on a simulated zero, so ordering by probability would
+        # pick an arbitrary rival. Order by points when given them.
         order = np.argsort(-(rank_by if rank_by is not None else probs))
         rival = int(order[1]) if len(probs) > 1 else leader
         if rival != leader:
@@ -225,15 +178,11 @@ def allocate_odds(
 
 
 def clinch_round(leader_points: float, rival_points: float, races_left: int, win: float = 25.0) -> int | None:
-    """The earliest round the leader could mathematically seal the title.
+    """Races from now until the leader could mathematically seal the title.
 
-    Best case for the leader, worst for the rival: the leader wins every race
-    from here and the rival scores nothing. After k more races the leader has
-    L + 25k and the rival can still reach R + 25(races_left - k), so the title
-    is settled once L + 25k > R + 25(races_left - k).
-
-    Returns the number of races from now, or None if it cannot be settled
-    before the finale. Sprints are ignored, which makes this a lower bound.
+    Leader wins every race, rival scores nothing: settled once
+    L + 25k > R + 25(races_left - k). None if not before the finale. Ignores
+    sprints, so it's a lower bound.
     """
     if races_left <= 0:
         return None
@@ -348,3 +297,63 @@ def project(
         else None,
         "clinched": bool(clinched),
     }
+
+
+# ---------------------------------------------------------------------------
+# What a driver is worth on a weekend that is not this one
+# ---------------------------------------------------------------------------
+# Ten of the race model's features describe the weekend rather than the driver:
+# where they start, and the track they start at. Together they carry about half
+# the model - qualifying position alone is a third of it.
+WEEKEND_GRID = ("grid", "quali_position", "quali_gap_to_pole_pct", "quali_gap_to_teammate_pct")
+WEEKEND_CIRCUIT = (
+    "drv_circuit_avg_finish",
+    "team_circuit_avg_finish",
+    "circuit_overtaking_score",
+    "circuit_dnf_rate",
+    "drv_circuit_starts",
+    "circuit_pole_win_rate",
+)
+
+
+def typical_weekend(race: pd.DataFrame, history: pd.DataFrame) -> pd.DataFrame:
+    """The same field on an ordinary weekend at an ordinary track.
+
+    The rest of the season isn't at this circuit or from this grid, so the
+    projection shouldn't be scored on either. Scoring it with the next race's
+    features let one qualifying session reshape nine races.
+
+    Weekend-specific features are replaced from races before this one: grid and
+    qualifying with the driver's recent averages, qualifying gaps with their
+    recent mean, track record with recent form overall, circuit traits with the
+    median. Recent averages keep each driver in a situation the model has seen,
+    unlike forcing everyone onto one grid slot.
+    """
+    t = race.copy()
+    cols = [c for c in WEEKEND_GRID + WEEKEND_CIRCUIT if c in history.columns]
+    med = history[cols].median(numeric_only=True)
+
+    def col(name: str) -> pd.Series:
+        return t[name] if name in t.columns else pd.Series(np.nan, index=t.index)
+
+    # .fillna with a Series aligns on index; every Series here is built from
+    # t's own index, so they line up by construction.
+    t["quali_position"] = (
+        col("drv_avg_quali_5").fillna(col("drv_avg_grid_5")).fillna(med.get("quali_position"))
+    )
+    t["grid"] = col("drv_avg_grid_5").fillna(t["quali_position"])
+
+    recent = history.sort_values("race_seq").groupby("driver_id").tail(5)
+    for c in ("quali_gap_to_pole_pct", "quali_gap_to_teammate_pct"):
+        if c in history.columns:
+            per_driver = recent.groupby("driver_id")[c].mean()
+            t[c] = t["driver_id"].map(per_driver).fillna(med.get(c))
+
+    if "drv_circuit_avg_finish" in t.columns:
+        t["drv_circuit_avg_finish"] = col("drv_avg_finish_5").fillna(med.get("drv_circuit_avg_finish"))
+    if "team_circuit_avg_finish" in t.columns:
+        t["team_circuit_avg_finish"] = col("team_avg_finish_5").fillna(med.get("team_circuit_avg_finish"))
+    for c in ("circuit_overtaking_score", "circuit_dnf_rate", "circuit_pole_win_rate", "drv_circuit_starts"):
+        if c in t.columns:
+            t[c] = med.get(c)
+    return t

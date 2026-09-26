@@ -1,33 +1,15 @@
-"""Calibrating the championship projection's range.
+"""Calibrate the width of the season projection's 10th-90th band.
 
-A projection that publishes a 10th-90th percentile band is making a testable
-promise: the real answer lands inside it eight times in ten. That promise was
-being broken badly - graded against real final constructors' standings the band
-contained the truth 45% of the time - and the reason was not the one that looks
-obvious from the outside.
+The band should contain the real final total eight times in ten. Race luck
+alone averages out over a season, so without an extra term the band was far
+too narrow. Development is real but small (about 1.4 finishing positions a
+season); most of the gap is the model being wrong about a car today, which
+carries into every remaining race.
 
-Three things can move a season away from its projection:
+config.SEASON_PACE_UNCERTAINTY covers all of it and is chosen by coverage:
+swept on one set of seasons, graded on another.
 
-  race-to-race noise  already in the simulator, and it largely cancels out over
-                      a dozen races, which is exactly why the band was narrow
-  development         real, and measurable: fitting the change in a team's mean
-                      finishing position either side of a checkpoint, with the
-                      sampling noise in both means modelled rather than counted
-                      as development, puts it at 1.37 positions over a full
-                      season (95% 0.90-1.83). Too small to explain a 35-point
-                      coverage gap, and adding it alone moved coverage by two.
-  being wrong now     the ranker's read of the field at round 8 is not the
-                      field's true pace. Unlike race noise this error does not
-                      average out - it is carried into every remaining race.
-
-The third dominates, so config.SEASON_PACE_UNCERTAINTY stands for all three
-together rather than pretending to isolate development, and is calibrated the
-only way a predictive interval honestly can be: by whether it covers.
-
-  f1pred.cli calibrate-spread
-
-sweeps candidate sizes on one window and grades the winner on another, so the
-seasons that choose the number are never the seasons that score it.
+    f1pred.cli calibrate-spread
 """
 
 from __future__ import annotations
@@ -46,7 +28,7 @@ log = logging.getLogger(__name__)
 CHECKPOINTS = (0.35, 0.55, 0.75, 0.90)
 FIT_SEASONS = (2019, 2020, 2021, 2022)
 GRADE_SEASONS = (2023, 2024, 2025)
-CANDIDATES = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
+CANDIDATES = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
 TARGET_COVERAGE = 0.80
 MIN_TRAIN_RACES = 30
 
@@ -93,7 +75,7 @@ def checkpoints(df: pd.DataFrame, seasons: tuple[int, ...]) -> list[dict]:
             if train["race_seq"].nunique() < MIN_TRAIN_RACES:
                 continue
             race = nxt.copy()
-            race["score"] = model.train_race(train).score(race)
+            race["score"] = model.train_race(train).score(championship.typical_weekend(race, train))
             out.append(
                 {
                     "season": season,

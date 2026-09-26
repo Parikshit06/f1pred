@@ -1,19 +1,9 @@
-"""Does the championship projection deserve the confidence it prints?
+"""Grade the title projection against completed seasons.
 
-The race forecast is graded every weekend. The title projection was not graded
-at all, which is a problem, because it is the number that prints 99.9% and a
-reader is entitled to ask what that has ever been worth.
-
-This walks every completed season, stops at a set of checkpoints, projects the
-title from the model as it stood at that moment - trained only on races before
-it - and records what the projection said against what actually happened. The
-output is a calibration table for the title probability itself.
-
-It is a small sample by construction: one season yields a handful of
-checkpoints, and the seasons available are 2019 onward - 2018 is in the data
-but cannot be graded, because the checkpoints in it have fewer than the thirty
-prior races the ranker needs. That is stated with the result rather than
-hidden, and it is still far better evidence than none.
+For each season from 2019, stop at a few checkpoints, project the title from
+a model trained only on earlier races, and record what it said against who
+won. A small sample by nature - a handful of checkpoints a season - and 2018
+can't be graded because its checkpoints have too little history behind them.
 """
 
 from __future__ import annotations
@@ -80,7 +70,9 @@ def run(
 
             ranker = model.train_race(train)
             race = nxt.copy()
-            race["score"] = ranker.score(race)
+            # A typical weekend, not the next race's: that race's qualifying had
+            # not happened at the checkpoint, and its track is one of many left.
+            race["score"] = ranker.score(championship.typical_weekend(race, train))
 
             out = championship.project(
                 race["driver_id"].tolist(),

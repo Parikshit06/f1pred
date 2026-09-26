@@ -1,17 +1,9 @@
-"""Produce and log a prediction for one race.
+"""Forecast one race and log it.
 
-Two outputs per race, both top 5:
-  qualifying  from the quali model
-  race        from the race model
-
-Before qualifying the grid is unknown, so the quali model's scores feed the
-simulation and each of the 10,000 simulated races runs on its own sampled
-grid. After qualifying the real grid is substituted and the whole thing is
-re-run. Both versions are kept, which is what makes it possible to measure how
-much of race prediction is simply knowing where everyone starts.
-
-Predictions are written to predictions/ with the timestamp they were generated
-and never overwritten. That file is the track record.
+Before qualifying the grid is unknown, so each simulated race samples its own
+grid from the qualifying model. After qualifying the real grid is used. Both
+calls are logged to predictions/ with the time they were made and are never
+overwritten - that folder is the track record.
 """
 
 from __future__ import annotations
@@ -84,18 +76,11 @@ class Prediction:
         return float((start - pd.Timestamp(datetime.now(UTC))).total_seconds()) / 86400
 
     def save(self, force: bool = False) -> Path | None:
-        """Write the forecast, unless this race and stage already has one.
+        """Write the forecast unless this race already has one at this stage.
 
-        The audit trail is the point of this folder, and it means one forecast
-        per race per stage - the pre-qualifying call and the post-grid call.
-        Writing a second pre-qualifying file on a later run does not add
-        evidence; it adds a near-identical file with a different timestamp and
-        makes the record look like it was replayed until it looked good.
-
-        It also lets the workflow run on a schedule loose enough to catch
-        qualifying whenever it actually happens - sprint weekends move it to
-        Friday, Las Vegas runs it on Sunday UTC - without the extra runs
-        littering the folder.
+        One file per race per stage keeps the record honest - a second pre-quali
+        file from a later run would look like the forecast was retried until it
+        looked good. It also lets the workflow run often without littering.
         """
         prior = None if force else self.existing()
         if prior is not None:
@@ -107,12 +92,8 @@ class Prediction:
             )
             return prior
 
-        # A forecast made a fortnight out is not logged at all. The scheduled
-        # run that grades Monday's result rolls straight on to the next race,
-        # and on a weekend off that race can be two weeks away; logging then
-        # would put the least informed call of the season into the record and,
-        # because the first file for a stage wins, keep the race-week one out.
-        # The page is still rendered - only the claim is withheld.
+        # Too far out to be a race-week call. The page still renders; the file isn't
+        # written, so it can't block the later forecast for this stage.
         ahead = self.days_out()
         if not force and not self.grid_known and ahead is not None and ahead > config.LOG_WINDOW_DAYS:
             log.info(
@@ -145,29 +126,16 @@ def _driver_names() -> dict[str, tuple[str, str]]:
 
 
 def next_race(df: pd.DataFrame) -> tuple[int, int]:
-    """The earliest race that has not started yet.
+    """The earliest race that hasn't started yet.
 
-    "No results yet" is not the same as "has not happened yet", and the gap
-    between them is where hindsight gets in. Results arrive through a
-    volunteer-run API that can lag a race by hours, so a run in that window
-    finds the finished race still showing no results and would publish a
-    pre-race forecast for it - timestamped after the fact.
-
-    Every claim this project makes rests on the files in predictions/ having
-    been committed before their sessions ran. One forecast dated after its own
-    race would be enough for a reader to discount all of them, so the start
-    time is checked rather than inferred from the results being absent.
-
-    2026 makes it concrete: Azerbaijan is the only Saturday race of the season
-    and runs at 11:00 UTC, so the Saturday-evening job reaches it eight hours
-    after the flag.
+    Checked against the start time, not the absence of results: jolpica can lag
+    a race by hours, and in that window a finished race would otherwise get a
+    "pre-race" forecast written after the flag.
     """
     pending = df[df["position"].isna()]
     if "race_start_utc" in pending.columns:
-        # utc=True on both sides. The column is UTC by name, but whether it
-        # arrives carrying a timezone depends on the ingest, and comparing a
-        # naive series against an aware timestamp raises rather than returning
-        # False - which would take the scheduled run down on a race weekend.
+        # utc=True on both sides: naive vs aware comparison raises, and whether the
+        # column carries a timezone depends on the ingest.
         now = pd.Timestamp(datetime.now(UTC))
         starts = pd.to_datetime(pending["race_start_utc"], errors="coerce", utc=True)
         # A race with no published start time is kept: better to forecast one
@@ -240,7 +208,7 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
         out = championship.project(
             race["driver_id"].tolist(),
             race["constructor_id"].tolist(),
-            race["score"].to_numpy(),
+            race["season_score"].to_numpy(),
             simulate.dnf_probability(race),
             season,
             rnd - 1,
@@ -279,8 +247,8 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
                 "high": high,
             }
         )
-    # Teammates share a constructor colour; the chart draws the second car in
-    # a garage with a lighter stroke. Dash is reserved for "projected".
+    # Teammates share a constructor colour; the chart tints the second car in
+    # a garage lighter. Dash is reserved for "projected".
     seen: set[str] = set()
     for entry in series:
         if entry["team"] in seen:
@@ -328,11 +296,8 @@ def explain(ranker: model.Ranker, race: pd.DataFrame, top_k: int = 2) -> list[st
         log.debug("SHAP unavailable: %s", exc)
         return [""] * len(race)
 
-    # Near-duplicate features get split contributions with opposite signs, and
-    # the rationale then contradicts itself in plain English: "helped by
-    # starting position; held back by qualifying position" is one fact stated
-    # twice, in both directions. Group them so only the stronger side of a
-    # pair can be named.
+    # Near-duplicate features split credit with opposite signs, which reads as a
+    # contradiction ("helped by grid, held back by qualifying"). Group them.
     synonyms = {
         "grid": "grid",
         "quali_position": "grid",
@@ -436,11 +401,9 @@ def run(
     race["q_exp_pos"] = q_sim["exp_position"].to_numpy()
 
     # ---- race ------------------------------------------------------------
-    # The grid column comes from raw_results, which does not exist until the
-    # race has been run - so between qualifying and the flag it is entirely
-    # NaN, which is exactly when this forecast matters most. The starting grid
-    # is the qualifying classification (penalties aside, and the method page
-    # says penalties are not modelled), so take it from there.
+    # grid comes from results, which don't exist until the race is run, so after
+    # qualifying it's empty. The starting grid is the qualifying order (grid
+    # penalties aren't modelled).
     if known_grid:
         g = race["grid"].fillna(race["quali_position"]).to_numpy(dtype=float)
         if np.isnan(g).any():
@@ -451,18 +414,15 @@ def run(
             g[np.isnan(g)] = back + 1.0 + np.arange(int(np.isnan(g).sum()))
         race["grid"] = g
     if not known_grid:
-        # Feed the quali model's expected order in as the grid the race model
-        # sees. It is a prediction, not a fact, and the output says so.
-        # .to_numpy() is load-bearing. race is a slice of the features frame and
-        # carries its index (3766..3787 for a 2026 round); q_sim is built fresh
-        # and is indexed 0..n-1. Assigning the Series aligns on index, matches
-        # nothing, and fills the column with NaN - silently, because NaN is a
-        # legal value for an XGBoost feature. The race model then forecasts with
-        # no grid at all, which is its strongest input, and the published
-        # probabilities come out of a model flying blind.
+        # Use the qualifying model's expected order as the grid. Assigned as an array
+        # so it doesn't rely on race's index matching the simulator's.
         race["grid"] = q_sim["exp_position"].rank(method="first").to_numpy()
 
     race["score"] = race_model.score(race)
+    # This race is scored on this race - its grid, its track. The rest of the
+    # season is not at this track or from this grid, so it gets a separate
+    # score for an ordinary weekend. See championship.typical_weekend.
+    race["season_score"] = race_model.score(championship.typical_weekend(race, history))
     r_probs = simulate.plackett_luce(race["score"].to_numpy(), temperature)
 
     ot = race["circuit_overtaking_score"].iloc[0]
@@ -486,18 +446,9 @@ def run(
         race[col] = sim[col].to_numpy()
     race["p_top10"] = sim["p_points"].to_numpy()
 
-    # Only the win column is blended with the closed-form ranking; the wider
-    # bands come straight out of the simulation. When the two disagree - the
-    # ranker rating a car highly while the simulation buries it from a bad grid
-    # slot - the blend can lift p_win above a p_podium it never touched, and
-    # the page publishes a driver with a better chance of winning than of
-    # finishing in the top three. That is not a close call, it is impossible,
-    # and a reader checks it by eye before they check anything else.
-    #
-    # Winning is a podium is a top five is a points finish, so each band is at
-    # least the one inside it. This is a floor, not a rescale: it only moves a
-    # figure that was already contradicting its neighbour. Blending the whole
-    # finishing distribution rather than one column of it is the real fix.
+    # Only p_win is blended with the closed form; the wider bands come straight
+    # from the simulation, so the blend can lift p_win above p_podium. Floor each
+    # band at the one inside it. Blending the whole distribution would be better.
     bands = ["p_win", "p_podium", "p_top5", "p_top10"]
     for inner, outer in itertools.pairwise(bands):
         race[outer] = np.maximum(race[outer].to_numpy(), race[inner].to_numpy())

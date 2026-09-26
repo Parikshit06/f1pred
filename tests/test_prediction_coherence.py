@@ -1,10 +1,8 @@
 """Invariants on a published forecast.
 
-These exist because a forecast can be wrong in two very different ways. It can
-be a bad guess, which is the model's job and is measured by the backtest. Or it
-can be internally impossible - and that is a defect, visible on the page to
-anyone who looks, and nothing in the backtest catches it because the backtest
-only ever reads the winner column.
+The backtest measures whether forecasts are good. These check that they're
+possible at all - the backtest only reads the winner column, so an
+internally contradictory board would pass it.
 """
 
 from __future__ import annotations
@@ -17,13 +15,9 @@ from f1pred.store import database_exists
 
 
 def test_a_simulator_column_assigned_as_a_series_lands_as_nan():
-    """The specific mistake, kept as a test because it is silent.
-
-    `race` is a slice of the features frame and carries its index - 3766..3787
-    for a 2026 round. A frame built by the simulator is indexed 0..n-1. Pandas
-    aligns on index when you assign a Series, so the two never meet and every
-    value comes out NaN. Nothing raises: NaN is a legal feature value, XGBoost
-    treats it as missing, and the model quietly forecasts without it.
+    """Pins a silent pandas trap: a features slice keeps its original index while
+    simulator frames are 0..n-1, so assigning a Series fills the column with NaN.
+    predict.run resets the index and assigns arrays; this keeps it honest.
     """
     race = pd.DataFrame({"driver_id": ["a", "b", "c"]}, index=[3766, 3767, 3768])
     sim = pd.DataFrame({"exp_position": [2.0, 1.0, 3.0]})
@@ -72,14 +66,9 @@ def test_the_field_is_not_forecast_to_finish_in_a_heap(forecast):
 
 
 def test_a_grid_with_holes_is_refused_rather_than_averaged_into_noise():
-    """The failure this guards was silent, which is what made it dangerous.
-
-    `grid` in the features table comes from raw_results, and results do not
-    exist until the race has been run - so between qualifying and the flag the
-    column is entirely NaN. Passed to the simulator it made every pace value
-    NaN, argsort returned an arbitrary order, and ten thousand runs of that
-    averaged into a near-uniform field. The output still looked like
-    probabilities, so it was published: a 26% favourite with a 9% podium.
+    """Before a race is run, grid is empty in the features table. Simulated as-is,
+    pace went NaN and the output averaged into a near-uniform field that still
+    looked like probabilities.
     """
     import numpy as np
 

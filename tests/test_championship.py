@@ -149,8 +149,7 @@ def test_retirements_cost_the_leader_wins():
 
 
 def test_the_spare_tenth_goes_to_the_nearest_rival_not_a_random_name():
-    """With everyone else on a simulated zero, ordering by probability picks an
-    arbitrary index - which once put 0.1% against the ninth-placed team."""
+    """With everyone else on a simulated zero, the rival is picked by points."""
     probs = np.array([1.0, 0.0, 0.0, 0.0])
     points = np.array([800.0, 540.0, 500.0, 110.0])
     out = champ.allocate_odds(probs, rank_by=points)
@@ -241,3 +240,73 @@ def test_the_ordering_survives_the_uncertainty():
     scores = np.linspace(2.0, -2.0, 10)
     mean = _spread(scores, 0.9, sims=6000).mean(axis=0)
     assert (np.diff(mean) < 0).all(), "a faster car no longer projects ahead of a slower one"
+
+
+def test_one_qualifying_session_does_not_move_the_season_projection():
+    """The season is scored on a typical weekend, so whatever this weekend's grid
+    and track are, the frame the projection sees must be the same.
+    """
+    import numpy as np
+    import pandas as pd
+
+    from f1pred.championship import WEEKEND_CIRCUIT, WEEKEND_GRID, typical_weekend
+
+    history = pd.DataFrame(
+        {
+            "race_seq": np.repeat(np.arange(6), 2),
+            "driver_id": ["a", "b"] * 6,
+            "quali_gap_to_pole_pct": [0.1, 0.6] * 6,
+            "quali_gap_to_teammate_pct": [-0.2, 0.2] * 6,
+            "grid": [2.0, 7.0] * 6,
+            "quali_position": [2.0, 7.0] * 6,
+            "drv_circuit_avg_finish": [3.0, 8.0] * 6,
+            "team_circuit_avg_finish": [4.0, 6.0] * 6,
+            "circuit_overtaking_score": [3.0, 3.0] * 6,
+            "circuit_dnf_rate": [0.1, 0.1] * 6,
+            "drv_circuit_starts": [5.0, 5.0] * 6,
+            "circuit_pole_win_rate": [0.5, 0.5] * 6,
+        }
+    )
+    base = pd.DataFrame(
+        {
+            "driver_id": ["a", "b"],
+            "drv_avg_quali_5": [2.4, 6.8],
+            "drv_avg_grid_5": [2.6, 7.1],
+            "drv_avg_finish_5": [3.0, 7.5],
+            "team_avg_finish_5": [4.0, 6.0],
+        },
+        index=[3766, 3767],  # a slice of the features frame keeps its own index
+    )
+    # Same drivers, two very different weekends: pole-sitter swapped, and a
+    # track where one of them has always been strong.
+    wk1 = base.assign(
+        grid=[1.0, 20.0],
+        quali_position=[1.0, 20.0],
+        quali_gap_to_pole_pct=[0.0, 1.9],
+        quali_gap_to_teammate_pct=[-0.5, 0.5],
+        drv_circuit_avg_finish=[1.5, 12.0],
+        team_circuit_avg_finish=[2.0, 11.0],
+        circuit_overtaking_score=9.0,
+        circuit_dnf_rate=0.4,
+        drv_circuit_starts=[9.0, 0.0],
+        circuit_pole_win_rate=0.9,
+    )
+    wk2 = base.assign(
+        grid=[20.0, 1.0],
+        quali_position=[20.0, 1.0],
+        quali_gap_to_pole_pct=[1.9, 0.0],
+        quali_gap_to_teammate_pct=[0.5, -0.5],
+        drv_circuit_avg_finish=[12.0, 1.5],
+        team_circuit_avg_finish=[11.0, 2.0],
+        circuit_overtaking_score=1.0,
+        circuit_dnf_rate=0.0,
+        drv_circuit_starts=[0.0, 9.0],
+        circuit_pole_win_rate=0.1,
+    )
+
+    cols = list(WEEKEND_GRID + WEEKEND_CIRCUIT)
+    t1, t2 = typical_weekend(wk1, history)[cols], typical_weekend(wk2, history)[cols]
+    pd.testing.assert_frame_equal(t1, t2, check_exact=False)
+    assert not t1.isna().any().any(), "a weekend feature was left empty"
+    # And the typical weekend is still the drivers' own: a qualifies ahead of b.
+    assert t1.loc[3766, "grid"] < t1.loc[3767, "grid"]
