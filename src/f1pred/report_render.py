@@ -981,11 +981,16 @@ def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None
     # Figures loaded from JSON arrive as strings and each kept its own decimal
     # count, so "0.32" sat in a column of "0.164" and "0.481". A column that
     # parses cleanly as numbers - no unit suffix to preserve - becomes numbers.
+    # A column written with explicit signs (a difference: "+0.043") keeps them,
+    # or a worsening would read as a plain positive number.
     df = df.copy()
+    signed = set()
     for c, right in zip(df.columns, align):
         if right and not pd.api.types.is_numeric_dtype(df[c]):
             parsed = pd.to_numeric(df[c], errors="coerce")
             if parsed.notna().all():
+                if df[c].astype(str).str.strip().str.startswith("+").any():
+                    signed.add(c)
                 df[c] = parsed
     places = {c: _decimals(df[c]) for c in df.columns}
 
@@ -1001,7 +1006,7 @@ def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None
             v = r[c]
             numeric = isinstance(v, (int, float)) and not isinstance(v, bool)
             mark = " best" if c in winners and numeric and abs(v - winners[c]) < 1e-9 else ""
-            text = f"{v:.{places[c]}f}" if numeric else esc(v)
+            text = f"{v:{'+' if c in signed else ''}.{places[c]}f}" if numeric else esc(v)
             cells.append(f"<td class='{'n' if align[j] else ''}{mark}'>{text}</td>")
         body.append(f"<tr{cls}>{''.join(cells)}</tr>")
     return f"<div class='scroll'><table class='fig'><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>"

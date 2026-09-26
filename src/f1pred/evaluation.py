@@ -564,8 +564,8 @@ def run_experiments(
         "pre_quali_ablation": lambda: pre_quali_ablation(df, windows, settings, retrain_every=2),
         "calibration": lambda: calibration_variants(df, start_season, settings, n_seeds=1, retrain_every=1),
         "form_statistic": lambda: definition_experiment(
-            {"mean": frame("mean", form_stat="mean"), "median": frame("median", form_stat="median")},
-            "mean",
+            {stat: frame(stat, form_stat=stat) for stat in ("mean", "median")},
+            features.FORM_STAT,
             windows,
             settings,
         ),

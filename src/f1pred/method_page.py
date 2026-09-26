@@ -354,34 +354,36 @@ def _choices(ex: dict) -> str:
                 )
         parts.append(
             "<p class='cap' style='margin-top:26px'><b>Practice pace.</b> FP1&ndash;FP3 aggregates, "
-            f"tested on the {practice.get('weekends_with_practice')} weekends with practice data. They "
-            "sharpen the qualifying forecast and add nothing once the real grid is known, so they "
-            "feed the qualifying model only.</p>" + rr.table(pd.DataFrame(rows))
+            f"tested on the {practice.get('weekends_with_practice')} weekends with practice data. Those "
+            "weekends fall inside the reported seasons, so unlike the other choices this one is not "
+            "held out. Practice feeds the qualifying model only; it adds nothing once the real grid "
+            "is known.</p>" + rr.table(pd.DataFrame(rows))
         )
-    defs = []
-    for key, label in (("form_statistic", "Median instead of mean recent form"),):
-        block = ex.get(key) or {}
-        for window, rows in block.items():
-            alt = next((r for r in rows if r.get("win_logloss_ci")), None)
-            if alt:
-                defs.append(
-                    {
-                        "change tested": label,
-                        "seasons": window,
-                        "log loss change": f"{alt['win_logloss_diff']:+.3f}",
-                        "95% interval": f"{alt['win_logloss_ci'][0]:+.3f} to {alt['win_logloss_ci'][1]:+.3f}",
-                        "verdict": _verdict(alt, "win_logloss"),
-                    }
-                )
+    defs, outcome = [], ""
+    for window, rows in (ex.get("form_statistic") or {}).items():
+        in_use = next((r["variant"] for r in rows if not r.get("win_logloss_ci")), None)
+        alt = next((r for r in rows if r.get("win_logloss_ci")), None)
+        if not (alt and in_use):
+            continue
+        verdict = _verdict(alt, "win_logloss")
+        defs.append(
+            {
+                "change tested": f"{alt['variant']} recent form instead of {in_use} (in use)",
+                "seasons": window,
+                "log loss change": f"{alt['win_logloss_diff']:+.3f}",
+                "95% interval": f"{alt['win_logloss_ci'][0]:+.3f} to {alt['win_logloss_ci'][1]:+.3f}",
+                "verdict": verdict,
+            }
+        )
+        if window.startswith("tuning"):
+            outcome = {
+                "worse": f"The {in_use} clears it against the {alt['variant']}, and is in use.",
+                "better": (
+                    f"On this run the {alt['variant']} clears it; the choice was made once, on an "
+                    "earlier run, and is not re-decided every time the evaluation is refreshed."
+                ),
+            }.get(verdict, f"On this run the two are within noise; the {in_use} is in use.")
     if defs:
-        kept = [
-            d["change tested"] for d in defs if d["seasons"].startswith("tuning") and d["verdict"] == "better"
-        ]
-        outcome = (
-            "It didn't, so the original definition stays."
-            if not kept
-            else f"Kept: {', '.join(rr.esc(k) for k in kept)}."
-        )
         parts.append(
             "<p class='cap' style='margin-top:26px'><b>Feature definitions.</b> A change is kept only "
             f"if it improves the tuning seasons with an interval clear of zero. {outcome}</p>"

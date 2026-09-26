@@ -280,8 +280,11 @@ def test_a_weekend_is_matched_on_the_race_start(offset_hours, expected):
             "session_key": [1, 2],
             "code": ["Q", "R"],
             "meeting_key": [7, 7],
-            "start_utc": [start - pd.Timedelta(days=1), start + pd.Timedelta(hours=offset_hours)],
+            "start_utc": [start - pd.Timedelta(1, unit="D"), start + pd.Timedelta(offset_hours, unit="h")],
         }
     )
     matched = openf1.weekend_sessions(sessions, start)
     assert (not matched.empty) == bool(expected)
+    if expected:
+        # A race listed a few hours off jolpica's time is still this weekend's race.
+        assert set(matched["code"]) == {"Q", "R"}

@@ -101,14 +101,16 @@ def weekend_sessions(all_sessions: pd.DataFrame, race_start_utc: datetime) -> pd
     start = pd.Timestamp(race_start_utc)
     races = all_sessions[all_sessions["code"] == "R"]
     gap = (pd.to_datetime(races["start_utc"]) - start).abs()
-    close = races[gap <= pd.Timedelta(hours=6)]
+    tolerance = pd.Timedelta(6, unit="h")
+    close = races[gap <= tolerance]
     if close.empty:
         return all_sessions.iloc[0:0]
     meeting = close.iloc[0]["meeting_key"]
     out = all_sessions[all_sessions["meeting_key"] == meeting]
     # Belt and braces: every session of the weekend precedes the race by days, not weeks.
-    lo = start - pd.Timedelta(days=WEEKEND_DAYS)
-    return out[(pd.to_datetime(out["start_utc"]) >= lo) & (pd.to_datetime(out["start_utc"]) <= start)]
+    lo = start - pd.Timedelta(WEEKEND_DAYS, unit="D")
+    when = pd.to_datetime(out["start_utc"])
+    return out[(when >= lo) & (when <= start + tolerance)]
 
 
 # ---------------------------------------------------------------------------

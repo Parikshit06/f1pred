@@ -722,3 +722,16 @@ def test_title_odds_say_what_the_simulation_can_and_cannot_resolve():
     assert rr._odds(1.0) == "clinched"
     assert rr._odds(0.9995) == "99.9%"
     assert rr._odds(0.008) == "0.8%"
+
+
+def test_a_signed_difference_keeps_its_sign_in_a_table():
+    """ "+0.043" is a worsening in a log-loss column; printed as "0.043" it reads
+    as a level, so the sign has to survive the numeric formatting."""
+    import pandas as pd
+
+    from f1pred import report_render as rr
+
+    html = rr.table(pd.DataFrame({"variant": ["a", "b"], "change": ["+0.043", "-0.018"]}))
+    assert ">+0.043<" in html and ">-0.018<" in html
+    plain = rr.table(pd.DataFrame({"variant": ["a"], "value": ["0.5"]}))
+    assert ">+0.5<" not in plain

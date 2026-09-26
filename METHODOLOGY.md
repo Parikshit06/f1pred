@@ -77,7 +77,7 @@ Two tests treat the feature code as a black box:
 * **result tampering**: reverse one race's result; no feature of that race or
   an earlier one may move, and later ones must.
 
-Race-model feature groups (27 features): driver form (mean finish over the
+Race-model feature groups (27 features): driver form (median finish over the
 last 3 and 5 races, points, podium and top-10 rates, places gained,
 reliability), team form and car pace (rolling gap to pole of the team's best
 car, the team's recent qualifying places), circuit history, and the grid,
@@ -88,9 +88,10 @@ Two groups were tested and left out of the race model:
 
 * the driver's own qualifying record (average grid and qualifying place, pole
   rate, one-lap gap to pole). It reaches the race through the grid already, and
-  inside the race model it counted twice: removing it improved the
-  pre-qualifying forecast on 2022-23 and cost nothing after qualifying;
-* the teammate qualifying gap, which added nothing measurable.
+  inside the race model it counted twice: adding it back made 2022-23 clearly
+  worse, both after qualifying and before;
+* the teammate qualifying gap, which also made 2022-23 worse after
+  qualifying.
 
 The qualifying model still uses the qualifying record and the teammate
 head-to-head, where they are direct one-lap evidence.
@@ -159,7 +160,10 @@ one, and the mixture against each of its halves.
 ## 6. Experiments (`make experiments` → `reports/experiments.json`)
 
 Each uses the same walk-forward. Decisions are read off 2022-23 and checked on
-2024-.
+2024-. The rule for a change is an improvement on 2022-23 with a 95% interval
+clear of zero. Many comparisons are made, so a marginal pass can be luck; to
+stop choices flipping with every refresh of the data, each was taken once, on
+the final configuration, and later runs report without re-deciding.
 
 * **Ablation**: the grid alone, the grid plus each feature group, the full
   model, and the full model minus each group. A group whose removal costs
@@ -167,18 +171,24 @@ Each uses the same walk-forward. Decisions are read off 2022-23 and checked on
 * **Redundancy**: feature pairs with |Spearman| ≥ 0.8, and grouped permutation
   importance (each group shuffled between drivers within a race, out of sample)
   beside mean |SHAP| shares.
-* **Feature definitions**: median against mean recent form, and the teammate
-  gap measured in the same session against the best lap of the day. Neither
-  alternative improved 2022-23 with an interval clear of zero, so the original
-  definitions stay. (One early run showed a significant gain for the median; the
-  final configuration didn't, and on 2024- the median was worse. That's the
-  instability the rule exists for.)
+* **Pre-qualifying ablation**: the groups left out of the race model, added
+  back when the grid columns hold the qualifying model's projection. A group
+  can be harmless once the real grid is known and still count twice here.
+* **Feature definitions**: median against mean recent form. The median lowered
+  2022-23 log loss by 0.047 (interval 0.003 to 0.093) and is in use; on 2024-
+  the difference is not clear. An earlier configuration measured the same
+  gain with an interval just touching zero, so this is the most marginal
+  decision in the project. A teammate gap measured within one session instead
+  of on each driver's best lap was also tried, made no difference, and was
+  dropped.
 * **Practice**: whether FP1-FP3 aggregates improve the qualifying forecast, and
   whether they add anything to the race model beyond the grid. Tested on the
   weekends with practice data only (2024 R1-13, 2026 R1-15), rather than
-  downloading every session since 2018 before knowing whether it helps. They
-  sharpen the qualifying forecast and add nothing to the race once the grid is
-  known, so they feed the qualifying model only. The live pipeline fetches the
+  downloading every session since 2018 before knowing whether it helps. Those
+  weekends fall inside the reported window, so unlike the other choices this
+  one is not held out: it is the weakest-evidenced decision here. Practice
+  sharpens the qualifying order and adds nothing to the race once the grid is
+  known, so it feeds the qualifying model only. The live pipeline fetches the
   current weekend's sessions, and the logged pre-qualifying call waits for them
   until six hours before qualifying.
 * **Season projection**: how to score a driver for the rest of the season,
@@ -186,8 +196,9 @@ Each uses the same walk-forward. Decisions are read off 2022-23 and checked on
   points, the final gap between teammates and the champion's probability.
   Decided on 2019–22, checked on 2023–.
 * **XGBoost settings**: a handful of candidates on two separate validation
-  windows. Not a search: the question is whether the settings in use are
-  stable.
+  windows, without intervals. Not a search: no candidate is best on both
+  windows (depth 3 leads on 2022-23 and trails on 2021), so the settings in
+  use are kept.
 
 ## 7. Explanations
 
@@ -210,10 +221,10 @@ driver's strength is the median of the model's own scores for their last eight
 real weekends, each scored on that race's full field. An earlier version
 scored a synthetic "typical weekend", which copied recent form into the
 circuit columns (counting it twice) and carried each driver's teammate gap.
-On the 2019–22 title-backtest checkpoints the new method was clearly better on
-final driver points, the final gap between teammates and the champion's
-probability; on 2023– all methods were level (`season_projection` in
-`reports/experiments.json`). Points
+Against that old method, on the 2019–22 title-backtest checkpoints the new one
+was clearly better on final driver points and on the champion's probability;
+on 2023– it was clearly better on the final gap between teammates and level on
+the rest (`season_projection` in `reports/experiments.json`). Points
 already scored are carried; constructors' points are summed from the results as
 awarded, because summing the current drivers' totals credited a team with points
 its new driver scored elsewhere. A per-team and a smaller per-driver pace
@@ -233,11 +244,13 @@ included.
 
 ## 10. Limitations
 
-* Win probabilities are well calibrated. Podium and top-10 probabilities are
-  over-confident at the top end: in `make verify`, a stated 92% podium chance
-  happened 83% of the time, and a stated 95% top-ten 87%. The temperature is
-  fitted on winners only; fitting it on the first three places would be the
-  next thing to try.
+* Win probabilities are well calibrated overall (expected calibration error
+  under 1%), though the 12 win calls above 70% came true less often than
+  stated. Podium and top-10 probabilities are over-confident at the top end:
+  in `make verify`, a stated 93% podium chance happened 80% of the time, and a
+  stated 96% top-ten 87%; mid-range top-ten chances are under-confident. The
+  temperature is fitted on winners only; fitting it on the first three places
+  would be the next thing to try.
 
 * Races are noisy and the sample is small. About 60 test races is enough to
   separate the model from naive baselines. Against the calibrated starting

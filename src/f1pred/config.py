@@ -59,13 +59,13 @@ CURRENT_SEASON = 2026
 DEFAULT_CURRENT_SEASON_WEIGHT = 2.0  # training weight on current-season races
 DEFAULT_TEMPERATURE = 0.35  # Plackett-Luce sharpness; <1 is more decisive
 DEFAULT_BLEND_WEIGHT = 0.7  # Plackett-Luce vs simulation in the mixture
-DEFAULT_QUALI_TEMPERATURE = 0.5  # the qualifying model's own Plackett-Luce temperature
+DEFAULT_QUALI_TEMPERATURE = 0.55  # the qualifying model's own Plackett-Luce temperature
 
 # How far a team's true pace can sit from the model's estimate over a full
 # remaining season, in finishing positions. Mostly model error rather than
 # development, and unlike race-to-race noise it doesn't average out.
 # Chosen by coverage of the projection's 10th-90th band: make calibrate-spread
-SEASON_PACE_UNCERTAINTY = 6.0
+SEASON_PACE_UNCERTAINTY = 7.0
 # The same for a driver against their own teammate. Chosen by coverage of the
 # teammate points gap on 2019-22, where scoring each driver on their own recent
 # weekends (championship.season_strength) already covers it: the sweep picks 0.

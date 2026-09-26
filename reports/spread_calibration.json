@@ -2,106 +2,106 @@
  "sweep": [
   {
    "spread": 0.0,
-   "coverage": 0.6,
-   "width": 38.016
+   "coverage": 0.593,
+   "width": 38.061
   },
   {
    "spread": 1.0,
-   "coverage": 0.6,
-   "width": 39.909
+   "coverage": 0.607,
+   "width": 39.823
   },
   {
    "spread": 2.0,
-   "coverage": 0.647,
-   "width": 44.657
+   "coverage": 0.633,
+   "width": 44.624
   },
   {
    "spread": 3.0,
-   "coverage": 0.68,
-   "width": 50.936
+   "coverage": 0.673,
+   "width": 50.976
   },
   {
    "spread": 4.0,
-   "coverage": 0.707,
-   "width": 58.209
+   "coverage": 0.713,
+   "width": 58.197
   },
   {
    "spread": 5.0,
-   "coverage": 0.773,
-   "width": 65.873
+   "coverage": 0.767,
+   "width": 65.811
   },
   {
    "spread": 6.0,
-   "coverage": 0.793,
-   "width": 73.549
+   "coverage": 0.787,
+   "width": 73.562
   },
   {
    "spread": 7.0,
-   "coverage": 0.82,
-   "width": 81.145
+   "coverage": 0.813,
+   "width": 81.085
   },
   {
    "spread": 8.0,
-   "coverage": 0.84,
-   "width": 88.681
+   "coverage": 0.833,
+   "width": 88.49
   },
   {
    "spread": 9.0,
-   "coverage": 0.88,
-   "width": 95.793
+   "coverage": 0.86,
+   "width": 95.731
   }
  ],
- "best": 6.0,
+ "best": 7.0,
  "driver_sweep": [
   {
    "spread": 0.0,
-   "coverage": 0.84,
-   "width": 41.979
+   "coverage": 0.847,
+   "width": 42.158
   },
   {
    "spread": 1.0,
-   "coverage": 0.847,
-   "width": 42.989
+   "coverage": 0.853,
+   "width": 43.145
   },
   {
    "spread": 2.0,
-   "coverage": 0.847,
-   "width": 45.835
+   "coverage": 0.86,
+   "width": 45.871
   },
   {
    "spread": 3.0,
    "coverage": 0.86,
-   "width": 49.883
+   "width": 49.882
   },
   {
    "spread": 4.0,
    "coverage": 0.867,
-   "width": 54.618
+   "width": 54.429
   },
   {
    "spread": 5.0,
    "coverage": 0.867,
-   "width": 59.669
+   "width": 59.43
   },
   {
    "spread": 6.0,
-   "coverage": 0.867,
-   "width": 65.009
+   "coverage": 0.873,
+   "width": 64.717
   },
   {
    "spread": 7.0,
-   "coverage": 0.873,
-   "width": 70.39
+   "coverage": 0.88,
+   "width": 69.957
   },
   {
    "spread": 8.0,
    "coverage": 0.893,
-   "width": 75.73
+   "width": 75.145
   },
   {
    "spread": 9.0,
    "coverage": 0.9,
-   "width": 80.925
+   "width": 80.363
   }
  ],
  "best_driver": 0.0,
@@ -118,20 +118,20 @@
  ],
  "held_out": {
   "before": {
-   "coverage": 0.5583333333333333,
-   "width": 38.7425,
-   "n": 120,
-   "teammate_coverage": 0.6890756302521008,
-   "teammate_n": 119
-  },
-  "after": {
-   "coverage": 0.8,
-   "width": 95.61916666666669,
+   "coverage": 0.5416666666666666,
+   "width": 38.678333333333335,
    "n": 120,
    "teammate_coverage": 0.7226890756302521,
    "teammate_n": 119
+  },
+  "after": {
+   "coverage": 0.8583333333333333,
+   "width": 107.55833333333335,
+   "n": 120,
+   "teammate_coverage": 0.7394957983193278,
+   "teammate_n": 119
   }
  },
- "in_use": 6.0,
+ "in_use": 7.0,
  "driver_in_use": 0.0
 }

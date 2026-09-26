@@ -79,10 +79,7 @@ BASE_FEATURES = [
 #                                                including log loss
 #
 # And measured with race-paired bootstrap intervals (reports/experiments.json):
-#   teammate qualifying gap in the race model  win log loss +0.007 on 2022-23,
-#                                                interval -0.047 to +0.060: nothing
 #   teammate gap in the same session, signed   no difference from the best-lap one
-#   median instead of mean recent form         2022-23 gain's interval spans zero
 
 PRACTICE_FEATURES = [
     "fp_long_run_gap_pct",
@@ -97,8 +94,8 @@ GRID_FEATURES = [
 ]
 
 # Measured and left out of the race model: the teammate qualifying gap, this
-# weekend's and its five-race average. Removing them changed win log loss by
-# -0.005 on 2022-23 and +0.001 on 2024-, both intervals straddling zero
+# weekend's and its five-race average. Adding them back made 2022-23 win log
+# loss worse by 0.049 (interval 0.010 to 0.089); no clear difference on 2024-
 # (reports/experiments.json, ablation). drv_teammate_quali_edge still feeds the
 # qualifying model, where head-to-head record is direct one-lap evidence.
 TEAMMATE_FEATURES = ["quali_gap_to_teammate_pct", "drv_teammate_quali_edge"]
@@ -106,8 +103,9 @@ TEAMMATE_FEATURES = ["quali_gap_to_teammate_pct", "drv_teammate_quali_edge"]
 # Also measured and left out of the race model: the driver's own qualifying
 # record. It is the qualifying model's core input, and reaches the race through
 # the grid - projected before qualifying, official after. Inside the race model
-# it counted twice: removing it improved pre-qualifying win log loss on 2022-23
-# by 0.060 (interval 0.020 to 0.104) and cost nothing after qualifying.
+# it counted twice: adding it back made 2022-23 win log loss worse by 0.078
+# (interval 0.027 to 0.138) after qualifying and by 0.043 (0.009 to 0.078)
+# before (reports/experiments.json, ablation and pre_quali_ablation).
 QUALI_FORM_FEATURES = ["drv_avg_grid_5", "drv_avg_quali_5", "drv_pole_rate_10", "drv_pace_gap_pct"]
 
 # Practice feeds the qualifying model only and reaches the race through the
@@ -147,13 +145,15 @@ RACE_FEATURES = BASE_FEATURES + GRID_FEATURES
 
 # Bumped whenever a feature's definition changes, and written into every
 # forecast, so a logged prediction says which definitions produced it.
-FEATURE_VERSION = "2026.09.5"
+FEATURE_VERSION = "2026.09.6"
 
 # How recent finishing form (drv_/team_avg_finish_*) is summarised: "mean" or
-# "median". The median resists one freak result, but it did not earn its place:
-# on the tuning seasons its gain had an interval including zero, and on 2024-
-# it was worse (reports/experiments.json, form_statistic).
-FORM_STAT = "mean"
+# "median". The median resists one freak result. On 2022-23 it lowered win log
+# loss by 0.047 (interval 0.003 to 0.093), which meets the bar for a change;
+# on 2024- it made no clear difference. An earlier configuration measured the
+# same gain (0.049) with an interval just touching zero, so this is a marginal
+# call, taken once and not revisited (reports/experiments.json, form_statistic).
+FORM_STAT = "median"
 
 # Rolling windows never see the current race, so early-career rows are sparse.
 # XGBoost handles NaN natively, so we leave them rather than imputing a value
@@ -398,7 +398,7 @@ def _upcoming_entries(raw: Raw) -> pd.DataFrame:
     today = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
     dates = pd.to_datetime(races["race_date"])
     not_run = np.array([(s, r) not in run for s, r in zip(races["season"], races["round"])], dtype=bool)
-    scheduled = races[not_run & (dates >= today - pd.Timedelta(days=1)).to_numpy()].sort_values(
+    scheduled = races[not_run & (dates >= today - pd.Timedelta(1, unit="D")).to_numpy()].sort_values(
         ["season", "round"]
     )
 
