@@ -1,20 +1,8 @@
-"""The README must agree with the evidence it cites.
+"""The README's figures must match the reports/*.json they come from.
 
-Every figure in the README comes from a committed `reports/*.json`. Nothing
-regenerates the README when those files change, so the two drift apart silently
-- and they have, twice. The first time, a change to the title projection moved
-16-of-16 to 12-of-12 and the method page kept quoting the old number while
-sitting directly above the table that contradicted it. The second time, a
-monthly evaluation refreshed the backtest and the README's headline log loss was
-stale within the hour.
-
-The method page now computes its figures, so it cannot drift. The README is
-hand-written prose and should stay that way - it argues, it does not just
-tabulate. So this guards it instead: the numbers are typed, but they cannot be
-wrong for long, because the run that refreshes the evidence also runs this.
-
-A failure here is not a bug in the code. It means the evidence moved and the
-README has not caught up; the message says what to write.
+The README is written by hand, so nothing updates it when an evaluation
+refreshes the evidence. This catches the drift; a failure means the README
+needs updating, and the message says to what.
 """
 
 from __future__ import annotations
@@ -104,8 +92,7 @@ def test_title_brier_and_hit_rate_are_current():
 
 
 def test_the_high_confidence_bucket_is_current():
-    """The figure that drifted the first time: n above 95%, and the Wilson floor
-    that stops it reading as certainty."""
+    """n above 95% and its Wilson floor match the report."""
     buckets = _load("title_backtest.json").get("calibration") or []
     over = [b for b in buckets if b["bucket"] == "over 95%"]
     if not over:
@@ -138,6 +125,25 @@ def test_the_shortfall_is_still_admitted():
             f"coverage is {held['after']['coverage']:.0%}, below the stated 80%, "
             "and the README no longer says so"
         )
+
+
+# ---------------------------------------------------------------------------
+# Driver bias
+# ---------------------------------------------------------------------------
+def test_driver_bias_figures_are_current():
+    bias = _load("bias.json")
+    text = _readme()
+    assert f"{bias['r']:.3f}" in text, f"bias correlation is {bias['r']:.3f}"
+    assert f"{bias['variance_explained']:.0%}" in text, f"artefact share is {bias['variance_explained']:.0%}"
+    named = {d["driver_id"]: d["driver_specific_bias"] for d in bias["drivers"]}
+    for driver, shown in (
+        ("hamilton", "+{:.2f}"),
+        ("max_verstappen", "+{:.2f}"),
+        ("tsunoda", "\u2212{:.2f}"),
+    ):
+        value = named.get(driver)
+        if value is not None:
+            assert shown.format(abs(value)) in text, f"{driver} is {value:+.2f}"
 
 
 # ---------------------------------------------------------------------------
