@@ -418,14 +418,8 @@ def _lstar(hex_colour: str) -> float:
 
 @pytest.mark.parametrize("theme,block", THEMES)
 def test_the_band_is_a_second_ink_pass_not_a_grey_box(theme, block):
-    """Sections alternate between paper and a slightly darker band. Every band
-    edge already carries a hairline, so the tone only has to suggest a change of
-    register - it does not have to separate anything.
-
-    Below about 1 in L* nobody sees it and the page goes flat; above about 3 it
-    stops reading as the same sheet under different light and starts reading as
-    a grey rectangle dropped on top, which is exactly the note this pins. It
-    shipped once at 4.2.
+    """Alternate sections sit on a slightly darker band. Under ~1 L* it disappears;
+    over ~3 it reads as a grey box rather than the same sheet.
     """
     paper = _token("paper", block)
     band = _token("band", block)
@@ -450,9 +444,7 @@ def test_the_band_is_the_same_paper_not_a_different_colour(theme, block):
 
 @pytest.mark.parametrize("theme,block", THEMES)
 def test_inline_code_still_reads_against_its_own_surface(theme, block):
-    """Code chips used to borrow the band colour. Softening the band would have
-    made them vanish, so they have their own token - and it has to be a step
-    away from BOTH surfaces they can sit on."""
+    """Code chips have their own token, distinct from both paper and band."""
     chip = _token("chip", block)
     for surface in ("paper", "band"):
         step = abs(_lstar(chip) - _lstar(_token(surface, block)))
@@ -475,17 +467,8 @@ def test_the_page_script_is_a_raw_string():
 # A clean checkout has no database
 # ---------------------------------------------------------------------------
 def test_both_pages_build_with_no_database(tmp_path, monkeypatch):
-    """The condition CI runs in, and the one these tests never had locally.
-
-    `data/*.duckdb` is rebuildable, so it is gitignored and a fresh clone does
-    not have one. Two readers reach for it while rendering - the track record
-    and the driver-surname lookup - and a read-only connect to a missing file
-    raises rather than creating it. Both now have an empty answer instead,
-    because they decorate a page rather than compute it.
-
-    This failed on the repo's very first CI run, which is the honest argument
-    for the test: the suite passed on every machine that had already run the
-    pipeline, which was every machine anyone had tried it on.
+    """A fresh clone - and CI - has no database. The two readers that only
+    decorate the page (track record, driver surnames) must fall back to empty.
     """
     from f1pred import config, method_page, store
 
@@ -514,10 +497,7 @@ def test_a_missing_database_is_not_confused_with_an_empty_one(tmp_path, monkeypa
 # Figures quoted in prose have to come from the data beside them
 # ---------------------------------------------------------------------------
 def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeypatch):
-    """It used to be typed out, and it drifted: the page read "16 of 16 correct
-    above 95%" at a true rate "as low as 81%" while the table directly above it
-    showed twelve checkpoints and a Wilson floor of 0.76. A sentence that
-    interprets a table has to be computed from that table."""
+    """The sentence under the table is computed from the table."""
     import json
 
     from f1pred import config, method_page
@@ -565,8 +545,7 @@ def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeyp
 
 
 def test_the_pooled_calibration_line_adds_up_the_buckets(tmp_path, monkeypatch):
-    """The pooled figure was prose too, and quoted 62 races over a table that
-    summed to 61 - which was how the dropped-bucket bug stayed invisible."""
+    """The pooled figure is the n-weighted sum of the buckets shown."""
     import json
 
     from f1pred import config, method_page
@@ -587,7 +566,7 @@ def test_the_pooled_calibration_line_adds_up_the_buckets(tmp_path, monkeypatch):
     )
     html = method_page.build()
     assert "Pooled over 40 races" in html
-    assert "stated 0.700, observed 0.800" in html
+    assert "stated 70%, observed 80%" in html
     assert "under-confident" in html
     assert "Buckets hold 10&ndash;30 races" in html
 
@@ -609,9 +588,7 @@ def test_a_column_heading_is_aligned_the_same_way_as_its_own_cells():
 
 
 def test_a_column_of_words_is_not_right_aligned():
-    """Alignment used to be chosen by column position, which right-aligned a
-    column of names in a monospaced face whenever a table carried two text
-    columns - the title-projection listing did, and it read as broken."""
+    """Alignment follows the column's content, not its position."""
     df = pd.DataFrame(
         {"season": [2021], "favourite": ["Hamilton"], "champion": ["Verstappen"], "claimed": [0.63]}
     )
@@ -629,9 +606,7 @@ def test_a_quantity_carrying_its_unit_still_counts_as_a_number():
 
 
 def test_the_emphasised_row_starts_where_every_other_row_starts():
-    """The marker on the highlighted row used to be drawn by giving that one
-    cell an extra 10px of padding, which pushed its text out of line with the
-    column it belonged to. The gutter is reserved on every row now."""
+    """The emphasis marker sits in the gutter, not in extra padding."""
     css = rr.document("", standalone=True)
     rule = re.search(r"tr\.me td:first-child\{([^}]*)\}", css)
     assert rule, "the emphasis rule is gone"
@@ -648,3 +623,74 @@ def test_probability_buckets_are_published_as_ranges_not_pandas_intervals():
     assert _band("(-0.001, 0.189]") == "0–19%", "a negative edge leaked into the page"
     assert _band("over 95%") == "over 95%", "a label that is already readable was mangled"
     assert "&ndash;" not in _band("(0.189, 0.378]"), "an HTML entity will be escaped and shown raw"
+
+
+def test_a_probability_too_small_to_print_is_not_shown_as_zero():
+    assert rr.pct(0.0) == "&lt;0.1%"
+    assert rr.pct(0.0004) == "&lt;0.1%"
+    assert rr.pct(0.0006) == "0.1%"
+    assert rr.pct(0.004, 0) == "&lt;1%"
+    assert rr.pct(0.542) == "54.2%"
+
+
+def test_the_second_car_in_a_garage_is_tinted():
+    first = rr.series_colour({"team": "mercedes"})
+    second = rr.series_colour({"team": "mercedes", "second_car": True})
+    assert first == rr.team_colour("mercedes")
+    assert second != first and "color-mix" in second
+
+
+def test_after_qualifying_the_board_shows_where_each_driver_qualified():
+    rows = [
+        {
+            "driver_id": "a",
+            "name": "A",
+            "short": "A",
+            "team": "mercedes",
+            "p_win": 0.3,
+            "p_podium": 0.7,
+            "p_top10": 0.97,
+            "grid": 16,
+        }
+    ]
+    before, after = rr.quali_board(rows), rr.quali_board(rows, qualified=True)
+    assert "Top 10" in before and "P16" not in before
+    assert "Qualified" in after and "P16" in after
+
+
+def test_the_championship_panel_uses_the_latest_projection(tmp_path, monkeypatch):
+    """The logged forecast fixes the race boards; the season panel should move
+    with results, so the dashboard reads the latest projection when there is one."""
+    import json
+
+    from f1pred import cli, config
+    from f1pred import method_page as mp
+
+    for name in ("PREDICTIONS", "REPORTS"):
+        (tmp_path / name).mkdir()
+        monkeypatch.setattr(config, name, tmp_path / name)
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "f1.duckdb")
+    monkeypatch.setattr(config, "SEASON_NOW", tmp_path / "season.json")
+
+    logged = {
+        "season": 2026,
+        "round": 15,
+        "race_name": "Test GP",
+        "circuit_id": "x",
+        "race_start_utc": None,
+        "generated_at_utc": "2026-01-01T00:00:00+00:00",
+        "grid_known": False,
+        "quali_board": [],
+        "race_board": [],
+        "field_probs": [],
+        "season_outlook": {"marker": "logged"},
+    }
+    (tmp_path / "PREDICTIONS" / "2026-15-prequali-x.json").write_text(json.dumps(logged))
+    config.SEASON_NOW.write_text(json.dumps({"marker": "latest"}))
+
+    rendered = {}
+    monkeypatch.setattr(report, "write", lambda p, *a, **k: rendered.update(p) or tmp_path / "i.html")
+    monkeypatch.setattr(mp, "write", lambda *a, **k: tmp_path / "m.html")
+    cli.main(["dashboard"])
+    assert rendered["season_outlook"] == {"marker": "latest"}
+    assert rendered["race_board"] == [], "the logged boards must be left as they were"

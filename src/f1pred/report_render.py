@@ -1,23 +1,12 @@
-"""Presentation layer for the dashboard.
+"""How the dashboard is drawn: CSS, SVG and colour.
 
-Visual direction is the pit wall, not the broadsheet. Every convention here is
-borrowed from a live timing screen because that is the native document of this
-subject: fixed-width numerals that hold their column as they tick, constructor
-colour used as the only chroma so a car is identifiable before you read the
-name, and gaps drawn as bars because a gap is a length.
+Styled after a timing screen. Two rules hold everywhere: colour carries data
+only (constructor colour identifies a car, the accent marks the model, green
+and red mean better or worse than a baseline), and numbers are monospaced
+and right-aligned so columns scan.
 
-Two rules follow from that and are worth stating, since both are easy to
-violate later:
-
-  * Colour is data. Constructor colour identifies a car; the accent marks the
-    model's own voice; green and red mean better and worse than a baseline.
-    Nothing is coloured for decoration, which is what keeps twenty-two team
-    colours from turning into noise.
-  * Numbers are monospaced and right-aligned, always. A probability column you
-    cannot scan vertically is a probability column nobody reads.
-
-Self-contained: inline CSS, hand-built SVG, no CDN, no build step. Renders
-identically from GitHub Pages, from a file:// URL, and offline.
+Self-contained - inline CSS, hand-built SVG, no CDN - so it renders the same
+from Pages, a local file, or offline.
 """
 
 from __future__ import annotations
@@ -28,21 +17,11 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
-# Constructor colours, one pair per team: (light surface, dark surface).
-#
-# A livery is not a palette. Mercedes petrol is 1.8:1 against white and Renault
-# yellow is 1.15:1 - as a 2px line or a thin bar they are invisible, which is a
-# correctness problem, not a taste one, because colour is the only thing
-# identifying a car before you read the name. Each team therefore gets a variant
-# per surface, shifted in lightness and kept on its own hue.
-#
-# The four that carry the chart - Mercedes, Ferrari, McLaren, Red Bull - were
-# picked by running the pairs through a CVD validator rather than by eye. Both
-# sets clear the lightness band, the chroma floor, the normal-vision separation
-# floor and 3:1 against their surface. Ferrari red against McLaren orange sits
-# in the 6-8 deuteranopia band, which is legal only with a second channel, so
-# every line on the chart is also labelled at its end and teammates are split by
-# dash pattern - the broadcast convention anyway.
+# Constructor colours as (light surface, dark surface) pairs. Raw liveries fail
+# contrast - Mercedes teal is 1.8:1 on white - so each team gets a lightness-
+# shifted variant per surface on its own hue. The main four were checked for
+# colour-vision deficiency; Ferrari and McLaren stay close for deuteranopes,
+# which is why chart lines are also labelled at their ends.
 TEAM_COLOURS = {
     "mercedes": ("#00917C", "#00A188"),
     "ferrari": ("#B00026", "#E04A66"),
@@ -109,11 +88,22 @@ def team_tokens(mode: int) -> str:
     return "; ".join(pairs) + ";"
 
 
+def series_colour(s: dict) -> str:
+    """Team colour, or a lighter tint of it for the second car in a garage."""
+    base = team_colour(s.get("team"))
+    return f"color-mix(in oklab, {base} 68%, var(--paper))" if s.get("second_car") else base
+
+
 def esc(x) -> str:
     return html.escape(str(x))
 
 
 def pct(x: float, dp: int = 1) -> str:
+    """A probability as a percentage. Anything that rounds to zero is shown as
+    below the smallest printable step rather than as 0, which reads as impossible."""
+    floor = 10**-dp
+    if 0 < x * 100 < floor / 2 or (x == 0):
+        return f"&lt;{floor:g}%"
     return f"{x * 100:.{dp}f}%"
 
 
@@ -125,9 +115,7 @@ def pct(x: float, dp: int = 1) -> str:
 # Both are the subject's own vernacular, so neither is an afterthought.
 CSS = """
 *,*::before,*::after{box-sizing:border-box}
-/* SVG elements ignore the HTML hidden attribute without this. Leaving it out
-   parks the hover crosshair and its dots at the viewBox origin, which renders
-   as a stray line and a stray dot in the corner of the chart. */
+/* SVG ignores the hidden attribute without this. */
 [hidden]{display:none!important}
 
 :root{
@@ -166,11 +154,7 @@ body{margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--sans); font-size:15px; line-height:1.5;
   -webkit-font-smoothing:antialiased}
 
-/* Depth on the dark theme comes from grain, not a gradient.
-   Flat near-black reads as unfinished; a gradient wash reads as generated. A
-   fine fractal-noise overlay at 3-5% is the print answer: it is invisible as an
-   effect and it stops large dark areas looking like dead pixels. Generated
-   inline as an SVG filter, so the page stays a single file with no CDN. */
+/* Faint noise on the dark theme so large dark areas don't look flat. */
 body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
   opacity:var(--grain); mix-blend-mode:var(--grain-blend);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -187,9 +171,7 @@ p{margin:0}
   font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase}
 .bar .sep{flex:1}
 .bar b{font-weight:600}
-/* The bar inverts the page, so its link takes the bar's own ink. A transparent
-   colour-mix was used here and computed to roughly the bar's own background at
-   some zoom levels; an opaque token cannot do that. */
+/* The bar inverts the page, so its link uses the bar's ink. */
 .bar a{color:var(--paper); text-decoration:none; opacity:.85;
   border-bottom:1px solid color-mix(in srgb, var(--paper) 40%, transparent)}
 .bar a:hover{opacity:1; border-bottom-color:var(--paper)}
@@ -218,13 +200,7 @@ p{margin:0}
 .facts dd{margin:2px 0 0; font-family:var(--mono); font-size:.95rem; font-weight:500}
 
 /* ---- section: label in the margin, content beside it ------------------- */
-/* Alternating full-bleed bands give the page rhythm without wrapping anything
-   in a card.
-   The step between paper and band is deliberately about 2.4 in L* - roughly
-   what a second ink pass costs on press. It was 4.2, which is enough to read
-   as a grey box dropped on the page rather than the same sheet under slightly
-   different light; every band edge already carries a hairline, so the tone
-   does not have to do the work of separating anything. */
+/* Alternate sections sit on a slightly darker band; the hairline does the separating. */
 section{display:grid; grid-template-columns:132px 1fr; gap:0 28px;
   padding-block:44px; border-top:1px solid var(--hair); position:relative}
 section::before{content:""; position:absolute; inset:0; z-index:-1;
@@ -237,8 +213,7 @@ section > .lab b{display:block; color:var(--ink); font-weight:600; font-size:11p
   letter-spacing:.12em; margin-bottom:6px}
 section > .body{min-width:0}
 .cap{color:var(--ink-2); font-size:.9rem; max-width:64ch; margin-bottom:18px}
-/* A table's last row drops its rule, so a paragraph after one used to sit
-   directly on the final figure with nothing between them. */
+/* Space between a table and a caption under it. */
 .scroll + .cap{margin-top:22px}
 .cap a, footer a{color:var(--ink); text-decoration:underline;
   text-decoration-color:var(--ink-3); text-underline-offset:3px;
@@ -253,7 +228,7 @@ section > .body{min-width:0}
 .grid5{display:grid;
   grid-template-columns:28px 3px minmax(110px,1.5fr) 52px 64px 60px 60px;
   align-items:center; gap:0 10px}
-.grid4{display:grid; grid-template-columns:28px 3px minmax(110px,1.6fr) 60px 56px 56px;
+.grid4{display:grid; grid-template-columns:28px 3px minmax(110px,1.6fr) 60px 56px 72px;
   align-items:center; gap:0 10px}
 .colhead{padding:0 0 7px; border-bottom:2px solid var(--rule);
   font-family:var(--mono); font-size:9.5px; letter-spacing:.11em;
@@ -264,8 +239,7 @@ section > .body{min-width:0}
   transition:background .18s, box-shadow .18s;
   animation:slide .4s cubic-bezier(.2,.7,.3,1) backwards;
   animation-delay:calc(var(--i,0) * 35ms + 60ms)}
-/* Hovering a row lifts its constructor colour into the margin - the car you
-   are looking at, marked, without moving anything. */
+/* Hovering a row shows its team colour in the margin. */
 .row:hover{background:color-mix(in srgb,var(--tc,var(--ink)) 7%,transparent);
   box-shadow:inset 3px 0 0 var(--tc,var(--ink))}
 .row:last-child{border-bottom:0}
@@ -287,26 +261,29 @@ section > .body{min-width:0}
   font-size:.86rem}
 .v.lead{font-weight:600; font-size:.95rem}
 .v.dim{color:var(--ink-3)}
-/* The 10th-90th percentile under the projected total. A single number reads as
-   a promise; the range is the actual claim. */
+/* 10th-90th percentile range under the projected total. */
 .rng{display:block; font-size:9.5px; font-weight:400; color:var(--ink-3);
   letter-spacing:.02em; margin-top:1px}
+
+.gridC{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 66px 52px;
+  align-items:center; gap:0 10px}
 
 @media (max-width:860px){
   .grid5{grid-template-columns:26px 3px minmax(96px,1fr) 52px 66px 56px}
   .grid5 > .c-points, .colhead.grid5 > span:nth-child(7){display:none}
 }
 @media (max-width:480px){
-  .grid5{grid-template-columns:22px 3px minmax(74px,1fr) 54px 46px; gap:0 8px}
-  .grid5 > .c-start, .colhead.grid5 > span:nth-child(4){display:none}
-  .grid4{grid-template-columns:22px 3px minmax(74px,1fr) 54px 46px; gap:0 8px}
+  .grid5{grid-template-columns:20px 3px minmax(70px,1fr) 34px 54px 42px; gap:0 8px}
+  .grid4{grid-template-columns:22px 3px minmax(74px,1fr) 54px 66px; gap:0 8px}
   .grid4 > .c-third, .colhead.grid4 > span:nth-child(5){display:none}
-  /* The championship panels carry three numeric columns and overflow a 320px
-     screen if they keep them all. "Now" is the one a reader already knows. */
-  .gridC,.gridT{grid-template-columns:20px 3px minmax(70px,1fr) 58px 50px; gap:0 8px}
+  /* Too wide for a 320px screen with every column; drop "Now". */
+  .gridC{grid-template-columns:20px 3px minmax(70px,1fr) 66px 50px; gap:0 8px}
   .gridC > .c-now, .colhead.gridC > span:nth-child(4){display:none}
   .wrap{padding-inline:14px}
   .bar .inner{padding:0 14px}
+  /* The chart scrolls sideways rather than shrinking its labels to nothing. */
+  .chart{overflow-x:auto}
+  .chart svg{min-width:620px}
 }
 
 /* ---- the title arithmetic --------------------------------------------- */
@@ -326,10 +303,6 @@ section > .body{min-width:0}
 .pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:34px}
 .panel h3{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
   text-transform:uppercase; color:var(--ink-2); margin-bottom:10px}
-.gridC{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 58px 52px;
-  align-items:center; gap:0 10px}
-.gridT{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 58px 52px;
-  align-items:center; gap:0 10px}
 
 /* ---- track record strip ------------------------------------------------ */
 .strip{margin-bottom:18px}
@@ -346,27 +319,16 @@ section > .body{min-width:0}
 .strip .sw.miss{border:1px solid var(--ink-3); margin-left:14px}
 
 /* ---- plain tables ------------------------------------------------------ */
-/* The 10px is a gutter for the emphasis marker, held outside the text margin
-   by the matching negative margin - so the first column of a table starts
-   exactly where the paragraph above it starts, and the marker has somewhere to
-   go that is not on top of the word it marks. */
+/* 10px gutter for the emphasis marker, outside the text margin. */
 .scroll{overflow-x:auto; padding-left:10px; margin-left:-10px}
 table{border-collapse:collapse; width:100%; font-size:.86rem}
-/* Gaps live between columns, not after them. Padding-right on every cell left
-   a right-aligned figure hard against the next column's edge with nothing on
-   its left, so a numeric column sat a few pixels out from its own heading.
-   Spacing columns from each other lets the first start at the text margin and
-   the last finish flush with it. */
+/* Gaps between columns, not after them, so both edges sit on the margins. */
 th,td{padding:8px 0; text-align:left; border-bottom:1px solid var(--hair);
   white-space:nowrap; vertical-align:baseline}
 th+th,td+td{padding-left:26px}
-/* The gutter is reserved on every row rather than added to the emphasised one,
-   which is what used to push that row 10px out of line with its own column. */
 th:first-child,td:first-child{padding-left:0}
-/* Figure tables only. Give the label column the slack so a two- or three-column
-   table packs its figures into a tight right-hand group instead of spreading
-   them across the full width with canyons between. Key-value tables are the
-   other shape - a short label and a paragraph - and are sized the other way. */
+/* Figure tables: the label column takes the slack so figures group on the right.
+   Key-value tables (label + paragraph) are sized the other way. */
 .fig th:first-child,.fig td:first-child{width:99%}
 .kv td:first-child{width:170px; vertical-align:top; padding-top:9px}
 .kv td.feat{width:auto}
@@ -390,9 +352,7 @@ tr.me td:first-child{box-shadow:-10px 0 0 -7px var(--ink)}
 .chart text.lbl{font-size:10.5px; font-weight:600; fill:var(--ink-2)}
 .chart .lead{fill:none; stroke-width:1; opacity:.45; stroke-linejoin:round}
 .chart .now{stroke:var(--accent); stroke-width:1; stroke-dasharray:2 3}
-/* Lines draw themselves in once, left to right, the way a lap builds. The
-   dash offset is set from the measured path length in script so the timing is
-   right whatever the shape. */
+/* Lines draw in once, left to right; dash length is set in script. */
 .chart .ser{fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
 .chart .ser.draw{animation:draw 1.1s cubic-bezier(.35,.1,.25,1) backwards}
 @keyframes draw{from{stroke-dashoffset:var(--len)} to{stroke-dashoffset:0}}
@@ -416,7 +376,7 @@ tr.me td:first-child{box-shadow:-10px 0 0 -7px var(--ink)}
 .legend{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:14px;
   font-family:var(--mono); font-size:10.5px; color:var(--ink-2)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
-.legend i{width:14px; height:2px; background:currentColor; border-radius:1px}
+.legend i{width:14px; height:3px; border-radius:1px}
 
 /* ---- numbered pipeline: these ARE a sequence, which is why they are numbered */
 .steps{list-style:none; margin:0; padding:0; display:grid; gap:22px}
@@ -500,21 +460,33 @@ def race_board(rows: list[dict]) -> str:
     return "".join(out)
 
 
-def quali_board(rows: list[dict]) -> str:
+def quali_board(rows: list[dict], qualified: bool = False) -> str:
+    """The qualifying forecast. Once qualifying has run, the last column shows
+    where each driver actually qualified instead of their top-ten chance."""
+    last = "Qualified" if qualified else "Top 10"
     out = [
         (
             "<div class='colhead grid4'><span></span><span></span><span>Driver</span>"
-            "<span>Pole</span><span>Top 3</span><span>Top 10</span></div>"
+            f"<span>Pole</span><span>Top 3</span><span>{last}</span></div>"
         )
     ]
     for i, r in enumerate(rows):
+        if qualified:
+            g = r.get("grid")
+            end = (
+                f"<div class='v'>P{int(g)}</div>"
+                if isinstance(g, (int, float))
+                else "<div class='v dim'>&mdash;</div>"
+            )
+        else:
+            end = f"<div class='v dim'>{pct(r.get('p_top10') or 0, 0)}</div>"
         out.append(
             f"<div class='row grid4{' podium' if i < 3 else ''}' "
             f'style="--i:{i}; --tc:{team_colour(r.get("team"))}">'
             + _row_head(i, r)
             + f"<div class='v lead' data-count>{pct(r.get('p_win') or 0)}</div>"
             + f"<div class='v c-third'>{pct(r.get('p_podium') or 0, 0)}</div>"
-            + f"<div class='v dim'>{pct(r.get('p_top10') or 0, 0)}</div>"
+            + end
             + "</div>"
         )
     return "".join(out)
@@ -612,15 +584,10 @@ def progression_chart(
     width: int = 880,
     height: int = 330,
 ) -> str:
-    """Cumulative championship points by round: solid where it happened, dashed
-    where it is projected.
+    """Cumulative points by round: solid for what happened, dashed for projection.
 
-    One y-axis, one unit, no second scale.
-
-    Dash means projected and nothing else - an earlier version also used it to
-    split teammates, which made a driver's completed season read as a forecast.
-    Teammates share a constructor colour and are separated by stroke weight plus
-    the label at the end of every line, so colour alone never carries identity.
+    Dashes mean projected and nothing else. The second car in a garage is a
+    lighter tint of the team colour, and every line is labelled at its end.
     """
     if not series:
         return ""
@@ -675,18 +642,9 @@ def progression_chart(
     out.append(f"<line class='now' x1='{nx:.1f}' y1='{pad_t}' x2='{nx:.1f}' y2='{pad_t + plot_h}'/>")
     out.append(f"<text x='{nx + 5:.1f}' y='{pad_t + 10}' text-anchor='start'>projected &rarr;</text>")
 
-    # End labels sit beside the line they belong to, so their vertical position
-    # has to stay close to where the line actually finishes. An earlier version
-    # walked a collision ladder downward only, which compounded: two drivers
-    # eight points apart pushed the second label 25px down, the third collided
-    # with THAT and moved again, and by the fifth the label was nowhere near
-    # its line.
-    #
-    # Two passes instead. The first enforces a minimum gap top to bottom; the
-    # second, only if the stack has run past the plot, lifts it back and
-    # re-enforces upward. Displacement ends up shared rather than dumped on
-    # whoever is last. Anything still moved more than a couple of pixels gets a
-    # leader line, so the label is tied to its series by something visible.
+    # End labels sit near their line's final value. Two passes: push down to a
+    # minimum gap, then if the stack overruns the plot, shift it up and re-space
+    # upward. Labels moved more than a few pixels get a leader line.
     ends = sorted(((s["points"][max(s["points"])], s) for s in series), key=lambda t: -t[0])
     # Each end label is two lines - name over value - so 26 left them touching.
     gap = 31.0
@@ -702,9 +660,7 @@ def progression_chart(
         placed = [max(y, pad_t + 6) for y in placed]
 
     for (value, s), want, y in zip(ends, wanted, placed):
-        colour = team_colour(s["team"])
-        # Second car in a garage: same hue, lighter stroke.
-        weight = "1.4" if s.get("second_car") else "2"
+        colour = series_colour(s)
         actual = [(r, v) for r, v in sorted(s["points"].items()) if r <= last_actual_round]
         future = [(r, v) for r, v in sorted(s["points"].items()) if r >= last_actual_round]
 
@@ -722,11 +678,9 @@ def progression_chart(
             out.append(f"<path class='band' d='M{top} L{bottom} Z' fill='{colour}'/>")
 
         if actual:
-            out.append(f"<path class='ser' d='{path(actual)}' stroke='{colour}' stroke-width='{weight}'/>")
+            out.append(f"<path class='ser' d='{path(actual)}' stroke='{colour}'/>")
         if len(future) > 1:
-            out.append(
-                f"<path class='ser proj' d='{path(future)}' stroke='{colour}' stroke-width='{weight}'/>"
-            )
+            out.append(f"<path class='ser proj' d='{path(future)}' stroke='{colour}'/>")
         if actual:
             r, v = actual[-1]
             out.append(f"<circle class='pt' cx='{X(r):.1f}' cy='{Y(v):.1f}' r='3.5' fill='{colour}'/>")
@@ -763,9 +717,7 @@ def progression_chart(
     out.append("<div class='tip' hidden></div>")
 
     legend = "".join(
-        f"<span style='color:{team_colour(s['team'])}'><i></i></span>"
-        f"<span style='margin-left:-10px'>{esc(s['label'])}</span>"
-        for s in series
+        f"<span><i style='background:{series_colour(s)}'></i>{esc(s['label'])}</span>" for s in series
     )
     out.append(f"<div class='legend'>{legend}</div>")
 
@@ -783,7 +735,7 @@ def progression_chart(
         "series": [
             {
                 "label": s["label"],
-                "colour": team_colour(s["team"]),
+                "colour": series_colour(s),
                 "points": {str(r): round(v, 1) for r, v in sorted(s["points"].items())},
             }
             for s in series
@@ -795,13 +747,8 @@ def progression_chart(
 
 
 def record_strip(board) -> str:
-    """One mark per graded race: was the favourite right, and how sure was it?
-
-    A table of results is checkable but not readable - nobody scans twenty rows
-    to form an impression. The strip gives the shape at a glance: bar height is
-    the probability the model published for its own pick, and the fill says
-    whether that pick won. A row of tall filled bars is a model that was
-    confident and correct; tall hollow ones are the honest failures.
+    """One bar per graded race: height is the probability published for the
+    model's pick, fill is whether it won.
     """
     if board is None or board.empty or "winner_hit" not in board:
         return ""
@@ -834,16 +781,10 @@ def record_strip(board) -> str:
 
 
 def _is_numeric_column(series: pd.Series) -> bool:
-    """Does this column hold quantities, or words?
+    """Whether a column holds quantities, which decides its alignment.
 
-    Alignment used to be decided by position - first column left, everything
-    after it right - which is correct often enough to look deliberate and wrong
-    whenever a table carries two text columns. A right-aligned column of names
-    set in a monospaced face reads as a broken layout, because it is one.
-
-    Strings count as numeric when the unit is the only thing between them and a
-    number: "71%", "90 pts". Those belong under a numeric heading, right-aligned
-    with the figures above and below them.
+    Strings count when a unit is all that stands between them and a number,
+    e.g. "71%" or "90 pts".
     """
     if series.empty or pd.api.types.is_bool_dtype(series):
         return False
@@ -854,13 +795,8 @@ def _is_numeric_column(series: pd.Series) -> bool:
 
 
 def _decimals(series: pd.Series) -> int:
-    """How many decimal places to give every value in this column.
-
-    %g prints each number to its own shortest form, so a column of three-decimal
-    figures published 0.890 as "0.89" and 0.880 as "0.88" - one digit short of
-    its neighbours, in a tabular-figures face where the ragged edge is the first
-    thing you see. One width for the whole column, taken from the value that
-    needs the most.
+    """Decimal places for a whole column, from the value that needs the most, so
+    0.890 doesn't print as 0.89 beside 0.881.
     """
     numbers = [v for v in series if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if not numbers:
@@ -880,10 +816,8 @@ def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None
             if series.notna().any():
                 winners[col] = series.min() if how == "min" else series.max()
 
-    # The first column is the row's label whatever it holds - a season number is
-    # still a label - so it stays left. Every other column is aligned on what is
-    # in it, and the heading takes the same class as the cells beneath it, which
-    # is the part that was missing.
+    # First column is the row label, always left. Other columns align on their
+    # content, and each heading takes its column's alignment.
     align = [False] + [_is_numeric_column(df[c]) for c in df.columns[1:]]
     # Figures loaded from JSON arrive as strings and each kept its own decimal
     # count, so "0.32" sat in a column of "0.164" and "0.481". A column that

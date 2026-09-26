@@ -144,8 +144,12 @@ def build(
         s.append(
             _section(
                 "Qualifying",
-                "One-lap pace. Feeds the projected grid above.",
-                rr.quali_board(prediction["quali_board"]),
+                (
+                    "What the model expected over one lap, beside where each driver qualified."
+                    if prediction.get("grid_known")
+                    else "One-lap pace. Feeds the projected grid above."
+                ),
+                rr.quali_board(prediction["quali_board"], qualified=bool(prediction.get("grid_known"))),
                 band=True,
             )
         )
@@ -184,11 +188,7 @@ def build(
                 )
 
     # ---- graded record ---------------------------------------------------
-    # The only section that answers "why should I believe this". Every forecast
-    # here was committed before its session ran, so the row is a claim made in
-    # advance and then marked. It is deliberately shown even when empty: a
-    # placeholder that says what will appear is more honest than a section that
-    # materialises once the numbers happen to be flattering.
+    # Shown even when empty, so it doesn't only appear once results look good.
     if not board.empty:
         show = board[["race", "when", "stage", "picked", "actual", "top5_overlap"]].rename(
             columns={"when": "made", "top5_overlap": "top 5"}

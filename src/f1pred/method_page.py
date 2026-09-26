@@ -75,7 +75,7 @@ def _range_block(sc: dict) -> str:
                 "should be": "80%",
                 "width": f"{held[key]['width']:.0f} pts",
             }
-            for label, key in (("Older version", "before"), ("Current", "after"))
+            for label, key in (("Race luck only", "before"), ("Current", "after"))
         ]
     )
     return (
@@ -83,11 +83,64 @@ def _range_block(sc: dict) -> str:
         "published with a range the real answer should land inside eight times in ten. "
         "Graded one team at a time against final constructors' standings:</p>"
         + rr.table(rows)
-        + "<p class='cap'>Race luck averages out over a dozen races, so it was never what made "
-        "a season miss. What does not average out is the model being wrong about a car "
-        "<em>now</em> and carrying that into every remaining race, so each simulated season "
-        "draws one pace offset per team. Still short of 80%, which is why it says so here.</p>"
+        + "<p class='cap'>Race luck averages out over a dozen races. What doesn't is the model "
+        "being wrong about a car <em>now</em>, which carries into every remaining race, so each "
+        "simulated season draws one pace offset per team."
+        + (" Still short of 80%." if held["after"]["coverage"] < 0.80 else "")
+        + "</p>"
     )
+
+
+def _in_short(bt: dict, sc: dict) -> str:
+    """The summary paragraphs, computed from the report files so they can't drift."""
+    rows = {r["method"]: r for r in bt.get("summary", [])}
+    model, grid = rows.get("model"), rows.get("grid")
+    out = []
+    if model:
+        n = int(model["n_races"])
+        out.append(
+            f"<p class='cap'>Every race from 2024 on was forecast by a model trained only on races "
+            f"before it: {n} races, each scored against the result.</p>"
+        )
+    if model and grid:
+        n = int(model["n_races"])
+        mw, gw = round(model["top1_hit"] * n), round(grid["top1_hit"] * n)
+        verdict = "more" if mw > gw else "fewer" if mw < gw else "as many"
+        out.append(
+            "<p class='cap'>The bar is the starting grid, which predicts a race well with no model at "
+            f"all. Against it the model calls {verdict} winners ({mw} of {n}, against {gw}), is a "
+            "little behind on the rest of the finishing order, and is clearly better at saying how "
+            f"likely each result is (log loss {model['logloss']:.3f} against {grid['logloss']:.3f}).</p>"
+        )
+    cal = pd.DataFrame(bt.get("calibration") or [])
+    if not cal.empty:
+        k = pd.to_numeric(cal["n"], errors="coerce").fillna(0)
+        said = (pd.to_numeric(cal["predicted"], errors="coerce") * k).sum() / max(k.sum(), 1)
+        won = (pd.to_numeric(cal["actual"], errors="coerce") * k).sum() / max(k.sum(), 1)
+        lean = (
+            "a little cautious"
+            if won - said > 0.03
+            else "a little bold"
+            if said - won > 0.03
+            else "about right"
+        )
+        out.append(
+            f"<p class='cap'>Its favourites were given {said:.0%} on average and won {won:.0%} of the "
+            f"time, so its confidence is {lean}.</p>"
+        )
+    held = (sc.get("held_out") or {}).get("after")
+    if held:
+        cov = held["coverage"]
+        tail = "slightly too narrow" if cov < 0.78 else "slightly too wide" if cov > 0.82 else "about right"
+        out.append(
+            "<p class='cap'>The season projection's range should hold the final total eight times in "
+            f"ten. On seasons it wasn't tuned on it held {cov:.0%}, so it is {tail}.</p>"
+        )
+    out.append(
+        "<p class='cap'>Each forecast is committed to <code>predictions/</code> before its session, "
+        "with the time it was made recorded in the file.</p>"
+    )
+    return "".join(out)
 
 
 def _step(n: int, title: str, body: str) -> str:
@@ -100,7 +153,7 @@ PIPELINE = [
         (
             "XGBoost ranker, objective <code>rank:ndcg</code>, trained on one group per race so "
             "each race contributes every pairwise comparison inside it rather than a single "
-            "winner label. 187 training races. Output is an unbounded score per driver."
+            "winner label. Output is an unbounded score per driver."
         ),
     ),
     (
@@ -122,17 +175,17 @@ PIPELINE = [
     (
         "Blend",
         (
-            "Published win probability is a fitted mix of the closed-form ranking and the "
-            "simulation. Podium and points probabilities are read off the simulated finishing "
-            "positions directly."
+            "Win probability is a fitted mix of the closed form and the simulation. Podium and "
+            "points come from the simulated finishing positions, floored so none is ever below "
+            "the chance of winning."
         ),
     ),
     (
         "Project",
         (
-            "Remaining calendar run 10,000 times with the same noise model, carrying points "
-            "already scored. Returns mean, 10th and 90th percentile, expected wins, and title "
-            "probability."
+            "The rest of the calendar run 10,000 times with the same noise model, from each "
+            "driver's strength on a typical weekend rather than this one's grid and track, "
+            "carrying points already scored."
         ),
     ),
 ]
@@ -149,15 +202,15 @@ NOT_MODELLED = [
     (
         "Penalties",
         (
-            "Pre-session grid drops arrive through the grid. In-race decisions do not. Splitting "
-            "retirements into driver-caused and car-caused was tried and moved no metric at all."
+            "Not applied. Before the race the starting grid is taken as the qualifying order, so "
+            "grid drops are missed, and in-race penalties aren't modelled at all."
         ),
     ),
     (
         "Upgrades",
         (
             "Which team improves is not forecast, and nothing here can forecast it. How far a team's "
-            "pace can move is in the championship projection's range - see below."
+            "pace can move is in the championship projection's range, above."
         ),
     ),
     ("Team orders", "Not represented."),
@@ -186,26 +239,11 @@ def build(standalone: bool = True) -> str:
         "</header>",
     ]
 
-    # Plain language before any metric. Everything below this is for someone
-    # checking the work; this paragraph is for someone deciding whether it is
-    # worth checking. Without it the page opens on NDCG and Brier and a general
-    # reader has no way in.
+    # Plain-language summary first, for readers who don't want the metrics.
     s.append(
         "<section><div class='lab'><b>In short</b></div><div class='body'>"
-        "<p class='cap'>Every race from 2024 onwards was forecast by a model that had only "
-        "seen races before it &mdash; never the one it was predicting, and never anything "
-        "later. That is 62 races, each scored against what actually happened.</p>"
-        "<p class='cap'>The comparison that matters is against the starting grid, because "
-        "the grid already predicts the race well and needs no model at all. This one ranks "
-        "the finishing order slightly worse than the grid does, and is clearly better at "
-        "saying <em>how likely</em> each outcome is. When it claimed its favourite would win, "
-        "it was right almost exactly as often as it said it would be.</p>"
-        "<p class='cap'>The championship projection is weaker, and this page says so rather "
-        "than rounding it off: its published range is too narrow.</p>"
-        "<p class='cap'>Every forecast is written to <code>predictions/</code> and committed "
-        "before its session runs, so the order is checkable by anyone from the commit dates. "
-        "The rest of this page is the evidence.</p>"
-        "</div></section>"
+        + _in_short(bt, _load("spread_calibration.json"))
+        + "</div></section>"
     )
 
     # ---- pipeline --------------------------------------------------------
@@ -218,10 +256,9 @@ def build(standalone: bool = True) -> str:
 
     # ---- race accuracy ---------------------------------------------------
     body = (
-        "<p class='cap'>Walk-forward. Each race predicted by a model trained only on "
-        "earlier races, scored against baselines requiring no model. Lower log loss and "
-        "Brier are better. Hyperparameters fitted on 2022&ndash;23, bounded at both ends, "
-        "and not re-fitted on the reported window.</p>"
+        "<p class='cap'>Each race predicted by a model trained only on earlier races, and "
+        "scored against baselines that need no model. Lower log loss and Brier are better. "
+        "Settings were fitted on 2022&ndash;23 and never on the reported window.</p>"
     )
     if bt.get("summary"):
         b = pd.DataFrame(bt["summary"]).rename(
@@ -229,7 +266,7 @@ def build(standalone: bool = True) -> str:
                 "method": "approach",
                 "top5_overlap": "top 5",
                 "podium_overlap": "podium",
-                "top1_hit": "winner",
+                "top1_hit": "winner %",
                 "ndcg5": "ndcg@5",
                 "logloss": "log loss",
                 "n_races": "races",
@@ -243,29 +280,26 @@ def build(standalone: bool = True) -> str:
             "team_form": "Team form",
         }
         b["approach"] = b["approach"].map(lambda x: names.get(x, x))
+        b["winner %"] = b["winner %"] * 100
         cols = [
             c
-            for c in ["approach", "top 5", "podium", "winner", "ndcg@5", "log loss", "brier", "races"]
+            for c in ["approach", "top 5", "podium", "winner %", "ndcg@5", "log loss", "brier", "races"]
             if c in b.columns
         ]
         body += rr.table(
-            b[cols].round(3),
+            b[cols].round({"winner %": 1}).round(3),
             emphasise="This model",
             best_cols={
                 "top 5": "max",
                 "podium": "max",
-                "winner": "max",
+                "winner %": "max",
                 "ndcg@5": "max",
                 "log loss": "min",
                 "brier": "min",
             },
         )
     if bt.get("by_season"):
-        # Stored long - one row per season per approach - which repeated the
-        # season down the first column and meant the emphasis on "This model"
-        # matched nothing, because the first column held a year. One row per
-        # season, with the grid's log loss beside the model's, is the
-        # comparison a reader is actually making.
+        # One row per season, with the grid's log loss beside the model's.
         by = pd.DataFrame(bt["by_season"])
         mine = by[by["approach"] == "This model"].set_index("season")
         grid = by[by["approach"] == "Grid order"].set_index("season")
@@ -273,15 +307,15 @@ def build(standalone: bool = True) -> str:
             {
                 "season": mine.index,
                 "top 5": mine["top 5"].round(2).to_numpy(),
-                "winner": [f"{v:.0%}" for v in mine["winner"]],
+                "winner %": (mine["winner"] * 100).round(1).to_numpy(),
                 "log loss": mine["log loss"].round(3).to_numpy(),
                 "grid log loss": grid["log loss"].reindex(mine.index).round(3).to_numpy(),
                 "races": mine["races"].to_numpy(),
             }
         )
         body += (
-            "<p class='cap' style='margin-top:26px'>By season, against the grid on the one "
-            "metric the grid can be scored on. 2026 is live and incomplete.</p>"
+            "<p class='cap' style='margin-top:26px'>By season, with the grid's log loss beside "
+            "the model's. 2026 is still in progress.</p>"
         )
         body += rr.table(seasons)
     s.append(f"<section><div class='lab'><b>Race accuracy</b></div><div class='body'>{body}</div></section>")
@@ -290,10 +324,7 @@ def build(standalone: bool = True) -> str:
     if bt.get("calibration"):
         c = pd.DataFrame(bt["calibration"])
         c.columns = [str(x) for x in c.columns]
-        # Every figure in this paragraph used to be typed out, and every one of
-        # them drifted: it claimed 62 races over a table that summed to 61, and
-        # a pooled pair that had not been true for two refits. A sentence that
-        # interprets a table has to be computed from that table.
+        # Computed from the table rather than typed, so it can't drift from it.
         n = pd.to_numeric(c["n"], errors="coerce").fillna(0)
         stated = (pd.to_numeric(c["predicted"], errors="coerce") * n).sum() / max(n.sum(), 1)
         observed = (pd.to_numeric(c["actual"], errors="coerce") * n).sum() / max(n.sum(), 1)
@@ -303,25 +334,22 @@ def build(standalone: bool = True) -> str:
             if gap > 0.01
             else ("mildly over-confident" if gap < -0.01 else "calibrated in aggregate")
         )
-        # Pandas hands back its own interval strings - "(0.189, 0.378]" - which
-        # are exact and unreadable. Same edges, stated the way the rest of the
-        # page states a probability.
+        # "(0.189, 0.378]" -> "19-38%"
         c["bucket"] = [_band(str(b)) for b in c["bucket"]]
+        for col in ("predicted", "actual"):
+            c[col] = [f"{v:.0%}" for v in pd.to_numeric(c[col], errors="coerce")]
         c = c.rename(columns={"predicted": "stated", "actual": "observed"})
         s.append(
             "<section class='band'><div class='lab'><b>Calibration</b></div>"
             "<div class='body'><p class='cap'>What the model said, against what happened. Each row "
             "collects the races where it put its favourite in that range. Buckets hold "
             f"{int(n.min())}&ndash;{int(n.max())} races; read n before reading a row. Pooled over "
-            f"{int(n.sum())} races: stated {stated:.3f}, observed {observed:.3f} &mdash; "
+            f"{int(n.sum())} races: stated {stated:.0%}, observed {observed:.0%} &mdash; "
             f"{verdict}.</p>" + rr.table(c) + "</div></section>"
         )
 
     # ---- the championship ------------------------------------------------
-    # Two sections once stood here: one grading the favourite, one grading the
-    # range. They are the same question - does the projection mean what it
-    # says - and splitting them meant a reader had to hold the first to make
-    # sense of the second.
+    # Who wins and how close answer the same question, so one section.
     sc = _load("spread_calibration.json")
     if tb.get("checkpoints"):
         f = pd.DataFrame(tb["checkpoints"])
@@ -338,8 +366,7 @@ def build(standalone: bool = True) -> str:
             f"<p class='cap'><b>Who wins.</b> Across {len(f)} of those checkpoints it named the "
             f"eventual champion {f['favourite_was_right'].mean() * 100:.0f}% of the time."
         )
-        # The high-end figures were typed out once and drifted: the page read
-        # "16 of 16" over a table showing twelve. They come off the JSON now.
+        # Figures come off the JSON so the prose can't drift from the table.
         if not cal.empty:
             top = cal.loc[[pd.to_numeric(cal["claimed"], errors="coerce").idxmax()]]
             n_top = int(pd.to_numeric(top["n"], errors="coerce").iloc[0])
