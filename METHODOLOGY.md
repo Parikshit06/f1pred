@@ -236,6 +236,10 @@ included.
 ## 9. Reproducibility and provenance
 
 * `uv.lock` pins every dependency; CI installs from it on Python 3.11-3.13.
+  The reports were generated on 3.12 (pinned in `.python-version`) with
+  XGBoost 3.4.1, and each report records its versions. XGBoost 3.4 needs
+  Python 3.12+, so on 3.11 the lock resolves 3.2 and figures may differ in the
+  last decimals.
 * `make demo` runs the whole pipeline on a seeded synthetic championship with
   no network. The same fixture drives `tests/test_pipeline.py` in CI.
 * Every forecast records its stage, grid and entry sources, the model and
