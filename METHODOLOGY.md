@@ -240,7 +240,9 @@ included.
   next thing to try.
 
 * Races are noisy and the sample is small. About 60 test races is enough to
-  separate the model from naive baselines, but mostly not from the starting grid.
+  separate the model from naive baselines. Against the calibrated starting
+  grid it is level on probabilities and behind on ordering the field (podium
+  overlap and rank correlation), once qualifying has run.
 * Not modelled: weather, tyre and pit strategy, in-race penalties, team orders,
   upgrades, correlated failures, safety-car timing.
 * Before the official grid is published, penalties are unknown and the

@@ -101,11 +101,28 @@ def test_the_readme_claims_no_lead_over_the_grid_the_evidence_lacks():
         pytest.skip("no paired comparison recorded")
     text = _readme().lower()
     clear_wins = [m for m, r in comp.items() if r["better"] == "model"]
+    clear_losses = [m for m, r in comp.items() if r["better"] == "grid"]
     for phrase in ("beats the grid", "better than the grid", "outperforms the grid"):
         if phrase in text:
             assert clear_wins, f"the README says the model {phrase!r}, but no paired interval supports it"
-    if not clear_wins:
+    if not clear_wins and not clear_losses:
         assert "nothing is statistically clear" in text, "the README no longer admits the grid is level"
+    else:
+        assert "nothing is statistically clear" not in text, "some intervals exclude zero; say which"
+
+
+def test_every_clear_loss_to_the_grid_is_admitted():
+    """The mirror image: where the grid is ahead with an interval clear of zero,
+    the README has to say so and quote the interval."""
+    comp = _comparison("comparison_vs_grid")
+    losses = {m: r for m, r in comp.items() if r["better"] == "grid"}
+    if not losses:
+        pytest.skip("the grid is not clearly ahead on any metric")
+    text = _readme()
+    assert "the grid is clearly better" in text.lower()
+    for metric, r in losses.items():
+        quoted = f"{r['difference']:+.3f} ({r['ci_low']:+.3f} to {r['ci_high']:+.3f})"
+        assert quoted in text, f"{metric}: the grid is ahead by {quoted}, not quoted in the README"
 
 
 @pytest.mark.parametrize(

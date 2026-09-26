@@ -56,9 +56,9 @@ CURRENT_SEASON = 2026
 
 # Fallbacks only: `make backtest` fits these on 2022-23 and writes them to
 # reports/backtest.json, which the live forecast reads (backtest.load_settings).
-DEFAULT_CURRENT_SEASON_WEIGHT = 1.5  # training weight on current-season races
+DEFAULT_CURRENT_SEASON_WEIGHT = 2.0  # training weight on current-season races
 DEFAULT_TEMPERATURE = 0.35  # Plackett-Luce sharpness; <1 is more decisive
-DEFAULT_BLEND_WEIGHT = 0.6  # Plackett-Luce vs simulation in the mixture
+DEFAULT_BLEND_WEIGHT = 0.7  # Plackett-Luce vs simulation in the mixture
 DEFAULT_QUALI_TEMPERATURE = 0.5  # the qualifying model's own Plackett-Luce temperature
 
 # How far a team's true pace can sit from the model's estimate over a full

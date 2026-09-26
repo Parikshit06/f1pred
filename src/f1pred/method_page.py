@@ -107,6 +107,12 @@ def _row(rows: list[dict], key: str, value: str) -> dict:
     return next((r for r in rows if r.get(key) == value), {})
 
 
+def _clear_side(comp: dict, side: str, lead: str) -> str:
+    """A sentence naming every metric where `side` is ahead with an interval clear of zero."""
+    names = [METRIC_NAMES.get(m, m) for m, r in comp.items() if r.get("better") == side]
+    return f" {lead}{', '.join(names)}." if names else ""
+
+
 def _in_short(bt: dict, sc: dict) -> str:
     """The summary paragraphs, computed from the report files so they can't drift."""
     window = bt.get("window") or {}
@@ -137,7 +143,10 @@ def _in_short(bt: dict, sc: dict) -> str:
                 if ll
                 else ""
             )
-            + ". Most of a race is decided in qualifying, and the numbers say so.</p>"
+            + ". Most of a race is decided in qualifying, and the numbers say so."
+            + _clear_side(comp, "grid", "The grid is clearly better on ")
+            + _clear_side(comp, "model", "The model is clearly better on ")
+            + "</p>"
         )
     ece = bt.get("calibration_error") or {}
     if ece:
