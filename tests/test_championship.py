@@ -329,3 +329,137 @@ def test_a_teammate_can_still_beat_a_stronger_teammate(monkeypatch):
         return (np.argmax(totals, axis=1) == 1).mean()
 
     assert title_share(5.0) > title_share(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Scoring rules by season
+# ---------------------------------------------------------------------------
+def test_sprint_scoring_follows_the_season():
+    assert champ.sprint_points(2020).size == 0
+    assert champ.sprint_points(2021).tolist() == [3, 2, 1]
+    assert champ.sprint_points(2026).tolist() == [8, 7, 6, 5, 4, 3, 2, 1]
+
+
+def test_the_fastest_lap_point_only_counts_while_it_existed():
+    assert [champ.fastest_lap_point(s) for s in (2018, 2019, 2024, 2025)] == [0, 1, 1, 0]
+
+
+def test_a_round_is_worth_more_with_a_sprint():
+    maxima = champ.round_maximum(2026, np.array([False, True]))
+    assert maxima.tolist() == [25.0, 33.0]
+    team = champ.round_maximum(2026, np.array([False, True]), cars=2)
+    assert team.tolist() == [43.0, 58.0]
+
+
+def test_a_sprint_weekend_awards_both_races_points():
+    races, n = 2, 12
+    totals, *_ = champ.simulate_seasons(
+        np.zeros(n),
+        np.zeros(n),
+        np.zeros(n),
+        races,
+        n_sims=300,
+        safety_car_prob=0.0,
+        sprint=np.array([True, False]),
+        sprint_table=champ.sprint_points(2026),
+    )
+    expected = champ.POINTS.sum() * races + champ.sprint_points(2026).sum()
+    assert totals.sum(axis=1) == pytest.approx(expected)
+
+
+def test_sprints_are_left_out_only_when_the_season_had_none():
+    n = 10
+    totals, *_ = champ.simulate_seasons(
+        np.zeros(n),
+        np.zeros(n),
+        np.zeros(n),
+        1,
+        n_sims=100,
+        safety_car_prob=0.0,
+        sprint=np.array([True]),
+        sprint_table=champ.sprint_points(2019),
+    )
+    assert totals.sum(axis=1) == pytest.approx(champ.POINTS.sum())
+
+
+def test_clinching_counts_the_sprint_points_still_on_offer():
+    """A 30-point lead with three plain rounds left can be sealed in the next
+    one; with a sprint on each, the rival has 33 a round to answer with."""
+    plain = champ.round_maximum(2026, np.array([False, False, False]))
+    sprints = champ.round_maximum(2026, np.array([True, True, True]))
+    assert champ.clinch_round(130, 100, plain) == 1
+    assert champ.clinch_round(130, 100, sprints) == 2
+
+
+def test_clinch_accepts_a_plain_count_of_races():
+    assert champ.clinch_round(100, 50, 1) == 1
+
+
+# ---------------------------------------------------------------------------
+# A driver's strength for the rest of the season
+# ---------------------------------------------------------------------------
+class _Ranker:
+    """Scores a race by the 'pace' column, standardised like model.Ranker.score."""
+
+    feature_names = ("pace",)
+
+    def score(self, df):
+        s = df["pace"].to_numpy(dtype=float)
+        return (s - s.mean()) / (s.std() or 1.0)
+
+
+def _season_history(n_races=10, bad_race=None):
+    import pandas as pd
+
+    rows = []
+    for seq in range(n_races):
+        for d, pace in (("fast", 3.0), ("mid", 2.0), ("slow", 1.0), ("back", 0.0), ("last", -1.0)):
+            p = pace
+            if bad_race is not None and seq == bad_race and d == "fast":
+                p = -5.0  # one wrecked weekend
+            rows.append({"race_seq": seq, "driver_id": d, "pace": p, "position": 1.0})
+    return pd.DataFrame(rows)
+
+
+def _next_race(drivers):
+    import pandas as pd
+
+    return pd.DataFrame({"driver_id": drivers, "pace": 0.0})
+
+
+def test_season_strength_follows_the_real_weekends():
+    h = _season_history()
+    s = champ.season_strength(_Ranker(), _next_race(["fast", "mid", "slow"]), h)
+    assert s[0] > s[1] > s[2]
+
+
+def test_one_wrecked_weekend_does_not_set_a_season():
+    clean = champ.season_strength(_Ranker(), _next_race(["fast"]), _season_history())
+    wrecked = champ.season_strength(_Ranker(), _next_race(["fast"]), _season_history(bad_race=9))
+    assert wrecked[0] == pytest.approx(clean[0]), "the median moved on one bad race"
+
+
+def test_a_driver_without_recent_races_is_scored_on_a_typical_weekend(monkeypatch):
+    """A rookie has no weekends of their own to take a median over."""
+    import pandas as pd
+
+    called = {}
+
+    def typical(race, history, method="mean5"):
+        called["method"] = method
+        return race.assign(pace=0.0)
+
+    monkeypatch.setattr(champ, "typical_weekend", typical)
+    s = champ.season_strength(
+        _Ranker(), pd.DataFrame({"driver_id": ["fast", "rookie"], "pace": 0.0}), _season_history()
+    )
+    assert called["method"] == "median8"
+    assert np.isfinite(s).all()
+
+
+def test_only_the_last_eight_races_count():
+    h = _season_history(n_races=20)
+    # Before the last eight races, "slow" was the fastest car on the grid.
+    h.loc[(h.race_seq < 12) & (h.driver_id == "slow"), "pace"] = 9.0
+    s = champ.season_strength(_Ranker(), _next_race(["fast", "slow"]), h)
+    assert s[0] > s[1], "form from more than eight races ago is still steering the season"

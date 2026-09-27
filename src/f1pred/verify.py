@@ -1,17 +1,18 @@
-"""End-to-end verification.
+"""End-to-end verification: a release gate, `make verify`.
 
-Seven audits that between them answer "should anyone believe this model":
-
-  1. leakage        does any pre-race feature move when the race result changes?
-  2. inputs         which of the three input classes actually reach the model?
-  3. weighting      what does it lean on, and does that ordering make sense?
-  4. bias           is it favouring particular drivers, once the artifact is removed?
-  5. accuracy       does it beat baselines anyone could produce without it?
+  1. leakage        does any pre-race feature move when a result is rewritten,
+                    or when later races are added?
+  2. inputs         which input classes actually reach the model?
+  3. contributions  what the model leans on, out of sample (SHAP). Reported,
+                    not judged against an expected ordering: which inputs
+                    matter is for the model and the ablation to establish
+  4. bias           is it favouring particular drivers, once the artefact is removed?
+  5. accuracy       what does it add over the starting grid, with intervals?
   6. calibration    when it says 30%, does that happen 30% of the time?
-  7. plausibility   are the published numbers internally coherent?
+  7. plausibility   is a live forecast one coherent distribution?
 
 Each returns PASS / WARN / FAIL with the evidence attached. `f1pred.cli verify`
-exits non-zero on any FAIL, so it works as a release gate.
+exits non-zero on any FAIL.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from . import backtest, config, diagnostics, features, model, simulate
+from . import backtest, diagnostics, features, model, probability, simulate
 
 log = logging.getLogger(__name__)
 
@@ -156,6 +157,61 @@ def audit_leakage(df: pd.DataFrame) -> Audit:
     )
 
 
+def audit_truncation(cuts: int = 3) -> Audit:
+    """Build features from data that stops at a race, and from everything:
+    every feature of every race up to the cut must come out identical."""
+    from dataclasses import replace
+
+    raw = features._load()
+    done = raw.results[["season", "round"]].drop_duplicates().sort_values(["season", "round"])
+    picks = done.iloc[np.linspace(len(done) * 0.4, len(done) - 2, cuts).astype(int)]
+    full = features.build(include_upcoming=False)
+    cols = sorted(set(features.RACE_FEATURES + features.QUALI_FEATURES))
+    keys = ["season", "round", "driver_id"]
+    moved: dict[str, int] = {}
+    original = features._load
+    try:
+        for cut in picks.itertuples():
+            limit = cut.season * 100 + cut.round
+
+            def keep(t, limit=limit):
+                return t if t.empty else t[(t["season"] * 100 + t["round"]) <= limit]
+
+            trimmed = replace(
+                raw,
+                results=keep(raw.results),
+                quali=keep(raw.quali),
+                standings=keep(raw.standings),
+                pace=keep(raw.pace),
+                openf1_grid=keep(raw.openf1_grid),
+                openf1_entries=keep(raw.openf1_entries),
+            )
+            features._load = lambda trimmed=trimmed: trimmed
+            early = features.build(include_upcoming=False).set_index(keys)[cols].sort_index()
+            late = full.set_index(keys)[cols].loc[early.index]
+            diff = ~np.isclose(early.astype(float), late.astype(float), equal_nan=True)
+            for c, n in zip(cols, diff.sum(axis=0)):
+                if n:
+                    moved[c] = moved.get(c, 0) + int(n)
+    finally:
+        features._load = original
+    where = ", ".join(f"{r.season} r{r.round}" for r in picks.itertuples())
+    if moved:
+        return Audit(
+            "1b. Truncation invariance",
+            FAIL,
+            f"{len(moved)} feature(s) change when later races are added",
+            f"Cut after {where}.",
+            pd.Series(moved, name="rows_changed").to_frame(),
+        )
+    return Audit(
+        "1b. Truncation invariance",
+        PASS,
+        f"All {len(cols)} features identical whether later races exist or not",
+        f"Cut after {where}; compared every row up to each cut.",
+    )
+
+
 # ---------------------------------------------------------------------------
 # 2. Inputs
 # ---------------------------------------------------------------------------
@@ -189,6 +245,9 @@ INPUT_CLASSES = {
         "drv_pace_gap_pct",
         "team_pace_trend",
         "drv_avg_grid_5",
+        "drv_avg_quali_5",
+        "drv_pole_rate_10",
+        "team_avg_quali_5",
     ],
     "Practice": ["fp_best_gap_pct", "fp_long_run_gap_pct", "practice_available"],
     "Circuit": ["circuit_overtaking_score", "circuit_dnf_rate", "circuit_pole_win_rate", "season_progress"],
@@ -236,57 +295,46 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
 
 
 # ---------------------------------------------------------------------------
-# 3. Weighting
+# 3. Contributions
 # ---------------------------------------------------------------------------
-def audit_weighting(df: pd.DataFrame) -> Audit:
-    """Does the model lean on things that should matter, in a sensible order?"""
-    ranker = model.train_race(df[df["position"].notna()])
-    gain = ranker.booster.get_booster().get_score(importance_type="gain")
-    imp = pd.DataFrame([{"feature": k, "gain": v} for k, v in gain.items()])
-    total = imp["gain"].sum()
-    imp["share"] = imp["gain"] / total * 100
+def audit_contributions(df: pd.DataFrame, n_races: int = 12) -> Audit:
+    """Share of the model's attention by input class, out of sample.
 
+    The model is trained on races before the last `n_races`, and SHAP shares
+    are averaged over those races. No ordering is expected: this is what the
+    model learned. Only an input class with no contribution at all is flagged,
+    because that means data isn't reaching it.
+    """
+    done = sorted(df[df["position"].notna()]["race_seq"].unique())
+    held = done[-n_races:]
+    ranker = model.train_race(df[df["race_seq"] < held[0]])
     lookup = {f: label for label, cols in INPUT_CLASSES.items() for f in cols}
-    imp["input"] = imp["feature"].map(lookup).fillna("Other")
-    by_class = imp.groupby("input")["share"].sum().sort_values(ascending=False).round(1)
-
-    problems = []
-    quali = by_class.get("Qualifying", 0.0)
-    past = by_class.get("Past results", 0.0)
-    circuit = by_class.get("Circuit", 0.0)
-
-    # Qualifying is measured this weekend in this car; history is a lagging
-    # proxy. A model leaning on history over the grid would be ignoring the
-    # freshest evidence it has.
-    if quali < past:
-        problems.append(
-            f"Qualifying carries {quali:.0f}% against {past:.0f}% for past results. "
-            "The grid is the most current evidence available and should dominate."
-        )
-    if quali > 85:
-        problems.append(
-            f"Qualifying carries {quali:.0f}% - the model is close to just reading the grid back."
-        )
-    if circuit < 0.5:
-        problems.append("Circuit character is contributing almost nothing.")
-
-    single = imp.sort_values("share", ascending=False).iloc[0]
-    if single["share"] > 60:
-        problems.append(
-            f"{single['feature']} alone carries {single['share']:.0f}% - dangerously concentrated."
-        )
-
-    top = imp.sort_values("share", ascending=False).head(10)[["feature", "input", "share"]].round(1)
-    detail = "share of total gain, grouped:\n" + by_class.to_string()
-    if problems:
-        return Audit("3. Weighting", WARN, "; ".join(problems), detail, top.set_index("feature"))
-    return Audit(
-        "3. Weighting",
-        PASS,
-        f"Qualifying {quali:.0f}% > past results {past:.0f}% > circuit {circuit:.0f}% - the sensible order",
-        detail,
-        top.set_index("feature"),
+    shares: dict[str, list[float]] = {}
+    for seq in held:
+        race = df[df["race_seq"] == seq]
+        phi = np.abs(ranker.contributions(race)).sum(axis=0)
+        total = phi.sum() or 1.0
+        by_class: dict[str, float] = {}
+        for f, v in zip(ranker.feature_names, phi):
+            by_class[lookup.get(f, "Other")] = by_class.get(lookup.get(f, "Other"), 0.0) + v / total
+        for k, v in by_class.items():
+            shares.setdefault(k, []).append(v)
+    table = (
+        pd.Series({k: float(np.mean(v)) * 100 for k, v in shares.items()}, name="share_pct")
+        .sort_values(ascending=False)
+        .round(1)
+        .to_frame()
     )
+    dead = [k for k in ("Past results", "Qualifying") if table["share_pct"].get(k, 0.0) < 0.5]
+    detail = (
+        f"Mean |SHAP| share over the last {len(held)} races, from a model trained before them.\n"
+        "Which input matters is established by the ablation in reports/experiments.json;\n"
+        "this checks that the learned contributions are live and not concentrated by accident."
+    )
+    if dead:
+        return Audit("3. Contributions", WARN, f"{', '.join(dead)} contribute nothing", detail, table)
+    top = table.index[0]
+    return Audit("3. Contributions", PASS, f"Largest share: {top} ({table.iloc[0, 0]:.0f}%)", detail, table)
 
 
 # ---------------------------------------------------------------------------
@@ -339,181 +387,121 @@ def audit_bias(df: pd.DataFrame, start_season: int, retrain_every: int = 3) -> A
 # ---------------------------------------------------------------------------
 # 5. Accuracy
 # ---------------------------------------------------------------------------
-def audit_accuracy(
-    df: pd.DataFrame, start_season: int, n_sims: int, retrain_every: int, params: dict | None = None
-) -> tuple[Audit, object]:
+def audit_accuracy(df: pd.DataFrame, start_season: int, retrain_every: int) -> tuple[Audit, object]:
+    """Against the starting grid, race by race, with bootstrap intervals."""
     res = backtest.walk_forward(
-        df, start_season, retrain_every=retrain_every, n_sims=n_sims, **(params or {})
+        df, start_season, retrain_every=retrain_every, settings=backtest.load_settings()
     )
-    s = res.summary()
-    if s.empty or "model" not in s.index:
+    if res.races.empty:
         return Audit("5. Accuracy", FAIL, "backtest produced no model rows"), res
-
-    m, weak = s.loc["model"], s.drop(index="model")
-    beaten = (m["ndcg5"] > weak["ndcg5"]).sum()
-
+    comp = res.compare("model", "grid").set_index("metric")
+    worse = [m for m, r in comp.iterrows() if r["better"] == "grid"]
+    better = [m for m, r in comp.iterrows() if r["better"] == "model"]
+    table = comp[["model", "grid", "difference", "ci_low", "ci_high", "better"]].round(3)
     detail = (
-        f"{int(m['n_races'])} races, walk-forward, trained only on earlier races.\n"
-        f"Beats {beaten} of {len(weak)} baselines on NDCG@5."
+        f"{int(comp['n_races'].iloc[0])} races, walk-forward, trained only on earlier races.\n"
+        "Both sides calibrated the same way; 'better' needs a 95% interval clear of zero."
     )
-    if "grid" in weak.index:
-        g = weak.loc["grid"]
-        detail += (
-            f"\nAgainst the grid baseline: top5 {m['top5_overlap']:.2f} vs {g['top5_overlap']:.2f}, "
-            f"log loss {m['logloss']:.3f} vs {g['logloss']:.3f}."
-        )
-
-    if beaten < len(weak) - 1:
-        return Audit("5. Accuracy", FAIL, f"Only beats {beaten} of {len(weak)} baselines", detail, s), res
-    if m["logloss"] > weak["logloss"].min():
+    if "win_logloss" in worse:
+        return Audit("5. Accuracy", FAIL, "The grid alone gives better win probabilities", detail, table), res
+    if worse:
         return Audit(
             "5. Accuracy",
             WARN,
-            "A baseline produces better-calibrated probabilities than the model",
+            f"Better than the grid on {len(better)} metric(s), worse on {', '.join(worse)}",
             detail,
-            s,
+            table,
         ), res
     return Audit(
-        "5. Accuracy",
-        PASS,
-        f"Best log loss of all approaches ({m['logloss']:.3f}); beats {beaten}/{len(weak)} on ranking",
-        detail,
-        s,
+        "5. Accuracy", PASS, f"Better than the grid on {len(better)} metric(s), worse on none", detail, table
     ), res
 
 
 # ---------------------------------------------------------------------------
 # 6. Calibration
 # ---------------------------------------------------------------------------
-def _wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval - behaves sensibly at small n, unlike normal approx."""
-    if n == 0:
-        return (0.0, 1.0)
-    phat = k / n
-    denom = 1 + z**2 / n
-    centre = (phat + z**2 / (2 * n)) / denom
-    half = z / denom * np.sqrt(phat * (1 - phat) / n + z**2 / (4 * n**2))
-    return (max(0.0, centre - half), min(1.0, centre + half))
-
-
 def audit_calibration(res) -> Audit:
-    """Is the miscalibration real, or is it small buckets?
+    """Per-driver reliability of win and podium probabilities.
 
-    Sixty races split four ways leaves 9-30 observations per bucket, where a
-    proportion carries a standard error near 0.15. Judging calibration on raw
-    gaps at that sample size flags noise as failure, so each bucket is tested
-    against its own confidence interval, and the aggregate confidence level -
-    which uses every race at once - is tested separately.
+    Each bucket is judged against its own Wilson interval, because a bucket of
+    a dozen races carries a standard error near 0.15 and a raw gap there is
+    noise, not miscalibration.
     """
-    cal = res.calibration()
-    if cal.empty:
-        return Audit("6. Calibration", WARN, "not enough races to bucket")
-
-    cal = cal.copy()
-    cal["gap"] = (cal["predicted"] - cal["actual"]).abs()
-    lo, hi, verdict = [], [], []
-    for row in cal.itertuples():
-        n = int(row.n)
-        k = round(row.actual * n)
-        a, b = _wilson(k, n)
-        lo.append(round(a, 3))
-        hi.append(round(b, 3))
-        verdict.append("ok" if a <= row.predicted <= b else "off")
-    cal["ci_low"], cal["ci_high"], cal["verdict"] = lo, hi, verdict
-    off = int((cal["verdict"] == "off").sum())
-
-    # Aggregate: does the model's stated confidence match reality overall?
-    total_n = int(cal["n"].sum())
-    pooled_pred = float((cal["predicted"] * cal["n"]).sum() / total_n)
-    pooled_obs = float((cal["actual"] * cal["n"]).sum() / total_n)
-    agg_lo, agg_hi = _wilson(round(pooled_obs * total_n), total_n)
-    aggregate_ok = agg_lo <= pooled_pred <= agg_hi
-
+    rel = res.reliability()
+    if not rel:
+        return Audit("6. Calibration", WARN, "nothing to bucket")
+    rows = []
+    for event, table in rel.items():
+        for r in table.itertuples():
+            rows.append(
+                {
+                    "event": event,
+                    "bucket": r.bucket,
+                    "stated": round(r.stated, 3),
+                    "observed": round(r.observed, 3),
+                    "n": int(r.n),
+                    "verdict": "ok" if r.ci_low <= r.stated <= r.ci_high else "off",
+                }
+            )
+    table = pd.DataFrame(rows).set_index(["event", "bucket"])
+    off = int((table["verdict"] == "off").sum())
+    ece = res.calibration_error()
     detail = (
-        f"Pooled over {total_n} races: model says {pooled_pred:.3f}, observed {pooled_obs:.3f} "
-        f"(95% CI {agg_lo:.3f}-{agg_hi:.3f}).\n"
-        f"Per bucket, {off} of {len(cal)} fall outside their own interval; with "
-        f"{len(cal)} comparisons about one is expected by chance.\n"
-        f"Mean absolute gap {cal['gap'].mean():.3f}, but buckets hold only "
-        f"{int(cal['n'].min())}-{int(cal['n'].max())} races each."
+        "Expected calibration error: "
+        + ", ".join(f"{k} {v:.3f}" for k, v in ece.items())
+        + f"\n{off} of {len(table)} buckets fall outside their own 95% interval; "
+        f"about {len(table) * 0.05:.1f} would by chance."
     )
-    table = cal[["bucket", "predicted", "actual", "ci_low", "ci_high", "n", "verdict"]]
-
-    if not aggregate_ok:
-        return Audit(
-            "6. Calibration",
-            FAIL,
-            f"Overall confidence is wrong: says {pooled_pred:.3f}, happens {pooled_obs:.3f}",
-            detail,
-            table,
-        )
-    if off > max(1, len(cal) // 3):
-        return Audit(
-            "6. Calibration",
-            WARN,
-            f"{off} of {len(cal)} buckets off, more than chance explains",
-            detail,
-            table,
-        )
+    if off > max(2, len(table) // 4):
+        return Audit("6. Calibration", WARN, f"{off} of {len(table)} buckets off", detail, table)
     return Audit(
         "6. Calibration",
         PASS,
-        f"Overall confidence is right: says {pooled_pred:.3f}, happens {pooled_obs:.3f}",
+        f"{len(table) - off} of {len(table)} buckets within their interval",
         detail,
         table,
     )
 
 
 # ---------------------------------------------------------------------------
-# 7. Plausibility of a live prediction
+# 7. Plausibility of a live forecast
 # ---------------------------------------------------------------------------
 def audit_plausibility(df: pd.DataFrame) -> Audit:
-    """The published numbers must be internally coherent and physically sane."""
+    """The most recent race, forecast exactly as live: one coherent distribution."""
     completed = df[df["position"].notna()]
     last_seq = completed["race_seq"].max()
-    race = df[df["race_seq"] == last_seq].copy()
+    race = df[df["race_seq"] == last_seq].copy().reset_index(drop=True)
     history = df[df["race_seq"] < last_seq]
+    s = backtest.load_settings()
 
-    ranker = model.train_race(history)
-    race["score"] = ranker.score(race)
-    temp = config.DEFAULT_TEMPERATURE
-    p_model = simulate.plackett_luce(race["score"].to_numpy(), temp)
-    sim = simulate.simulate(
-        simulate.SimInputs(
-            driver_ids=race["driver_id"].tolist(),
-            scores=race["score"].to_numpy(),
-            dnf_prob=simulate.dnf_probability(race),
-            grid=race["grid"].fillna(len(race)).to_numpy(),
-            overtaking_score=float(race["circuit_overtaking_score"].iloc[0])
-            if pd.notna(race["circuit_overtaking_score"].iloc[0])
-            else 3.0,
-        ),
-        n_sims=4000,
-        temperature=temp,
+    ranker = backtest.race_trainer(s)(history)
+    scores = ranker.score(race)
+    fc = simulate.forecast(
+        simulate.race_inputs(race, scores, grid_known=True), s.temperature, s.blend_weight, 4000
     )
-    p = simulate.blend(p_model, sim["p_win"].to_numpy(), config.DEFAULT_BLEND_WEIGHT)
-
+    t = fc.table
     checks = {
-        "win probabilities sum to 1": abs(p.sum() - 1.0) < 1e-6,
-        "no negative probabilities": bool((p >= 0).all()),
-        "podium >= win for every driver": bool((sim["p_podium"] >= sim["p_win"] - 1e-9).all()),
-        "top5 >= podium for every driver": bool((sim["p_top5"] >= sim["p_podium"] - 1e-9).all()),
-        "position distribution rows sum to 1": bool(
-            all(abs(float(np.sum(r)) - 1.0) < 1e-6 for r in sim["position_dist"])
+        "a coherent position distribution": not probability.check_distribution(fc.matrix),
+        "win probabilities sum to 1": abs(t["p_win"].sum() - 1.0) < 1e-6,
+        "podium probabilities sum to 3": abs(t["p_podium"].sum() - 3.0) < 1e-6,
+        "win <= podium <= top 5 <= top 10 for every driver": bool(
+            (
+                (t["p_win"] <= t["p_podium"] + 1e-12)
+                & (t["p_podium"] <= t["p_top5"] + 1e-12)
+                & (t["p_top5"] <= t["p_top10"] + 1e-12)
+            ).all()
         ),
-        "favourite below 90% (no false certainty)": float(p.max()) < 0.90,
-        "favourite above 8% (not a coin toss)": float(p.max()) > 0.08,
-        "at least 4 drivers above 2%": int((p > 0.02).sum()) >= 4,
-        "expected positions span the field": float(sim["exp_position"].max() - sim["exp_position"].min())
-        > 5.0,
+        "no driver at exactly zero": bool((t["p_win"] > 0).all()),
+        "favourite below 90% (no false certainty)": float(t["p_win"].max()) < 0.90,
+        "favourite above 8% (not a coin toss)": float(t["p_win"].max()) > 0.08,
+        "expected positions span the field": float(t["exp_position"].max() - t["exp_position"].min()) > 5.0,
     }
     failed = [k for k, v in checks.items() if not v]
     table = pd.DataFrame(
         [{"check": k, "result": "ok" if v else "FAILED"} for k, v in checks.items()]
     ).set_index("check")
-
-    top = race.assign(p=p).sort_values("p", ascending=False).head(3)
-    shape = ", ".join(f"{r.driver_id} {r.p * 100:.0f}%" for r in top.itertuples())
+    top = t.sort_values("p_win", ascending=False).head(3)
+    shape = ", ".join(f"{r.driver_id} {r.p_win * 100:.0f}%" for r in top.itertuples())
     if failed:
         return Audit(
             "7. Prediction sanity",
@@ -528,38 +516,15 @@ def audit_plausibility(df: pd.DataFrame) -> Audit:
 
 
 # ---------------------------------------------------------------------------
-def _tuned_params() -> dict:
-    """Use the settings a previous `backtest --tune` fitted, if there are any.
-
-    Verifying with library defaults when the project has tuned settings would
-    grade a model nobody is actually running.
-    """
-    import json
-
-    path = config.REPORTS / "backtest.json"
-    if not path.exists():
-        return {}
-    try:
-        params = json.loads(path.read_text()).get("params", {})
-    except (json.JSONDecodeError, OSError):
-        return {}
-    return {
-        k: params[k] for k in ("temperature", "blend_weight") if isinstance(params.get(k), (int, float))
-    } | (
-        {"current_season_weight": params["recency_weight"]}
-        if isinstance(params.get("recency_weight"), (int, float))
-        else {}
-    )
-
-
 def run(start_season: int = 2024, n_sims: int = 3000, retrain_every: int = 3) -> Verification:
     df = features.load()
     v = Verification()
     v.audits.append(audit_leakage(df))
+    v.audits.append(audit_truncation())
     v.audits.append(audit_inputs(df))
-    v.audits.append(audit_weighting(df))
+    v.audits.append(audit_contributions(df))
     v.audits.append(audit_bias(df, start_season, retrain_every))
-    accuracy, res = audit_accuracy(df, start_season, n_sims, retrain_every, _tuned_params())
+    accuracy, res = audit_accuracy(df, start_season, retrain_every)
     v.audits.append(accuracy)
     v.audits.append(audit_calibration(res))
     v.audits.append(audit_plausibility(df))

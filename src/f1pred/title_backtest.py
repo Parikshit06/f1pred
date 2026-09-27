@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import logging
 
-import numpy as np
 import pandas as pd
 
-from . import championship, model, simulate
+from . import championship, metrics, model, simulate
 from .store import connect
 
 log = logging.getLogger(__name__)
@@ -72,7 +71,7 @@ def run(
             race = nxt.copy()
             # A typical weekend, not the next race's: that race's qualifying had
             # not happened at the checkpoint, and its track is one of many left.
-            race["score"] = ranker.score(championship.typical_weekend(race, train))
+            race["score"] = championship.season_strength(ranker, race, train)
 
             out = championship.project(
                 race["driver_id"].tolist(),
@@ -135,14 +134,9 @@ def calibration(frame: pd.DataFrame) -> pd.DataFrame:
     return g.round(3)
 
 
-def _wilson(hits: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    if n == 0:
-        return 0.0, 1.0
-    p = hits / n
-    denom = 1 + z**2 / n
-    centre = (p + z**2 / (2 * n)) / denom
-    half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
-    return round(max(0.0, centre - half), 3), round(min(1.0, centre + half), 3)
+def _wilson(hits: int, n: int) -> tuple[float, float]:
+    lo, hi = metrics.wilson(hits, n)
+    return round(lo, 3), round(hi, 3)
 
 
 def report(frame: pd.DataFrame) -> str:

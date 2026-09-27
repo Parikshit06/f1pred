@@ -8,8 +8,11 @@ name: Evaluate
 # what stops the published accuracy figures drifting away from the ones written
 # down in the README.
 #
-# Both commands are slow by design: the backtest refits per race across three
-# seasons, and the title backtest refits at four checkpoints in each of seven.
+# All slow by design: the backtest fits its settings on 2022-23 and then refits
+# per race across the reported seasons, before and after qualifying; the title
+# backtest refits at four checkpoints in each of seven seasons. The experiments
+# behind the design choices (make experiments) take about an hour more and are
+# run by hand when the model changes, not every month.
 
 on:
   schedule:
@@ -26,19 +29,21 @@ concurrency:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      # Same locked versions as CI and as the published reports.
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
+          enable-cache: true
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: |
+          uv sync --locked --extra dev
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       # The DATABASE is cached, not just the HTTP responses. jolpica's ingest
       # skips any season already in the ingest_log except the current one, and
@@ -95,8 +100,14 @@ jobs:
       - name: Ingest
         run: python -m f1pred.cli ingest-jolpica --seasons 2018-2026
 
-      - name: Repair status flags
-        run: python -m f1pred.cli repair
+      # The official starting grid (penalties applied) and who is actually
+      # entered this weekend. jolpica has neither before the race, and has
+      # published results with the grid blank. A second source can't be allowed
+      # to stop the run: without it the grid falls back to the qualifying order
+      # and the forecast records that it did.
+      - name: Starting grid and entry list (OpenF1)
+        continue-on-error: true
+        run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they

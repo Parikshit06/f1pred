@@ -158,9 +158,11 @@ def test_every_team_feature_uses_the_race_level_helper():
             )
 
 
-def test_walk_forward_respects_the_upper_season_bound():
+def test_tuning_is_bounded_on_both_sides():
     """The tuner must not evaluate on races the report will later claim are
     out-of-sample. Without an upper bound it walks to the end of the data."""
+    import inspect
+
     from f1pred import backtest
 
     df = pd.DataFrame(
@@ -168,14 +170,13 @@ def test_walk_forward_respects_the_upper_season_bound():
             "race_seq": np.repeat(np.arange(120), 2),
             "season": np.repeat(np.where(np.arange(120) < 100, 2022, 2025), 2),
             "round": np.repeat(np.arange(120) + 1, 2),
+            "position": 1.0,
         }
     )
-    keys = df[["race_seq", "season", "round"]].drop_duplicates()
-    bounded = keys[(keys["season"] >= 2022) & (keys["season"] <= 2024)]
+    bounded = backtest.completed_races(df, 2022, 2024)
     assert bounded["season"].max() == 2022, "upper bound let a later season through"
-    assert "end_season" in backtest.walk_forward.__code__.co_varnames
-    for fn in (backtest.tune_temperature, backtest.tune_blend, backtest.tune_recency):
-        assert "end_season" in fn.__code__.co_varnames, f"{fn.__name__} cannot be bounded"
+    params = inspect.signature(backtest.tune).parameters
+    assert "tune_start" in params and "tune_end" in params
 
 
 # ---------------------------------------------------------------------------

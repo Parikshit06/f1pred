@@ -1,11 +1,13 @@
-# data artefacts - never commit, they are rebuildable
+# Rebuildable data: the database, HTTP and FastF1 caches, the demo
 data/*.duckdb
 data/*.duckdb.wal
 data/cache/
 data/fastf1_cache/
+data/season.json
+data/demo/
 *.parquet
 
-# python
+# Python tooling
 __pycache__/
 *.py[cod]
 .venv/
@@ -13,36 +15,16 @@ venv/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.coverage
 
-# outputs that ARE committed live in predictions/ and reports/
+# Committed outputs live in predictions/ (forecast history) and
+# reports/*.json (measured figures). The HTML pages are generated every run
+# and deployed from the Pages artifact, not from the repo: tracking them let
+# two runs collide on a generated file.
+reports/*.html
 reports/*.tmp
 
-# os
-.DS_Store
-
-# delivery scratch - screenshots, zips and superseded forecasts. Kept on disk
-# so nothing is lost, kept out of the repo so the published tree is only what
-# the project needs to run.
-*outputs/
-_superseded/
-models_out/
-
-_gitjunk/
-
-# local transfer artefacts and working notes; contents already in the tree
-*.tar.gz
-APPLY-THIS.md
-PUSH-TO-GITHUB.md
-
-# personal working notes - the plain-English explainer and resume text. Kept on
-# disk, deliberately not published.
+# Personal working notes, kept out of the published tree
 docs/
 
-# Generated every run and deployed from the Pages artifact, not from the repo.
-# Tracking them meant two runs could edit the same file and collide, and a
-# content conflict in a generated file never auto-resolves - it just wedged the
-# rebase and lost the forecast that had already been computed.
-reports/*.html
-
-# Latest season projection, rebuilt every run.
-data/season.json
+.DS_Store

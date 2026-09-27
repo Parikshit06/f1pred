@@ -82,6 +82,12 @@ def _race_start_utc(date_str: str | None, time_str: str | None) -> datetime | No
         return None
 
 
+def _session_start(session: dict | None) -> datetime | None:
+    if not session:
+        return None
+    return _race_start_utc(session.get("date"), session.get("time"))
+
+
 # ---------------------------------------------------------------------------
 # Parsers: one per endpoint, each returns a tidy DataFrame
 # ---------------------------------------------------------------------------
@@ -104,6 +110,11 @@ def parse_races(races: list[dict]) -> pd.DataFrame:
                 "race_date": r.get("date"),
                 "race_time": r.get("time"),
                 "race_start_utc": _race_start_utc(r.get("date"), r.get("time")),
+                # The schedule names every session of the weekend. Qualifying time
+                # dates the grid; a Sprint entry is how future sprint weekends are
+                # known before any sprint result exists.
+                "quali_start_utc": _session_start(r.get("Qualifying")),
+                "sprint_start_utc": _session_start(r.get("Sprint")),
             }
         )
     df = pd.DataFrame(rows)

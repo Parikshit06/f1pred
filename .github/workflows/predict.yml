@@ -61,13 +61,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      # Same locked versions as CI and as the published reports.
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
+          enable-cache: true
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: |
+          uv sync --locked --extra dev
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       # The DATABASE is cached, not just the HTTP responses. jolpica's ingest
       # skips any season already in the ingest_log except the current one, and
@@ -84,6 +86,7 @@ jobs:
         with:
           path: |
             data/cache
+            data/fastf1_cache
             data/f1.duckdb*
           key: f1data-${{ github.run_id }}
           restore-keys: f1data-
@@ -123,6 +126,23 @@ jobs:
 
       - name: Ingest
         run: python -m f1pred.cli ingest-jolpica --seasons 2018-2026
+
+      # The official starting grid (penalties applied) and who is actually
+      # entered this weekend. jolpica has neither before the race, and has
+      # published results with the grid blank. A second source can't be allowed
+      # to stop the run: without it the grid falls back to the qualifying order
+      # and the forecast records that it did.
+      - name: Starting grid and entry list (OpenF1)
+        continue-on-error: true
+        run: python -m f1pred.cli ingest-openf1 --seasons 2026
+
+      # Practice pace for this weekend only (FP1-FP3 per-driver aggregates). It
+      # feeds the qualifying forecast, where it measurably helps; nothing
+      # historical is downloaded here. Optional like OpenF1: without it the
+      # forecast waits until close to qualifying, then goes ahead.
+      - name: Practice pace (FastF1, this weekend)
+        continue-on-error: true
+        run: python -m f1pred.cli ingest-fastf1 --next
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they

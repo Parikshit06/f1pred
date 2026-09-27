@@ -1,8 +1,13 @@
-"""Ingest practice/qualifying/race pace and session weather via FastF1.
+"""Practice pace via FastF1: compact per-driver aggregates, nothing raw kept.
 
-This is the slow part of the pipeline: FastF1 downloads and caches the full
-timing archive per session (a few hundred MB per season). It is resumable -
-every session we finish is recorded in ingest_log and skipped next run.
+For each FP1-FP3 session, one row per driver: best lap, median clean lap,
+median of long-run laps. Lap timing only - no telemetry, no weather. FastF1
+caches its downloads in data/fastf1_cache (gitignored); the database keeps only
+the aggregates. Resumable: each finished session is recorded in ingest_log.
+
+The live forecast only needs the weekend in progress (ingest_next_weekend).
+History is fetched only for the seasons being evaluated, because practice pace
+is an experiment until the walk-forward says it helps.
 
 Pace definitions, and why:
   best_lap_ms    single fastest lap. Headline number, but noisy: one low-fuel
@@ -16,17 +21,27 @@ from __future__ import annotations
 
 import logging
 import warnings
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
 
 from .. import config
-from ..store import connect, ingest_status, log_ingest, upsert
+from ..store import connect, log_ingest, upsert
 
 log = logging.getLogger(__name__)
 
-# Attempted in order; sessions that do not exist for a given weekend are skipped.
-SESSION_CODES = ["FP1", "FP2", "FP3", "SQ", "S", "Q", "R"]
+# Practice only. Qualifying and race laps feed no feature (jolpica has the
+# classifications), and loading them tripled the calls against FastF1's hourly
+# limit. Sessions that don't exist on a weekend (FP2/FP3 at a sprint) are skipped.
+SESSION_CODES = ["FP1", "FP2", "FP3"]
+
+# A session that genuinely doesn't exist is settled for good. Anything else -
+# a rate limit, a dropped connection - is worth another try. Recording those as
+# "empty" is how every 2025 session came to be skipped forever: the first
+# backfill hit FastF1's 500 calls/hour limit and each refusal was filed as
+# "this session has no data".
+_ABSENT = ("does not exist", "no laps")
 
 MIN_STINT_LAPS = 5
 
@@ -111,47 +126,56 @@ def _driver_pace(laps: pd.DataFrame, clean: pd.DataFrame, code: str) -> dict[str
     }
 
 
-def _weather_row(session: Any, season: int, rnd: int, code: str) -> dict[str, Any] | None:
-    try:
-        wx = session.weather_data
-    except Exception:  # noqa: BLE001
-        return None
-    if wx is None or wx.empty:
-        return None
-    return {
-        "season": season,
-        "round": rnd,
-        "session": code,
-        "air_temp_c": float(wx["AirTemp"].mean()) if "AirTemp" in wx else None,
-        "track_temp_c": float(wx["TrackTemp"].mean()) if "TrackTemp" in wx else None,
-        "humidity_pct": float(wx["Humidity"].mean()) if "Humidity" in wx else None,
-        "wind_speed_ms": float(wx["WindSpeed"].mean()) if "WindSpeed" in wx else None,
-        "rainfall": bool(wx["Rainfall"].any()) if "Rainfall" in wx else False,
-    }
+def _settled(season: int, scope: str) -> bool:
+    """Already fetched, or known not to exist. Never true for a transient failure.
+
+    For the live season an empty session may just not have run yet, so it isn't
+    settled either; otherwise one mid-season ingest would leave practice pace
+    missing for every remaining round.
+    """
+    with connect(read_only=True) as con:
+        row = con.execute(
+            "SELECT status, detail FROM ingest_log WHERE source = 'fastf1' AND scope = ?", [scope]
+        ).fetchone()
+    if row is None:
+        return False
+    status, detail = row
+    if status == "ok":
+        return True
+    absent = status == "empty" and any(k in (detail or "") for k in _ABSENT)
+    return absent and season != config.CURRENT_SEASON
 
 
 def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = False) -> int:
     scope = f"{season}:{rnd}:{code}"
-
-    with connect() as con:
-        status = ingest_status(con, "fastf1", scope)
-
-    # For the live season an empty session may just not have run yet, so it isn't
-    # recorded as done. Otherwise one mid-season ingest would leave practice pace
-    # missing for every remaining round.
-    settled = status == "ok" or (status == "empty" and season != config.CURRENT_SEASON)
-    if not force and settled:
+    if not force and _settled(season, scope):
         return 0
 
     try:
         session = fastf1.get_session(season, rnd, code)
-        session.load(laps=True, telemetry=False, weather=True, messages=False)
-    except Exception as exc:  # noqa: BLE001 - session genuinely may not exist
+    except ValueError as exc:  # "Session type 'FP3' does not exist for this event"
         with connect() as con:
             log_ingest(con, "fastf1", scope, "empty", f"unavailable: {exc!r}"[:400])
         return 0
+    except Exception as exc:  # noqa: BLE001 - schedule lookup failed; try again next run
+        with connect() as con:
+            log_ingest(con, "fastf1", scope, "failed", repr(exc)[:400])
+        return 0
 
-    laps = session.laps
+    try:
+        # Lap timing only: no telemetry, weather or messages. Only per-driver
+        # aggregates are kept; the laps themselves stay in FastF1's cache.
+        session.load(laps=True, telemetry=False, weather=False, messages=False)
+    except Exception as exc:  # noqa: BLE001 - rate limit or network: retryable
+        with connect() as con:
+            log_ingest(con, "fastf1", scope, "failed", repr(exc)[:400])
+        log.warning("fastf1 %s failed (will retry next run): %s", scope, exc)
+        return 0
+
+    try:
+        laps = session.laps
+    except Exception:  # noqa: BLE001 - a session not yet run "loads" but has no laps
+        laps = None
     if laps is None or laps.empty:
         with connect() as con:
             log_ingest(con, "fastf1", scope, "empty", "no laps")
@@ -182,34 +206,55 @@ def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = 
         )
 
     df = pd.DataFrame(rows)
-    wx_row = _weather_row(session, season, rnd, code)
 
     with connect() as con:
         n = upsert(con, "raw_session_pace", df, ["season", "round", "session", "driver_id"])
-        if wx_row:
-            upsert(con, "raw_session_weather", pd.DataFrame([wx_row]), ["season", "round", "session"])
-        log_ingest(con, "fastf1", scope, "ok" if n else "empty", f"{n} drivers")
+        log_ingest(con, "fastf1", scope, "ok" if n else "empty", f"{n} drivers" if n else "no laps mapped")
 
     return n
 
 
-def ingest(seasons: list[int], force: bool = False) -> None:
+def ingest(seasons: list[int], force: bool = False, rounds: list[int] | None = None) -> None:
     fastf1 = _setup_fastf1()
 
     for season in seasons:
         with connect(read_only=True) as con:
-            rounds = [
+            scheduled = [
                 r[0]
                 for r in con.execute(
                     "SELECT round FROM raw_races WHERE season = ? ORDER BY round", [season]
                 ).fetchall()
             ]
-        if not rounds:
+        if not scheduled:
             log.warning("season %d has no races - run ingest-jolpica first", season)
             continue
 
-        for rnd in rounds:
+        for rnd in scheduled:
+            if rounds is not None and rnd not in rounds:
+                continue
             got = 0
             for code in SESSION_CODES:
                 got += ingest_session(fastf1, season, rnd, code, force=force)
             log.info("fastf1 %d r%-2d: %d driver-sessions", season, rnd, got)
+
+
+def ingest_next_weekend() -> None:
+    """Practice pace for the race about to run: the sessions held so far.
+
+    What the live forecast needs from FastF1, at a few calls a session rather
+    than a season's worth. A session that hasn't run yet comes back empty and,
+    this being the live season, is tried again on the next run.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    with connect(read_only=True) as con:
+        row = con.execute(
+            """
+            SELECT season, round FROM raw_races
+            WHERE race_start_utc > ?::TIMESTAMP ORDER BY race_start_utc LIMIT 1
+            """,
+            [now],
+        ).fetchone()
+    if row is None:
+        log.info("fastf1: no race scheduled")
+        return
+    ingest([int(row[0])], rounds=[int(row[1])])

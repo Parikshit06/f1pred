@@ -112,31 +112,6 @@ def test_races_out_of_order_is_caught(con):
     assert "races_chronological" in _names(report)
 
 
-def test_hindsight_forecast_is_caught(con):
-    con.execute("UPDATE raw_races SET race_start_utc = TIMESTAMP '2024-03-02 14:00:00' WHERE round=1")
-    con.execute(
-        """
-        INSERT INTO raw_forecast (season, round, session, fetched_at_utc, valid_at_utc, temp_c)
-        VALUES (2024, 1, 'R', TIMESTAMP '2024-03-02 18:00:00', TIMESTAMP '2024-03-02 14:00:00', 21)
-        """
-    )
-    report = validate.run(con)
-    assert "forecasts_predate_their_session" in _names(report)
-    assert not report.ok, "a forecast made after the race must be a hard error"
-
-
-def test_forecast_made_before_the_race_is_fine(con):
-    con.execute("UPDATE raw_races SET race_start_utc = TIMESTAMP '2024-03-02 14:00:00' WHERE round=1")
-    con.execute(
-        """
-        INSERT INTO raw_forecast (season, round, session, fetched_at_utc, valid_at_utc, temp_c)
-        VALUES (2024, 1, 'R', TIMESTAMP '2024-03-01 06:00:00', TIMESTAMP '2024-03-02 14:00:00', 21)
-        """
-    )
-    report = validate.run(con)
-    assert "forecasts_predate_their_session" not in _names(report)
-
-
 def test_tiny_field_is_caught(con):
     con.execute("DELETE FROM raw_results WHERE round = 2 AND CAST(substr(driver_id,2) AS INT) > 8")
     report = validate.run(con)

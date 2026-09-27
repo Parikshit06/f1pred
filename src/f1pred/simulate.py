@@ -1,10 +1,23 @@
-"""Ranking scores to probabilities, two ways.
+"""Stochastic race-outcome simulation over the learned ranking model.
 
-Plackett-Luce is the closed form: each score is a strength, read off the
-chance of finishing first. The Monte Carlo simulates the race and adds what
-a ranking can't express - pace varying on the day, retirements, safety cars,
-and an unknown grid before qualifying. Win probability blends the two, with
-the weight fitted by log loss (backtest.tune_blend).
+Not a physics model. Each simulated race perturbs the ranker's scores:
+
+    pace noise   normal, sd = PACE_NOISE x the spread of scores in the field
+    safety car   with the circuit's probability, the noise widens by
+                 SAFETY_CAR_SPREAD - a stand-in for a neutralised race
+                 handing out luck, not a model of when one happens
+    grid         a pull toward the starting order, stronger where the
+                 circuit's history says overtaking is hard
+    retirement   each car independently, at its driver and team DNF rates
+    unknown grid before qualifying, each run draws its own grid from the
+                 qualifying model
+
+Not modelled: tyre and pit strategy, weather, safety-car timing, penalties,
+team orders, first-lap incidents, and failures shared by a team's two cars.
+
+forecast() is the one entry point. The walk-forward evaluation and the live
+forecast both call it, so the numbers that are graded are produced exactly the
+way the published ones are.
 """
 
 from __future__ import annotations
@@ -14,54 +27,14 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from . import config
+from . import config, probability
+
+PACE_NOISE = 0.55
+SAFETY_CAR_SPREAD = 1.9
+DEFAULT_OVERTAKING = 3.0  # mean |grid - finish| at a circuit with no history
+DEFAULT_SAFETY_CAR = 0.35
 
 
-# ---------------------------------------------------------------------------
-# Plackett-Luce
-# ---------------------------------------------------------------------------
-def plackett_luce(scores: np.ndarray, temperature: float = 1.0) -> np.ndarray:
-    """P(each entry finishes first), from ranking scores.
-
-    Temperature controls how decisive the model is. Below 1 sharpens toward the
-    favourite, above 1 flattens. Fitted on validation data, because a ranker's
-    raw score scale carries no probabilistic meaning on its own.
-    """
-    z = np.asarray(scores, dtype=float) / max(temperature, 1e-6)
-    z = z - z.max()
-    e = np.exp(z)
-    return e / e.sum()
-
-
-ADAPTIVE_WINDOW = 24  # roughly one season of races
-MIN_CALIBRATION_RACES = 10
-
-
-def fit_temperature(
-    score_groups: list[np.ndarray], winner_idx: list[int], grid: np.ndarray | None = None
-) -> float:
-    """Choose the temperature that minimises log loss on observed winners."""
-    if grid is None:
-        grid = np.concatenate([np.linspace(0.05, 2.0, 40), np.linspace(2.2, 8.0, 30)])
-
-    best_t, best_loss = 1.0, np.inf
-    for t in grid:
-        losses = []
-        for scores, win in zip(score_groups, winner_idx):
-            if win is None or win < 0 or win >= len(scores):
-                continue
-            p = plackett_luce(scores, t)
-            losses.append(-np.log(max(p[win], 1e-12)))
-        if losses:
-            loss = float(np.mean(losses))
-            if loss < best_loss:
-                best_t, best_loss = float(t), loss
-    return best_t
-
-
-# ---------------------------------------------------------------------------
-# Monte Carlo
-# ---------------------------------------------------------------------------
 @dataclass
 class SimInputs:
     driver_ids: list[str]
@@ -69,23 +42,58 @@ class SimInputs:
     dnf_prob: np.ndarray  # per driver, 0..1
     grid: np.ndarray | None = None  # known grid, or None before qualifying
     grid_scores: np.ndarray | None = None  # quali-model scores, used when grid is None
-    overtaking_score: float = 3.0  # mean |grid - finish| at this circuit
-    safety_car_prob: float = 0.35
+    overtaking_score: float = DEFAULT_OVERTAKING
+    safety_car_prob: float = DEFAULT_SAFETY_CAR
 
 
-def _softmax_sample_order(rng: np.random.Generator, scores: np.ndarray, temperature: float) -> np.ndarray:
-    """Sample a full ordering via sequential Plackett-Luce draws."""
-    remaining = list(range(len(scores)))
-    order = []
-    z = scores / max(temperature, 1e-6)
-    while remaining:
-        sub = z[remaining]
-        sub = sub - sub.max()
-        p = np.exp(sub)
-        p /= p.sum()
-        pick = rng.choice(len(remaining), p=p)
-        order.append(remaining.pop(pick))
-    return np.array(order)
+def grid_pull(overtaking_score: float) -> float:
+    """How much a track lets pace show: where nobody overtakes, the grid decides."""
+    ot = DEFAULT_OVERTAKING if not np.isfinite(overtaking_score) else float(overtaking_score)
+    return float(np.clip(1.6 - ot / 8.0, 0.15, 1.4))
+
+
+def simulate_matrix(
+    inputs: SimInputs,
+    n_sims: int = config.N_SIMULATIONS,
+    grid_temperature: float = 1.0,
+    seed: int = config.RANDOM_SEED,
+) -> np.ndarray:
+    """Run the race n_sims times; return shares as a matrix [driver, position]."""
+    rng = np.random.default_rng(seed)
+    scores = np.asarray(inputs.scores, dtype=float)
+    n = len(scores)
+    score_sd = float(np.std(scores)) or 1.0
+
+    if inputs.grid is not None:
+        grid_given = np.asarray(inputs.grid, dtype=float)
+        # A grid with gaps doesn't raise on its own - pace goes NaN and the
+        # simulation averages into a near-uniform field. Fail instead.
+        if not np.isfinite(grid_given).all():
+            missing = int((~np.isfinite(grid_given)).sum())
+            raise ValueError(
+                f"grid has {missing} missing entries of {n}. A race that has not run yet "
+                "carries no grid in results - fill it from qualifying before simulating."
+            )
+        grid = np.broadcast_to(grid_given, (n_sims, n))
+    elif inputs.grid_scores is not None:
+        orders = probability.sample_orders(rng, inputs.grid_scores, grid_temperature, n_sims)
+        grid = np.empty((n_sims, n))
+        grid[np.arange(n_sims)[:, None], orders] = np.arange(1, n + 1)[None, :]
+    else:
+        grid = np.full((n_sims, n), (n + 1) / 2.0)
+
+    chaos = np.where(rng.random((n_sims, 1)) < inputs.safety_car_prob, SAFETY_CAR_SPREAD, 1.0)
+    pace = (
+        scores[None, :]
+        + rng.normal(0.0, 1.0, size=(n_sims, n)) * (PACE_NOISE * score_sd * chaos)
+        - grid_pull(inputs.overtaking_score) * (grid - 1) * (score_sd / 6.0)
+    )
+    # Retirements are classified behind every finisher, ordered by how far they
+    # got - which a random draw stands in for.
+    retired = rng.random((n_sims, n)) < np.asarray(inputs.dnf_prob, dtype=float)[None, :]
+    pace = np.where(retired, -1e6 + rng.random((n_sims, n)), pace)
+
+    return probability.position_counts(np.argsort(-pace, axis=1))
 
 
 def simulate(
@@ -94,96 +102,21 @@ def simulate(
     temperature: float = 1.0,
     seed: int = config.RANDOM_SEED,
 ) -> pd.DataFrame:
-    """Run the race n_sims times. Returns per-driver outcome probabilities and
-    the full position distribution the dashboard draws as a spread."""
-    rng = np.random.default_rng(seed)
-    n = len(inputs.driver_ids)
-    positions = np.zeros((n, n), dtype=np.int32)  # [driver, finishing position]
+    """The simulation on its own, summarised per driver.
 
-    # How much a track lets pace show: where nobody overtakes, the grid decides.
-    ot = 3.0 if not np.isfinite(inputs.overtaking_score) else float(inputs.overtaking_score)
-    grid_pull = float(np.clip(1.6 - ot / 8.0, 0.15, 1.4))
-
-    score_sd = float(np.std(inputs.scores)) or 1.0
-
-    # A grid with gaps doesn't raise on its own - pace goes NaN and the simulation
-    # averages into a near-uniform field. Fail instead.
-    grid_given = None
-    if inputs.grid is not None:
-        grid_given = np.asarray(inputs.grid, dtype=float)
-        if not np.isfinite(grid_given).all():
-            missing = int((~np.isfinite(grid_given)).sum())
-            raise ValueError(
-                f"grid has {missing} missing entries of {n}. A race that has not run yet "
-                "carries no grid in results - fill it from qualifying before simulating."
-            )
-
-    for i in range(n_sims):
-        # Grid: known after qualifying, sampled from the quali model before it.
-        if inputs.grid is not None:
-            grid = grid_given
-        elif inputs.grid_scores is not None:
-            order = _softmax_sample_order(rng, inputs.grid_scores, temperature)
-            grid = np.empty(n, dtype=float)
-            grid[order] = np.arange(1, n + 1)
-        else:
-            grid = np.full(n, (n + 1) / 2.0)
-
-        # A safety car compresses the field and hands out luck.
-        chaos = 1.0 + (0.9 if rng.random() < inputs.safety_car_prob else 0.0)
-
-        race_pace = (
-            inputs.scores
-            + rng.normal(0.0, 0.55 * score_sd * chaos, size=n)
-            - grid_pull * (grid - 1) * (score_sd / 6.0)
-        )
-
-        retired = rng.random(n) < inputs.dnf_prob
-        # Retirements are classified behind every finisher, ordered by how far
-        # they got - which we proxy with a random draw.
-        race_pace = np.where(retired, -1e6 + rng.random(n), race_pace)
-
-        order = np.argsort(-race_pace)
-        positions[order, np.arange(n)] += 1
-
-    pos_prob = positions / n_sims
-    return pd.DataFrame(
-        {
-            "driver_id": inputs.driver_ids,
-            "p_win": pos_prob[:, 0],
-            "p_podium": pos_prob[:, :3].sum(axis=1),
-            "p_top5": pos_prob[:, :5].sum(axis=1),
-            "p_points": pos_prob[:, :10].sum(axis=1),
-            "exp_position": (pos_prob * np.arange(1, len(inputs.driver_ids) + 1)).sum(axis=1),
-            "position_dist": list(pos_prob),
-        }
-    )
-
-
-def rolling_temperature(
-    score_groups: list[np.ndarray],
-    winner_idx: list[int],
-    fallback: float,
-    window: int = ADAPTIVE_WINDOW,
-) -> float:
-    """Plackett-Luce temperature fitted on a trailing window of finished races.
-
-    One fixed value doesn't hold across eras: 0.5 was best on 2022-23 with one
-    dominant car, and overconfident on the closer 2024-26 field. Refitting from
-    recent races lets confidence drop when a season gets less predictable.
+    `temperature` only shapes the grid drawn before qualifying.
     """
-    if len(score_groups) < MIN_CALIBRATION_RACES:
-        return fallback
-    return fit_temperature(score_groups[-window:], winner_idx[-window:])
+    matrix = simulate_matrix(inputs, n_sims, grid_temperature=temperature, seed=seed)
+    out = probability.summarise(matrix)
+    out.insert(0, "driver_id", inputs.driver_ids)
+    out["p_points"] = out["p_top10"]
+    out["position_dist"] = list(matrix)
+    return out
 
 
-def blend(p_model: np.ndarray, p_sim: np.ndarray, weight: float) -> np.ndarray:
-    """weight = how much to trust the closed-form model over the simulation."""
-    out = weight * np.asarray(p_model) + (1.0 - weight) * np.asarray(p_sim)
-    total = out.sum()
-    return out / total if total > 0 else out
-
-
+# ---------------------------------------------------------------------------
+# Inputs from a feature frame
+# ---------------------------------------------------------------------------
 def dnf_probability(df: pd.DataFrame, floor: float = 0.02, cap: float = 0.35) -> np.ndarray:
     """Blend the driver's and the team's recent retirement rates.
 
@@ -193,3 +126,87 @@ def dnf_probability(df: pd.DataFrame, floor: float = 0.02, cap: float = 0.35) ->
     drv = df["drv_dnf_rate_10"].fillna(0.12).to_numpy()
     team = df["team_dnf_rate_10"].fillna(0.12).to_numpy()
     return np.clip(0.35 * drv + 0.65 * team, floor, cap)
+
+
+def safety_car_probability(circuit_dnf_rate: float) -> float:
+    """A heuristic: tracks that stop cars also bring out safety cars."""
+    if circuit_dnf_rate is None or not np.isfinite(circuit_dnf_rate):
+        return DEFAULT_SAFETY_CAR
+    return float(np.clip(circuit_dnf_rate * 2, 0.2, 0.7))
+
+
+def starting_grid(grid: pd.Series | np.ndarray) -> np.ndarray:
+    """A complete grid: anyone without a slot starts at the back, in field order."""
+    g = np.asarray(grid, dtype=float).copy()
+    missing = np.isnan(g)
+    if missing.any():
+        back = np.nanmax(g) if np.isfinite(g).any() else 0.0
+        g[missing] = back + 1.0 + np.arange(int(missing.sum()))
+    return g
+
+
+def race_inputs(
+    race: pd.DataFrame, scores: np.ndarray, grid_known: bool, quali_scores: np.ndarray | None = None
+) -> SimInputs:
+    """Everything the simulation needs about one race, from its feature rows."""
+    first = race.iloc[0]
+    return SimInputs(
+        driver_ids=race["driver_id"].tolist(),
+        scores=np.asarray(scores, dtype=float),
+        dnf_prob=dnf_probability(race),
+        grid=starting_grid(race["grid"]) if grid_known else None,
+        grid_scores=None if grid_known else quali_scores,
+        overtaking_score=float(first.get("circuit_overtaking_score", np.nan)),
+        safety_car_prob=safety_car_probability(float(first.get("circuit_dnf_rate", np.nan))),
+    )
+
+
+# ---------------------------------------------------------------------------
+# The forecast
+# ---------------------------------------------------------------------------
+@dataclass
+class RaceForecast:
+    driver_ids: list[str]
+    matrix: np.ndarray  # [driver, position]; rows and columns sum to 1
+    table: pd.DataFrame  # driver_id, p_win, p_podium, p_top5, p_top10, exp_position
+
+    def column(self, name: str) -> np.ndarray:
+        return self.table[name].to_numpy()
+
+
+def forecast(
+    inputs: SimInputs,
+    temperature: float,
+    blend_weight: float,
+    n_sims: int = config.N_SIMULATIONS,
+    grid_temperature: float | None = None,
+    seed: int = config.RANDOM_SEED,
+) -> RaceForecast:
+    """One coherent finishing-position distribution for a race.
+
+    Plackett-Luce at the calibrated temperature, mixed with the Monte Carlo at
+    the fitted weight; see probability.py for why the mixture stays coherent.
+    """
+    pl = probability.pl_position_matrix(inputs.scores, temperature, n_samples=max(n_sims, 10_000), seed=seed)
+    sim = simulate_matrix(
+        inputs, n_sims, grid_temperature=grid_temperature if grid_temperature else temperature, seed=seed + 1
+    )
+    matrix = probability.mix(pl, sim, blend_weight)
+    table = probability.summarise(matrix)
+    table.insert(0, "driver_id", inputs.driver_ids)
+    return RaceForecast(inputs.driver_ids, matrix, table)
+
+
+def ranking_forecast(
+    driver_ids: list[str],
+    scores: np.ndarray,
+    temperature: float,
+    n_samples: int = 20_000,
+    seed: int = config.RANDOM_SEED,
+) -> RaceForecast:
+    """Plackett-Luce alone, for qualifying: one lap has no retirements or safety
+    cars worth simulating, so its distribution is the ranking's own."""
+    matrix = probability.smooth(probability.pl_position_matrix(scores, temperature, n_samples, seed))
+    table = probability.summarise(matrix)
+    table.insert(0, "driver_id", driver_ids)
+    return RaceForecast(driver_ids, matrix, table)

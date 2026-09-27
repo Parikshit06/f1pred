@@ -63,23 +63,44 @@ class Ranker:
     label: str
     trained_through: tuple[int, int]  # (season, round) of the last race seen
 
-    @property
-    def booster(self) -> xgb.XGBRanker:
-        """First member. SHAP explains one tree ensemble, not an average of them."""
-        return self.boosters[0]
-
-    def score(self, df: pd.DataFrame) -> np.ndarray:
+    def _matrix(self, df: pd.DataFrame) -> pd.DataFrame:
         missing = [c for c in self.feature_names if c not in df.columns]
         if missing:
             raise KeyError(f"missing feature columns: {missing}")
+        return df[self.feature_names]
 
-        X = df[self.feature_names]
+    def score(self, df: pd.DataFrame) -> np.ndarray:
+        """One race's scores: each seed standardised within the race, then averaged.
+
+        Only meaningful within a race - the input must be one race's field.
+        """
+        X = self._matrix(df)
         stacked = []
         for booster in self.boosters:
             s = booster.predict(X)
             sd = s.std()
             stacked.append((s - s.mean()) / sd if sd > 1e-9 else s - s.mean())
         return np.mean(stacked, axis=0)
+
+    def contributions(self, df: pd.DataFrame) -> np.ndarray:
+        """SHAP values for the ensemble score, one row per driver, one column per feature.
+
+        TreeSHAP per seed (XGBoost's built-in implementation, identical to
+        shap.TreeExplainer), then centred on the race and scaled exactly as
+        score() treats that seed, then averaged. Each row therefore sums to the
+        driver's published score: the contributions explain the forecast that
+        was made, not one member of it. Read as "why this driver is rated above
+        or below the field average", never as cause and effect.
+        """
+        X = self._matrix(df)
+        dmatrix = xgb.DMatrix(X, missing=np.nan)
+        per_seed = []
+        for booster in self.boosters:
+            phi = booster.get_booster().predict(dmatrix, pred_contribs=True)[:, :-1]  # drop the bias column
+            sd = booster.predict(X).std()
+            centred = phi - phi.mean(axis=0, keepdims=True)
+            per_seed.append(centred / sd if sd > 1e-9 else centred)
+        return np.mean(per_seed, axis=0)
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -134,6 +155,7 @@ def train(
     label: str,
     current_season_weight: float = config.DEFAULT_CURRENT_SEASON_WEIGHT,
     n_seeds: int = N_SEEDS,
+    params: dict | None = None,
 ) -> Ranker:
     d, X, y, qid = _prepare(df, feature_names, label)
     if d.empty:
@@ -145,8 +167,8 @@ def train(
 
     boosters = []
     for i in range(max(1, n_seeds)):
-        params = {**PARAMS, "random_state": config.RANDOM_SEED + i * 101}
-        booster = xgb.XGBRanker(**params)
+        seeded = {**PARAMS, **(params or {}), "random_state": config.RANDOM_SEED + i * 101}
+        booster = xgb.XGBRanker(**seeded)
         booster.fit(X, y, qid=qid, sample_weight=group_weights, verbose=False)
         boosters.append(booster)
 
@@ -163,9 +185,15 @@ def train_race(df: pd.DataFrame, **kw) -> Ranker:
 
 
 def feature_importance(ranker: Ranker, top: int = 15) -> pd.DataFrame:
-    gain = ranker.booster.get_booster().get_score(importance_type="gain")
-    rows = [{"feature": k, "gain": v} for k, v in gain.items()]
-    out = pd.DataFrame(rows).sort_values("gain", ascending=False)
+    """Total gain per feature, averaged over the seeds. In-sample and biased
+    toward features with many split points - evaluation.py measures importance
+    out of sample instead; this is for a quick look."""
+    frames = [
+        pd.Series(b.get_booster().get_score(importance_type="total_gain"), name=i)
+        for i, b in enumerate(ranker.boosters)
+    ]
+    gain = pd.concat(frames, axis=1).fillna(0.0).mean(axis=1)
+    out = gain.rename("gain").rename_axis("feature").reset_index().sort_values("gain", ascending=False)
     total = out["gain"].sum()
     out["share_pct"] = (out["gain"] / total * 100).round(1) if total else 0.0
     return out.head(top).reset_index(drop=True)
