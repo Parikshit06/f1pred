@@ -29,6 +29,7 @@ LOWER_IS_BETTER = {
     "podium_brier",
     "top10_brier",
     "pole_logloss",
+    "position_error",
     "driver_points_mae",
     "team_points_mae",
     "teammate_gap_mae",

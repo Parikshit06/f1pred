@@ -136,10 +136,10 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
-      # Practice pace for this weekend only (FP1-FP3 per-driver aggregates). It
-      # feeds the qualifying forecast, where it measurably helps; nothing
-      # historical is downloaded here. Optional like OpenF1: without it the
-      # forecast waits until close to qualifying, then goes ahead.
+      # Practice pace for this weekend only (FP1-FP3 per-driver aggregates).
+      # It feeds the qualifying forecast, where held-out testing showed it
+      # helps; nothing historical is downloaded here. Optional like OpenF1:
+      # without it the weekend simply keeps its before-practice forecast.
       - name: Practice pace (FastF1, this weekend)
         continue-on-error: true
         run: python -m f1pred.cli ingest-fastf1 --next

@@ -312,15 +312,38 @@ def definition_experiment(
     return out
 
 
+PRACTICE_KEEP_METRICS = ("ndcg5", "position_error")
+PRACTICE_GUARD_METRICS = ("ndcg3", "ndcg5", "position_error", "pole_logloss")
+
+
 def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
-    """Does practice pace improve the qualifying forecast, and the race forecast
-    beyond the official grid? Graded only on weekends with practice data."""
+    """Does this weekend's practice tell us anything about this weekend's
+    qualifying beyond history? And about the race beyond the official grid?
+
+    Rule, fixed before looking at the check period:
+      1. two current-weekend designs (compact, detailed) are compared on the
+         first season with practice data, and the one with the better NDCG@5
+         gain over history alone is picked;
+      2. the picked design is graded against history alone on the later,
+         untouched seasons. It is kept only if it is clearly better (interval
+         clear of zero) on NDCG@5 or qualifying position error, and clearly
+         worse on none of NDCG@3, NDCG@5, position error and pole log loss.
+    Every forecast is walk-forward: trained only on earlier weekends.
+    """
     with_practice = df[df["practice_available"] > 0]["race_seq"].unique().tolist()
     if not with_practice:
         return {"note": "no practice data ingested"}
-    no_practice = [f for f in features.QUALI_FEATURES if f not in features.PRACTICE_FEATURES]
-    start = int(df[df["race_seq"].isin(with_practice)]["season"].min())
-    cols = ["pole_hit", "pole_logloss", "ndcg5", "top10_overlap", "spearman"]
+    practice = set(features.PRACTICE_FEATURES) | set(features.PRACTICE_DETAIL_FEATURES)
+    history = [f for f in features.QUALI_FEATURES if f not in practice]
+    designs = {
+        "history + compact practice": history + list(features.PRACTICE_FEATURES),
+        "history + detailed practice": history
+        + list(features.PRACTICE_FEATURES)
+        + list(features.PRACTICE_DETAIL_FEATURES),
+    }
+    seasons = sorted(int(x) for x in df[df["race_seq"].isin(with_practice)]["season"].unique())
+    start = seasons[0]
+    cols = ["pole_hit", "pole_logloss", "ndcg3", "ndcg5", "position_error", "top10_overlap"]
 
     def quali(feats):
         r = backtest.walk_forward_quali(
@@ -334,7 +357,34 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
         )
         return r[r["method"] == "model"]
 
-    quali_results = {"with practice": quali(features.QUALI_FEATURES), "without practice": quali(no_practice)}
+    results = {"history only": quali(history), **{name: quali(f) for name, f in designs.items()}}
+    decide, check = seasons[:1], seasons[1:]
+    later = f"{check[0]}" if len(check) == 1 else f"{check[0]}-{check[-1]}"
+
+    def table(ss, names):
+        subset = {k: v[v["season"].isin(ss)] for k, v in results.items() if k in names}
+        return _paired_table(subset, "history only", cols)
+
+    decided = table(decide, results)
+    gain = {r["variant"]: r["ndcg5_diff"] for r in decided if "ndcg5_diff" in r}
+    picked = max(gain, key=gain.get)
+    checked = table(check, ["history only", picked]) if check else []
+    row = next((r for r in checked if r["variant"] == picked), {})
+
+    def side(m):
+        lo, hi = row.get(f"{m}_ci", [0, 0])
+        good_if_positive = m not in metrics.LOWER_IS_BETTER
+        if lo > 0:
+            return "better" if good_if_positive else "worse"
+        if hi < 0:
+            return "worse" if good_if_positive else "better"
+        return "unclear"
+
+    keep = (
+        bool(row)
+        and any(side(m) == "better" for m in PRACTICE_KEEP_METRICS)
+        and not any(side(m) == "worse" for m in PRACTICE_GUARD_METRICS)
+    )
 
     race_cols = ["ndcg5", "winner_hit", "spearman", "win_logloss", "podium_brier"]
     race_results = {}
@@ -345,31 +395,23 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
         r = _variant(df, start, None, settings, feats, n_seeds, retrain_every)
         keys = df[df["race_seq"].isin(with_practice)][["season", "round"]].drop_duplicates()
         race_results[name] = r.merge(keys, on=["season", "round"])
-    seasons = sorted(df[df["race_seq"].isin(with_practice)]["season"].unique().tolist())
-
-    # Held out: the choice is read off the first season with practice data and
-    # checked on the later ones, so the evidence isn't graded on the weekends
-    # that decided it.
-    def split(results: dict, reference: str, metric_cols: list[str]) -> dict:
-        periods = (
-            {f"decide {seasons[0]}": seasons[:1], f"check {seasons[-1]}": seasons[1:]}
-            if len(seasons) > 1
-            else {}
+    race_split = {
+        f"decide {decide[0]}": _paired_table(
+            {k: v[v["season"].isin(decide)] for k, v in race_results.items()}, "race model", race_cols
         )
-        return {
-            label: _paired_table(
-                {k: v[v["season"].isin(ss)] for k, v in results.items()}, reference, metric_cols
-            )
-            for label, ss in periods.items()
-        }
-
+    }
+    if check:
+        race_split[f"check {later}"] = _paired_table(
+            {k: v[v["season"].isin(check)] for k, v in race_results.items()}, "race model", race_cols
+        )
     return {
         "weekends_with_practice": len(with_practice),
-        "seasons": [int(x) for x in seasons],
-        "qualifying": _paired_table(quali_results, "without practice", cols),
-        "race": _paired_table(race_results, "race model", race_cols),
-        "qualifying_held_out": split(quali_results, "without practice", cols),
-        "race_held_out": split(race_results, "race model", race_cols),
+        "seasons": seasons,
+        "rule": "design picked on the first season by NDCG@5; kept only if clearly better on the later seasons",
+        "picked_design": picked,
+        "kept": keep,
+        "qualifying_held_out": {f"decide {decide[0]}": decided, f"check {later}": checked},
+        "race_held_out": race_split,
     }
 
 

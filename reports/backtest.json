@@ -17,7 +17,8 @@
   "recency": 2.0,
   "quali_temperature": 0.5499999999999999,
   "adaptive_temperature": true,
-  "n_sims": 3000
+  "n_sims": 3000,
+  "temperature_depth": 1
  },
  "tuning": {
   "window": [
@@ -104,7 +105,8 @@
    "recency": 2.0,
    "quali_temperature": 0.5499999999999999,
    "adaptive_temperature": true,
-   "n_sims": 3000
+   "n_sims": 3000,
+   "temperature_depth": 1
   }
  },
  "summary": [
@@ -1705,17 +1707,17 @@
   "summary": [
    {
     "method": "model",
-    "ndcg3": 0.7646,
-    "ndcg5": 0.8342,
-    "winner_hit": 0.3651,
-    "podium_overlap": 1.7143,
-    "top5_overlap": 3.6349,
-    "spearman": 0.5708,
-    "kendall": 0.4329,
-    "win_logloss": 1.766,
-    "win_brier": 0.7924,
-    "podium_brier": 0.0865,
-    "top10_brier": 0.1796,
+    "ndcg3": 0.7608,
+    "ndcg5": 0.8327,
+    "winner_hit": 0.2857,
+    "podium_overlap": 1.7302,
+    "top5_overlap": 3.7143,
+    "spearman": 0.5756,
+    "kendall": 0.4371,
+    "win_logloss": 1.7402,
+    "win_brier": 0.7896,
+    "podium_brier": 0.0842,
+    "top10_brier": 0.1781,
     "n_races": 63
    },
    {
@@ -1767,130 +1769,130 @@
   "comparison_vs_championship": [
    {
     "metric": "ndcg3",
-    "model": 0.7646,
+    "model": 0.7608,
     "championship": 0.7564,
-    "difference": 0.0082,
-    "ci_low": -0.0321,
-    "ci_high": 0.0479,
+    "difference": 0.0044,
+    "ci_low": -0.0314,
+    "ci_high": 0.04,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "ndcg5",
-    "model": 0.8342,
+    "model": 0.8327,
     "championship": 0.8078,
-    "difference": 0.0264,
-    "ci_low": -0.0035,
-    "ci_high": 0.0579,
+    "difference": 0.0249,
+    "ci_low": -0.0032,
+    "ci_high": 0.0541,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "winner_hit",
-    "model": 0.3651,
+    "model": 0.2857,
     "championship": 0.3016,
-    "difference": 0.0635,
-    "ci_low": -0.0476,
-    "ci_high": 0.1905,
+    "difference": -0.0159,
+    "ci_low": -0.127,
+    "ci_high": 0.0794,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "podium_overlap",
-    "model": 1.7143,
+    "model": 1.7302,
     "championship": 1.6825,
-    "difference": 0.0317,
+    "difference": 0.0476,
     "ci_low": -0.1111,
-    "ci_high": 0.1746,
+    "ci_high": 0.2063,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "top5_overlap",
-    "model": 3.6349,
+    "model": 3.7143,
     "championship": 3.4444,
-    "difference": 0.1905,
-    "ci_low": 0.0,
-    "ci_high": 0.3968,
-    "better": "unclear",
+    "difference": 0.2698,
+    "ci_low": 0.0794,
+    "ci_high": 0.4762,
+    "better": "model",
     "n_races": 63
    },
    {
     "metric": "spearman",
-    "model": 0.5708,
+    "model": 0.5756,
     "championship": 0.5684,
-    "difference": 0.0024,
-    "ci_low": -0.036,
-    "ci_high": 0.0487,
+    "difference": 0.0073,
+    "ci_low": -0.0309,
+    "ci_high": 0.0542,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "kendall",
-    "model": 0.4329,
+    "model": 0.4371,
     "championship": 0.4357,
-    "difference": -0.0027,
-    "ci_low": -0.0352,
-    "ci_high": 0.0357,
+    "difference": 0.0014,
+    "ci_low": -0.0315,
+    "ci_high": 0.0415,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "win_logloss",
-    "model": 1.766,
+    "model": 1.7402,
     "championship": 2.1276,
-    "difference": -0.3616,
-    "ci_low": -0.6159,
-    "ci_high": -0.0992,
+    "difference": -0.3874,
+    "ci_low": -0.6346,
+    "ci_high": -0.1241,
     "better": "model",
     "n_races": 63
    },
    {
     "metric": "win_brier",
-    "model": 0.7924,
+    "model": 0.7896,
     "championship": 0.8561,
-    "difference": -0.0637,
-    "ci_low": -0.1503,
-    "ci_high": 0.026,
+    "difference": -0.0666,
+    "ci_low": -0.1483,
+    "ci_high": 0.0188,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "podium_brier",
-    "model": 0.0865,
+    "model": 0.0842,
     "championship": 0.0955,
-    "difference": -0.009,
-    "ci_low": -0.0159,
-    "ci_high": -0.0014,
+    "difference": -0.0113,
+    "ci_low": -0.0181,
+    "ci_high": -0.004,
     "better": "model",
     "n_races": 63
    },
    {
     "metric": "top10_brier",
-    "model": 0.1796,
+    "model": 0.1781,
     "championship": 0.177,
-    "difference": 0.0026,
-    "ci_low": -0.0071,
-    "ci_high": 0.012,
+    "difference": 0.0011,
+    "ci_low": -0.0088,
+    "ci_high": 0.0106,
     "better": "unclear",
     "n_races": 63
    }
   ],
   "calibration_error": {
-   "win": 0.0119,
-   "podium": 0.0399,
-   "top10": 0.075
+   "win": 0.0118,
+   "podium": 0.0329,
+   "top10": 0.0745
   }
  },
  "qualifying": {
   "summary": [
    {
     "method": "model",
-    "pole_hit": 0.3651,
-    "pole_logloss": 1.7868,
-    "ndcg5": 0.8517,
-    "top10_overlap": 7.8889,
-    "spearman": 0.6932,
+    "pole_hit": 0.3492,
+    "pole_logloss": 1.6772,
+    "ndcg5": 0.8594,
+    "top10_overlap": 7.873,
+    "spearman": 0.7152,
     "n_races": 63
    },
    {
@@ -1906,59 +1908,59 @@
   "comparison": [
    {
     "metric": "pole_hit",
-    "model": 0.3651,
+    "model": 0.3492,
     "recent_quali_form": 0.2698,
-    "difference": 0.0952,
+    "difference": 0.0794,
     "ci_low": -0.0635,
-    "ci_high": 0.2381,
+    "ci_high": 0.2222,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "pole_logloss",
-    "model": 1.7868,
+    "model": 1.6772,
     "recent_quali_form": 2.0892,
-    "difference": -0.3024,
-    "ci_low": -0.5324,
-    "ci_high": -0.0821,
+    "difference": -0.412,
+    "ci_low": -0.6671,
+    "ci_high": -0.1612,
     "better": "model",
     "n_races": 63
    },
    {
     "metric": "ndcg5",
-    "model": 0.8517,
+    "model": 0.8594,
     "recent_quali_form": 0.8135,
-    "difference": 0.0382,
-    "ci_low": 0.0148,
-    "ci_high": 0.0623,
+    "difference": 0.0459,
+    "ci_low": 0.0236,
+    "ci_high": 0.069,
     "better": "model",
     "n_races": 63
    },
    {
     "metric": "top10_overlap",
-    "model": 7.8889,
+    "model": 7.873,
     "recent_quali_form": 7.746,
-    "difference": 0.1429,
-    "ci_low": -0.0794,
-    "ci_high": 0.381,
+    "difference": 0.127,
+    "ci_low": -0.0635,
+    "ci_high": 0.3175,
     "better": "unclear",
     "n_races": 63
    },
    {
     "metric": "spearman",
-    "model": 0.6932,
+    "model": 0.7152,
     "recent_quali_form": 0.7136,
-    "difference": -0.0204,
-    "ci_low": -0.0459,
-    "ci_high": 0.0063,
+    "difference": 0.0016,
+    "ci_low": -0.0208,
+    "ci_high": 0.0246,
     "better": "unclear",
     "n_races": 63
    }
   ]
  },
  "provenance": {
-  "generated_at_utc": "2026-09-26T17:59:01+00:00",
-  "git_commit": "00c5d9417946-dirty",
+  "generated_at_utc": "2026-09-27T12:17:02+00:00",
+  "git_commit": "41323f4bdbb4-dirty",
   "data": {
    "rows": {
     "raw_drivers": 221,
@@ -1969,7 +1971,7 @@
     "raw_qualifying": 3780,
     "raw_races": 196,
     "raw_results": 3788,
-    "raw_session_pace": 1988,
+    "raw_session_pace": 3490,
     "raw_session_weather": 63,
     "raw_sprint": 590,
     "raw_standings": 3928
@@ -1989,7 +1991,7 @@
    "duckdb": "1.5.5",
    "scikit-learn": "1.9.1"
   },
-  "model_version": "36e7ea5749e7",
-  "feature_version": "2026.09.6"
+  "model_version": "444e9010a6a9",
+  "feature_version": "2026.09.7"
  }
 }

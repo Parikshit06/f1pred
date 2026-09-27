@@ -80,10 +80,9 @@ TOP_N = 10  # rows published per board; the full field is still modelled
 # so the record holds race-week calls rather than whatever the scheduler ran
 # while grading the previous weekend.
 LOG_WINDOW_DAYS = 5.0
-# Within that window, the pre-qualifying call waits for the weekend's practice
-# pace - it measurably improves the qualifying forecast - but never beyond this
-# many hours before qualifying, so a practice-data outage can't cost the record
-# a race.
-PRACTICE_WAIT_HOURS = 6.0
-
+# The after-practice call waits for the last practice session before qualifying
+# (FP3, or FP1 on a sprint weekend), since that is what it was tested with, but
+# no later than this many hours before qualifying, so a late or missing session
+# can't cost the record a forecast.
+PRACTICE_WAIT_HOURS = 1.0
 RANDOM_SEED = 20260913

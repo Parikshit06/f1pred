@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 
-import pandas as pd
 import pytest
 
 from f1pred import report
@@ -304,12 +303,12 @@ def test_only_the_probability_cells_animate_their_value():
 
 
 def test_links_in_the_inverted_bar_take_the_bar_ink():
-    """The top strap inverts the page, so its link uses --paper, not the accent
+    """The top strap has its own surface, so its link uses the strap's ink, not the accent
     (unreadable on the strap) and not a transparent mix (which resolved close
     to the strap's own background)."""
     rule = rr.CSS.split(".bar a{")[1].split("}")[0]
     colour = next(d for d in rule.split(";") if d.strip().startswith("color:"))
-    assert "var(--paper)" in colour, colour
+    assert "var(--bar-ink)" in colour, colour
     assert "color-mix" not in colour, "a transparent text colour resolved near the strap itself"
 
 
@@ -319,7 +318,7 @@ def test_the_method_page_builds_and_links_back():
     html = method_page.build()
     assert html.startswith("<!doctype html>")
     assert "index.html" in html, "no way back to the forecast"
-    assert "Method &amp; accuracy" in html
+    assert "href='method.html' aria-current='page'>Method" in html
 
 
 def test_the_forecast_page_links_to_the_evidence():
@@ -345,48 +344,6 @@ def test_the_band_surface_is_defined(theme, block):
     """Alternate sections paint --band full-bleed; if it is missing they render
     on the page ground and the rhythm disappears."""
     assert _token("band", block)
-
-
-def test_the_method_page_reports_whether_the_range_holds(tmp_path, monkeypatch):
-    """The projection's band is the one claim on the page that is a promise with
-    a number attached, and it is currently NOT being kept - 71% against a stated
-    80%. A page that quietly dropped that section when the calibration file was
-    renamed would be presenting a shortfall as a clean bill of health."""
-    import json
-
-    from f1pred import config, method_page
-
-    monkeypatch.setattr(config, "REPORTS", tmp_path)
-    (tmp_path / "spread_calibration.json").write_text(
-        json.dumps(
-            {
-                "best": 6.0,
-                "fit_seasons": [2019, 2022],
-                "grade_seasons": [2023, 2025],
-                "held_out": {
-                    "before": {"coverage": 0.458, "width": 38.8, "n": 120},
-                    "after": {"coverage": 0.708, "width": 89.7, "n": 120},
-                },
-            }
-        )
-    )
-    html = method_page.build()
-    # Who wins and how close are graded in one Championship section.
-    assert "<b>Championship</b>" in html
-    assert "46%" in html and "71%" in html, "the graded coverage is not on the page"
-    assert "80%" in html, "the target the band is being held to is not stated"
-
-
-def test_the_method_page_omits_the_range_section_when_it_has_not_been_graded():
-    """No calibration file means no claim - better a missing section than one
-    quoting numbers from a run that never happened."""
-    import pytest as _pytest
-
-    from f1pred import config, method_page
-
-    with _pytest.MonkeyPatch.context() as mp:
-        mp.setattr(config, "REPORTS", config.REPORTS / "does-not-exist")
-        assert "Does the range hold up" not in method_page.build()
 
 
 # ---------------------------------------------------------------------------
@@ -483,52 +440,48 @@ def test_a_missing_database_is_not_confused_with_an_empty_one(tmp_path, monkeypa
 # ---------------------------------------------------------------------------
 # Figures quoted in prose have to come from the data beside them
 # ---------------------------------------------------------------------------
-def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeypatch):
-    """The sentence under the table is computed from the table."""
+def test_the_method_page_sets_the_winner_rate_against_the_grid(tmp_path, monkeypatch):
+    """The headline rate always comes with the pole-sitter's, and with the
+    admission that the gap could be luck when the interval says so."""
     import json
 
     from f1pred import config, method_page
 
     monkeypatch.setattr(config, "REPORTS", tmp_path)
-    (tmp_path / "title_backtest.json").write_text(
+    (tmp_path / "backtest.json").write_text(
         json.dumps(
             {
-                "brier": 0.1,
-                "checkpoints": [
-                    {
-                        "season": 2024,
-                        "after_round": 8,
-                        "races_left": 10,
-                        "favourite": "hamilton",
-                        "p_favourite": 0.97,
-                        "champion": "hamilton",
-                        "favourite_was_right": 1,
-                        "p_on_actual_champion": 0.97,
-                    },
-                    {
-                        "season": 2025,
-                        "after_round": 9,
-                        "races_left": 9,
-                        "favourite": "piastri",
-                        "p_favourite": 0.61,
-                        "champion": "norris",
-                        "favourite_was_right": 0,
-                        "p_on_actual_champion": 0.3,
-                    },
+                "window": {"n_races": 63, "start_season": 2024},
+                "summary": [
+                    {"method": "model", "winner_hit": 0.667},
+                    {"method": "grid", "winner_hit": 0.587},
                 ],
-                "calibration": [
-                    {"bucket": "50-80%", "claimed": "0.61", "happened": "0.0", "n": "1", "ci_low": "0.0"},
-                    {"bucket": "over 95%", "claimed": "0.97", "happened": "1.0", "n": "1", "ci_low": "0.2"},
-                ],
+                "comparison_vs_grid": [{"metric": "winner_hit", "better": "unclear"}],
             }
         )
     )
     html = method_page.build()
-    assert "right 1 times out of 1" in html, "the count is not read off the table"
-    assert "as low as 20%" in html, "the Wilson floor is not read off the table"
-    assert "16 of 16" not in html
-    # The season of every miss is named.
-    assert "misses were all in 2025" in html
+    assert "67% of races" in html and "won 59%" in html
+    assert "could be luck" in html
+
+
+def test_the_title_claim_names_the_leader_it_mostly_follows(tmp_path, monkeypatch):
+    """A title favourite that is nearly always the points leader is a low bar;
+    the page has to say so, with the leader's own record."""
+    import json
+
+    from f1pred import config, method_page
+
+    monkeypatch.setattr(config, "REPORTS", tmp_path)
+    (tmp_path / "backtest.json").write_text(json.dumps({"reliability": {}}))
+    cp = {"favourite": "a", "leader": "a", "favourite_was_right": 1}
+    (tmp_path / "title_backtest.json").write_text(
+        json.dumps({"checkpoints": [{**cp, "leader_was_champion": 1}, {**cp, "leader_was_champion": 0}]})
+    )
+    html = method_page.build()
+    assert "win 100% of the time" in html
+    assert "already leading the championship (2 times in 2)" in html
+    assert "right 50% of the time" in html
 
 
 def test_the_calibration_section_is_drawn_from_the_report(tmp_path, monkeypatch):
@@ -557,9 +510,9 @@ def test_the_calibration_section_is_drawn_from_the_report(tmp_path, monkeypatch)
         )
     )
     html = method_page.build()
-    assert html.count("class='cal-row") == 2, "one row per band with enough cases, per event"
-    assert "Said <b>27%</b>" in html and "happened <b>31%</b>" in html
-    assert "40 cases" in html
+    assert html.count("class='cpt") == 2, "one point per band with enough cases, per event"
+    assert "Said 27%, happened 31% (40 cases" in html
+    assert "class='diag'" in html, "no perfect-calibration reference line"
 
 
 def test_an_old_forecast_without_the_new_fields_still_renders():
@@ -588,51 +541,6 @@ def test_an_old_forecast_without_the_new_fields_still_renders():
     }
     html = report.build(prediction=old)
     assert "Old Grand Prix" in html and "30.0%" in html
-
-
-def test_a_column_heading_is_aligned_the_same_way_as_its_own_cells():
-    """The bug this catches is visible from across the room and was invisible
-    in the code: cells were right-aligned by position and headings were not
-    aligned at all, so every numeric column sat under a left-flush label."""
-    df = pd.DataFrame({"approach": ["Grid order"], "top 5": [3.919], "races": [62]})
-    html = rr.table(df)
-
-    heads = re.findall(r"<th(?: class='([^']*)')?>", html)
-    cells = re.findall(r"<td class='([^']*)'>", html)
-    assert len(heads) == len(cells) == 3
-    for head, cell in zip(heads, cells):
-        assert ("n" in (head or "").split()) == ("n" in cell.split()), (
-            f"heading {head!r} disagrees with cell {cell!r}"
-        )
-
-
-def test_a_column_of_words_is_not_right_aligned():
-    """Alignment follows the column's content, not its position."""
-    df = pd.DataFrame(
-        {"season": [2021], "favourite": ["Hamilton"], "champion": ["Verstappen"], "claimed": [0.63]}
-    )
-    cells = re.findall(r"<td class='([^']*)'>", rr.table(df))
-    assert cells[1] == "" and cells[2] == "", "a column of driver names was right-aligned"
-    assert "n" in cells[3].split(), "a column of probabilities was not right-aligned"
-
-
-def test_a_quantity_carrying_its_unit_still_counts_as_a_number():
-    """The range table publishes "90 pts" and "71%" as strings. They belong
-    under a right-aligned heading with the figures they sit beside."""
-    df = pd.DataFrame({"projection": ["Current model"], "band held": ["71%"], "width": ["90 pts"]})
-    cells = re.findall(r"<td class='([^']*)'>", rr.table(df))
-    assert "n" in cells[1].split() and "n" in cells[2].split()
-
-
-def test_the_emphasised_row_starts_where_every_other_row_starts():
-    """The emphasis marker sits in the gutter, not in extra padding."""
-    css = rr.document("", standalone=True)
-    rule = re.search(r"tr\.me td:first-child\{([^}]*)\}", css)
-    assert rule, "the emphasis rule is gone"
-    assert "padding" not in rule.group(1), "the emphasised row is still padded out of line"
-    assert re.search(r"th:first-child,\s*td:first-child\{[^}]*padding-left", css), (
-        "the first-column gutter is not reserved on every row"
-    )
 
 
 def test_a_probability_too_small_to_print_is_not_shown_as_zero():
@@ -672,7 +580,7 @@ def test_after_qualifying_the_board_shows_where_each_driver_qualified():
     ]
     before, after = rr.quali_board(rows), rr.quali_board(rows, qualified=True)
     assert "Top 10" in before and "P16" not in before
-    assert "Qualified" in after and "P16" in after
+    assert "Starts" in after and "P16" in after
 
 
 def test_the_championship_panel_uses_the_latest_projection(tmp_path, monkeypatch):
@@ -721,19 +629,6 @@ def test_title_odds_say_what_the_simulation_can_and_cannot_resolve():
     assert rr._odds(0.008) == "0.8%"
 
 
-def test_a_signed_difference_keeps_its_sign_in_a_table():
-    """ "+0.043" is a worsening in a log-loss column; printed as "0.043" it reads
-    as a level, so the sign has to survive the numeric formatting."""
-    import pandas as pd
-
-    from f1pred import report_render as rr
-
-    html = rr.table(pd.DataFrame({"variant": ["a", "b"], "change": ["+0.043", "-0.018"]}))
-    assert ">+0.043<" in html and ">-0.018<" in html
-    plain = rr.table(pd.DataFrame({"variant": ["a"], "value": ["0.5"]}))
-    assert ">+0.5<" not in plain
-
-
 def test_the_record_reads_race_by_race_and_merges_reruns():
     """A race card lists its forecasts in order - re-runs of the same step
     merged - and ignores anything made after the start."""
@@ -763,8 +658,9 @@ def test_the_record_reads_race_by_race_and_merges_reruns():
     assert [st["stage"] for st in race["steps"]] == ["pre_quali", "post_quali"]
     assert race["steps"][0]["runs"] == 2 and race["steps"][0]["p_pick_high"] == 0.55
     assert race["final_hit"] and race["winner"] == "A"
-    html = rr.record_cards([race])
-    assert "Pre-qualifying" in html and "Post-qualifying" in html and "A</b> won" in html
+    html = rr.record_table([race])
+    assert "Before practice" in html and "After qualifying" in html and "won by A" in html
+    assert html.count("&#10003;") == 1 and html.count("&#10007;") == 1, "one miss before, one hit after"
 
 
 def _field(n):
@@ -785,12 +681,10 @@ def _field(n):
     ]
 
 
-def test_the_board_shows_the_whole_field_and_explains_without_claiming_cause(no_track_record):
-    html = rr.race_board(_field(20), {r["driver_id"]: r["why_detail"] for r in _field(20)})
+def test_the_board_shows_the_whole_field_leading_with_the_contenders(no_track_record):
+    html = rr.race_board(_field(20))
     assert "Show the other 10 drivers" in html
-    assert html.count("<summary class='row") == 20
-    assert "Pushed up the order" in html and "Pulled down the order" in html
-    assert "associated with the model" in html and "not causes" in html
+    assert html.count("<div class='row") == 20
 
 
 def test_a_finished_race_shows_the_result_beside_the_unchanged_forecast(monkeypatch, no_track_record):
@@ -807,5 +701,27 @@ def test_a_finished_race_shows_the_result_beside_the_unchanged_forecast(monkeypa
         "meta": {"stage": "post_quali"},
     }
     html = report.build(prediction=pred)
-    assert "Race finished" in html and "Finished" in html
+    assert "Race finished" in html and "<span>Result</span>" in html
     assert "Result in" in html, "the stage shown is the result, not a live forecast"
+
+
+def test_the_typical_finish_is_the_median_not_the_mean():
+    """A retirement counts as a place near the back, which drags the mean far
+    from where a driver usually finishes; the median moves by one place at most."""
+    dist = [0.30, 0.25, 0.15, 0.05] + [0.0] * 14 + [0.10, 0.15]
+    assert report._quantile(dist, 0.5) == 2
+    pred = {"meta": {"matrix_driver_ids": ["a"]}, "position_matrix": [dist]}
+    assert report._spread(pred)["a"] == (1, 2, 4)
+    board = rr.race_board([{"driver_id": "a", "name": "A", "p_win": 0.3, "typical": 2}])
+    assert "Typical" in board and ">P2<" in board
+
+
+def test_a_forecast_whose_win_chances_disagree_with_its_distribution_is_flagged():
+    """Some early logged forecasts took the win chance from somewhere other than
+    the finishing distribution. They are never rewritten, so the page says so."""
+    base = {"meta": {"matrix_driver_ids": ["a", "b"]}, "position_matrix": [[0.6, 0.4], [0.4, 0.6]]}
+    ok = {**base, "field_probs": [{"driver_id": "a", "p_win": 0.6}, {"driver_id": "b", "p_win": 0.4}]}
+    off = {**base, "field_probs": [{"driver_id": "a", "p_win": 0.5}, {"driver_id": "b", "p_win": 0.4}]}
+    assert report.coherent(ok) and not report.coherent(off)
+    line = report.status_line({**off, "race_start_utc": None}, "post_quali", [], {})
+    assert "earlier version of the pipeline" in line

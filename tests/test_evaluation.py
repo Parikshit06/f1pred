@@ -29,8 +29,11 @@ def test_practice_never_reaches_the_race_model_by_default():
     assert not set(features.PRACTICE_FEATURES) & set(features.RACE_FEATURES)
 
 
-def test_the_left_out_groups_are_also_tested_before_qualifying():
-    """A group can be harmless once the real grid is known and still count twice
-    before it, when the grid is the qualifying model's projection of the same
-    record. The pre-qualifying ablation is what caught that."""
-    assert "pre_quali_ablation" in evaluation.EXPERIMENTS
+def test_practice_feeds_the_qualifying_model_only():
+    """Held out (design picked on 2024, graded on 2025-26), current-weekend
+    practice improved the qualifying forecast; it added nothing to the race
+    beyond the official grid, so the race model never sees it."""
+    practice = set(features.PRACTICE_FEATURES) | set(features.PRACTICE_DETAIL_FEATURES)
+    assert practice <= set(features.QUALI_FEATURES)
+    assert not practice & set(features.RACE_FEATURES)
+    assert "practice" in evaluation.EXPERIMENTS

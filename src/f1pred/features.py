@@ -86,6 +86,20 @@ PRACTICE_FEATURES = [
     "fp_best_gap_pct",
     "practice_available",
 ]
+PRACTICE_MAX_GAP_PCT = 7.0
+# The detailed current-weekend design, tested against the compact one above.
+PRACTICE_DETAIL_FEATURES = [
+    "fp1_gap_pct",
+    "fp2_gap_pct",
+    "fp3_gap_pct",
+    "fp_latest_gap_pct",
+    "fp_latest_rank",
+    "fp_team_gap_pct",
+    "fp_teammate_gap_pct",
+    "fp_trend_12",
+    "fp_trend_23",
+    "fp_consistency",
+]
 
 GRID_FEATURES = [
     "grid",
@@ -108,10 +122,12 @@ TEAMMATE_FEATURES = ["quali_gap_to_teammate_pct", "drv_teammate_quali_edge"]
 # before (reports/experiments.json, ablation and pre_quali_ablation).
 QUALI_FORM_FEATURES = ["drv_avg_grid_5", "drv_avg_quali_5", "drv_pole_rate_10", "drv_pace_gap_pct"]
 
-# Practice feeds the qualifying model only and reaches the race through the
-# predicted grid. Measured on the weekends with practice data
-# (reports/experiments.json, practice): it sharpens the qualifying forecast and
-# adds nothing to the race once the real grid is known.
+# Practice pace: this weekend's FP1-FP3 only, as gaps to each session's
+# fastest car (never a long-term driver feature). The detailed design was
+# picked on 2024 and graded on untouched 2025-26 weekends: it clearly lowered
+# qualifying position error and pole log loss against history alone, so it
+# feeds the qualifying model. It adds nothing to the race once the real grid
+# is known, so the race model never sees it (reports/experiments.json, practice).
 
 # Direct one-lap evidence. These lead the qualifying model, because
 # qualifying history predicts qualifying and race results do not: a race
@@ -140,12 +156,14 @@ QUALI_CONTEXT_FEATURES = [
     "season_progress",
 ]
 
-QUALI_FEATURES = QUALI_HISTORY_FEATURES + QUALI_CONTEXT_FEATURES + PRACTICE_FEATURES
+QUALI_FEATURES = (
+    QUALI_HISTORY_FEATURES + QUALI_CONTEXT_FEATURES + PRACTICE_FEATURES + PRACTICE_DETAIL_FEATURES
+)
 RACE_FEATURES = BASE_FEATURES + GRID_FEATURES
 
 # Bumped whenever a feature's definition changes, and written into every
 # forecast, so a logged prediction says which definitions produced it.
-FEATURE_VERSION = "2026.09.6"
+FEATURE_VERSION = "2026.09.7"
 
 # How recent finishing form (drv_/team_avg_finish_*) is summarised: "mean" or
 # "median". The median resists one freak result. On 2022-23 it lowered win log
@@ -206,14 +224,22 @@ def _load() -> Raw:
             """
         ).fetchdf()
 
-        # Practice sessions only: all of them run before qualifying.
+        # Practice sessions that ran before this weekend's qualifying. In the
+        # 2021-22 sprint format FP2 came after qualifying, so a session is only
+        # used when it demonstrably started first (or the times are unknown).
         pace = con.execute(
             """
-            SELECT season, round, driver_id,
-                   min(long_run_ms) AS fp_long_run_ms,
-                   min(best_lap_ms) AS fp_best_ms
-            FROM raw_session_pace
-            WHERE session IN ('FP1', 'FP2', 'FP3')
+            SELECT p.season, p.round, p.driver_id,
+                   min(p.long_run_ms) AS fp_long_run_ms,
+                   min(p.best_lap_ms) AS fp_best_ms,
+                   min(CASE WHEN p.session = 'FP1' THEN p.best_lap_ms END) AS fp1_best_ms,
+                   min(CASE WHEN p.session = 'FP2' THEN p.best_lap_ms END) AS fp2_best_ms,
+                   min(CASE WHEN p.session = 'FP3' THEN p.best_lap_ms END) AS fp3_best_ms
+            FROM raw_session_pace p
+            LEFT JOIN raw_races r USING (season, round)
+            WHERE p.session IN ('FP1', 'FP2', 'FP3')
+              AND (p.session_start_utc IS NULL OR r.quali_start_utc IS NULL
+                   OR p.session_start_utc < r.quali_start_utc)
             GROUP BY 1, 2, 3
             """
         ).fetchdf()
@@ -317,28 +343,6 @@ def _prior_pace_at_circuit(df: pd.DataFrame, group: str, col: str) -> pd.Series:
         how="left",
     )
     return pd.Series(merged["_v"].to_numpy(), index=df.index)
-
-
-def _prior_circuit_by_race(df: pd.DataFrame, group: str, col: str, how: str = "mean") -> pd.Series:
-    """Expanding stat at a circuit for a multi-car group, race-stepped.
-
-    Same hazard as _prior_rolling_by_race, scoped to visits to one circuit.
-    """
-    per_race = (
-        df.groupby([group, "circuit_id", "race_seq"], sort=True)[col]
-        .mean()
-        .reset_index()
-        .sort_values([group, "circuit_id", "race_seq"])
-    )
-    per_race["_value"] = per_race.groupby([group, "circuit_id"], sort=False)[col].transform(
-        lambda s: getattr(s.shift(1).expanding(min_periods=1), how)()
-    )
-    merged = df[[group, "circuit_id", "race_seq"]].merge(
-        per_race[[group, "circuit_id", "race_seq", "_value"]],
-        on=[group, "circuit_id", "race_seq"],
-        how="left",
-    )
-    return pd.Series(merged["_value"].to_numpy(), index=df.index)
 
 
 def _prior_rolling_by_race(
@@ -699,16 +703,44 @@ def _add_practice_features(df: pd.DataFrame) -> pd.DataFrame:
     if "fp_long_run_ms" not in df or df["fp_long_run_ms"].notna().sum() == 0:
         # No FastF1 data ingested. Emit the columns as null so the model
         # schema is identical either way, and flag their absence.
-        df["fp_long_run_gap_pct"] = np.nan
-        df["fp_best_gap_pct"] = np.nan
+        for col in ["fp_long_run_gap_pct", "fp_best_gap_pct", *PRACTICE_DETAIL_FEATURES]:
+            df[col] = np.nan
         df["practice_available"] = 0.0
         return df
 
-    fastest_long = df.groupby(["season", "round"])["fp_long_run_ms"].transform("min")
-    fastest_best = df.groupby(["season", "round"])["fp_best_ms"].transform("min")
+    weekend = ["season", "round"]
+    fastest_long = df.groupby(weekend)["fp_long_run_ms"].transform("min")
+    fastest_best = df.groupby(weekend)["fp_best_ms"].transform("min")
     df["fp_long_run_gap_pct"] = (df["fp_long_run_ms"] / fastest_long - 1.0) * 100
     df["fp_best_gap_pct"] = (df["fp_best_ms"] / fastest_best - 1.0) * 100
     df["practice_available"] = df["fp_best_ms"].notna().astype(float)
+
+    # The detailed design: this weekend only, each session against its own
+    # fastest car, so track evolution and conditions within a session cancel.
+    for k in (1, 2, 3):
+        col = f"fp{k}_best_ms"
+        if col not in df:
+            df[col] = np.nan
+        gap = (df[col] / df.groupby(weekend)[col].transform("min") - 1.0) * 100
+        # More than 7% off the fastest car is an out-lap or a red-flagged run,
+        # not pace: treated as no representative lap.
+        df[f"fp{k}_gap_pct"] = gap.where(gap <= PRACTICE_MAX_GAP_PCT)
+    # Representative pace: the latest session each car ran, where programmes
+    # converge on qualifying trim.
+    latest = df["fp3_gap_pct"].fillna(df["fp2_gap_pct"]).fillna(df["fp1_gap_pct"])
+    df["fp_latest_gap_pct"] = latest
+    df["fp_latest_rank"] = latest.groupby([df["season"], df["round"]]).rank(method="min")
+    team_best = latest.groupby([df["season"], df["round"], df["constructor_id"]]).transform("min")
+    n_timed = latest.notna().groupby([df["season"], df["round"], df["constructor_id"]]).transform("sum")
+    df["fp_team_gap_pct"] = team_best
+    df["fp_teammate_gap_pct"] = (latest - team_best).where(n_timed >= 2)
+    df["fp_trend_12"] = df["fp2_gap_pct"] - df["fp1_gap_pct"]
+    df["fp_trend_23"] = df["fp3_gap_pct"] - df["fp2_gap_pct"]
+    df["fp_consistency"] = (
+        df[["fp1_gap_pct", "fp2_gap_pct", "fp3_gap_pct"]]
+        .std(axis=1, ddof=0)
+        .where(df[["fp1_gap_pct", "fp2_gap_pct", "fp3_gap_pct"]].notna().sum(axis=1) >= 2)
+    )
     return df
 
 

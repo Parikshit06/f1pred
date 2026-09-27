@@ -27,4 +27,9 @@ reports/*.tmp
 # Personal working notes, kept out of the published tree
 docs/
 
+# Editors and OS metadata
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

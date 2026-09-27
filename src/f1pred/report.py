@@ -39,6 +39,15 @@ def _stage(p: dict) -> str:
     return (p.get("meta") or {}).get("stage") or ("post_quali" if p.get("grid_known") else "pre_quali")
 
 
+def weekend_stage(p: dict) -> str:
+    """_stage, with the forecast before any practice told apart from the one
+    made with it."""
+    stage = _stage(p)
+    if stage == "pre_quali" and not (p.get("meta") or {}).get("practice_data"):
+        return "pre_practice"
+    return stage
+
+
 def actual_result(season: int, rnd: int) -> dict[str, int]:
     """driver_id -> finishing position, or {} if the race hasn't run."""
     if not database_exists():
@@ -146,6 +155,10 @@ def history_of(preds: list[dict], result_of, names_db: dict[str, str]) -> list[d
                 "race": first.get("race_name", f"{season} round {rnd}"),
                 "race_start": first.get("race_start_utc"),
                 "winner": win_name,
+                "winner_team": next(
+                    (f.get("team") for f in first.get("field_probs") or [] if f.get("driver_id") == winner),
+                    None,
+                ),
                 "steps": steps,
                 "final_hit": steps[-1]["hit"],
                 "final_p_winner": steps[-1]["p_winner"],
@@ -173,46 +186,105 @@ def _when(ts: str | None) -> str:
         return "\u2014"
 
 
-def status_line(prediction: dict) -> str:
-    """One line of what this forecast was built on, in the reader's terms."""
+def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[str, int]) -> str:
+    """One plain sentence of where this forecast stands."""
     meta = prediction.get("meta") or {}
-    grid = meta.get("grid_source") or ("qualifying" if _stage(prediction) == "post_quali" else "projected")
-    bits = [
-        f"Published <b>{_when(prediction.get('generated_at_utc'))}</b>",
-        f"Race starts {_when(prediction.get('race_start_utc'))}",
-        f"Grid: {rr.esc(GRID_SOURCES.get(grid, str(grid)))}",
-        f"{int(meta.get('n_simulations', 10000)):,} simulated races",
-    ]
-    if meta.get("entry_source") == "previous_race":
-        bits.append("field assumed from the last race until entries are published")
-    return "<p class='meta'>" + " &middot; ".join(bits) + "</p>"
+    if finished:
+        winner = min(finished, key=finished.get)
+        said = next((r.get("p_win") for r in rows if r.get("driver_id") == winner), None)
+        name = next((r.get("short") or r.get("name") for r in rows if r.get("driver_id") == winner), winner)
+        lead = f"<span class='pill done'>Race finished</span> <b>{rr.esc(name)} won</b>" + (
+            f". The forecast gave {rr.pct(said, 0)}." if said is not None else "."
+        )
+    elif stage == "post_quali":
+        lead = f"<span class='pill live'>After qualifying</span> Race starts {_when(prediction.get('race_start_utc'))}."
+    elif stage == "pre_practice":
+        lead = (
+            "<span class='pill'>Before practice</span> Made from past races only; it updates once "
+            f"practice has run. Race starts {_when(prediction.get('race_start_utc'))}."
+        )
+    else:
+        lead = (
+            "<span class='pill'>After practice</span> The grid is not set yet, so it is "
+            f"forecast too. Race starts {_when(prediction.get('race_start_utc'))}."
+        )
+    grid = meta.get("grid_source")
+    note = (
+        " Grid taken from the qualifying order."
+        if stage in ("post_quali", "result") and grid in (None, "qualifying")
+        else ""
+    )
+    return (
+        f"<p class='status'>{lead}</p>"
+        f"<p class='meta'>Forecast published {_when(prediction.get('generated_at_utc'))}, before the session, "
+        f"from {int(meta.get('n_simulations', 10000)):,} simulated races.{note}</p>"
+        + (
+            ""
+            if coherent(prediction)
+            else "<p class='meta legacy'>Logged by an earlier version of the pipeline, whose win chances "
+            "were not read from the same simulated finishing order as the other figures. It is shown "
+            "exactly as it was published; current forecasts take every figure from one distribution.</p>"
+        )
+    )
 
 
 def primary(rows: list[dict], prediction: dict, finished: dict[str, int]) -> str:
-    """The favourite, then the leading drivers' win, podium and top-5 chances."""
+    """The favourite, then the top five with one bar each: the chance to win."""
     if not rows:
         return ""
     fav = rows[0]
     grid = fav.get("grid")
-    grid_txt = f"P{int(grid)}" if isinstance(grid, (int, float)) else "\u2014"
-    exp = fav.get("exp_position")
-    cells = [
-        ("Grid" if prediction.get("grid_known") else "Proj. grid", grid_txt),
-        ("Podium", rr.pct(fav.get("p_podium") or 0, 0)),
-        ("Exp. finish", f"{float(exp):.1f}" if isinstance(exp, (int, float)) else "\u2014"),
-    ]
-    if finished:
-        pos = finished.get(fav.get("driver_id"))
-        cells[2] = ("Finished", f"P{pos}" if pos else "DNF")
+    where = (
+        f"starts P{int(grid)}"
+        if isinstance(grid, (int, float)) and prediction.get("grid_known")
+        else f"forecast to start P{int(grid)}"
+        if isinstance(grid, (int, float))
+        else ""
+    )
     card = (
         f"<div class='fav' style='--tc:{rr.team_colour(fav.get('team'))}'>"
         "<div class='k'>Most likely winner</div>"
         f"<div class='nm'>{rr.esc(fav.get('name', ''))}</div>"
-        f"<div class='tm'>{rr.esc(rr.team_name(fav.get('team')))}</div>"
-        f"<div class='pc'>{rr.pct(fav.get('p_win') or 0)}<small>to win</small></div>"
-        "<dl>" + "".join(f"<div><dt>{k}</dt><dd>{v}</dd></div>" for k, v in cells) + "</dl></div>"
+        f"<div class='tm'>{rr.esc(rr.team_name(fav.get('team')))}{' &middot; ' + where if where else ''}</div>"
+        f"<div class='pc'>{rr.pct(fav.get('p_win') or 0, 0)}</div>"
+        "<div class='pcl'>chance to win</div></div>"
     )
-    return f"<div class='lead-grid'>{card}{rr.prob_ladder(rows)}</div>"
+    return f"<div class='hero'>{card}{rr.finish_line(rows, bool(finished))}</div>"
+
+
+def _quantile(dist: list[float], q: float) -> int:
+    """The first finishing position whose cumulative chance reaches q."""
+    total = 0.0
+    for pos, p in enumerate(dist, 1):
+        total += float(p)
+        if total >= q - 1e-9:
+            return pos
+    return len(dist)
+
+
+def _spread(prediction: dict) -> dict[str, tuple[int, int, int]]:
+    """driver_id -> (25th, 50th, 75th percentile finish) from the logged
+    finishing-position distribution. The median is the typical finish: a
+    retirement moves it by one place at most, where it drags the mean."""
+    ids = (prediction.get("meta") or {}).get("matrix_driver_ids") or []
+    matrix = prediction.get("position_matrix") or []
+    if len(ids) != len(matrix):
+        return {}
+    return {
+        d: (_quantile(row, 0.25), _quantile(row, 0.5), _quantile(row, 0.75)) for d, row in zip(ids, matrix)
+    }
+
+
+def coherent(prediction: dict, tol: float = 0.02) -> bool:
+    """Whether the published win chances are the ones in the logged
+    distribution. Forecasts from the current pipeline always are (tested);
+    some logged by an earlier version are not, and are never rewritten."""
+    ids = (prediction.get("meta") or {}).get("matrix_driver_ids") or []
+    matrix = prediction.get("position_matrix") or []
+    if len(ids) != len(matrix) or not matrix:
+        return True
+    win = {f.get("driver_id"): f.get("p_win") for f in prediction.get("field_probs") or []}
+    return all(abs(float(row[0]) - float(win.get(d) or 0)) <= tol for d, row in zip(ids, matrix) if d in win)
 
 
 def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
@@ -225,9 +297,12 @@ def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     listed = prediction.get("race_board") or []
     board = {r.get("driver_id"): r for r in listed if r.get("driver_id")}
     field = prediction.get("field_probs") or []
+    spread = _spread(prediction)
     rows = []
     for f in sorted(field, key=lambda r: -(r.get("p_win") or 0)) if field else listed:
         row = {**f, "short": f.get("short") or f.get("name")}
+        if f.get("driver_id") in spread:
+            row["q25"], row["typical"], row["q75"] = spread[f["driver_id"]]
         if field and f.get("driver_id") in board:
             row["name"] = board[f["driver_id"]].get("name", row.get("name"))
         if finished:
@@ -236,12 +311,21 @@ def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     return rows
 
 
+SECTIONS = [
+    ("race", "Race forecast"),
+    ("qualifying", "Qualifying forecast"),
+    ("championship", "Championship projection"),
+    ("record", "Track record"),
+]
+
+
 def _section(label: str, caption: str, body: str, note: str = "", band: bool = False) -> str:
-    """Label in the margin, content beside it. No cards; alternate sections sit
-    on a tinted full-bleed band so the page has rhythm without panels."""
+    """A ruled heading, then the content. No cards; alternate sections sit on a
+    tinted full-bleed band so the page has rhythm without panels."""
     cls = " class='band'" if band else ""
+    anchor = next((k for k, name in SECTIONS if name == label), "")
     return (
-        f"<section{cls}>"
+        f"<section{cls}{f' id={anchor!r}' if anchor else ''}>"
         f"<div class='lab'><b>{label}</b>{note}</div><div class='body'>"
         + (f"<p class='cap'>{caption}</p>" if caption else "")
         + body
@@ -268,7 +352,7 @@ def build(
                 pass
         if prediction.get("season") and prediction.get("round"):
             finished = actual_result(int(prediction["season"]), int(prediction["round"]))
-        stage = "result" if finished else _stage(prediction)
+        stage = "result" if finished else weekend_stage(prediction)
 
     s: list[str] = [rr.top_bar(prediction, generated, stage), "<main class='wrap'>"]
 
@@ -277,31 +361,18 @@ def build(
     s.append("<header class='mast'>")
     if prediction:
         s.append(
-            f"<div class='kicker'>{rr.esc(prediction.get('season', ''))} season &middot; "
-            f"Round {prediction.get('round', '?')} &middot; "
-            f"{rr.esc(str(prediction.get('circuit_id', '')).replace('_', ' '))}</div>"
+            f"<div class='kicker'>Round {prediction.get('round', '?')} &middot; "
+            f"{rr.esc(prediction.get('season', ''))} season</div>"
         )
     s.append(f"<h1>{rr.esc(prediction['race_name']) if prediction else 'No race scheduled'}</h1>")
-    s.append(
-        "<p class='sub'>An F1 forecasting system. Before each race it estimates every driver's "
-        "chance of winning, finishing on the podium and in the top five, publishes that, and "
-        "checks itself against the result. <a href='method.html'>How it works</a>.</p>"
-    )
     if prediction:
-        s.append(rr.stage_track(stage or "pre_quali"))
-        s.append(status_line(prediction))
-        if finished:
-            winner = min(finished, key=finished.get)
-            said = next((r.get("p_win") for r in rows if r.get("driver_id") == winner), None)
-            name = next((r.get("name") for r in rows if r.get("driver_id") == winner), winner)
-            s.append(
-                "<div class='notice result'><b>Race finished: "
-                f"{rr.esc(name)} won</b>"
-                + (f" (the forecast gave {rr.pct(said)})" if said is not None else "")
-                + ". The forecast below is exactly as published before the race; the Finished "
-                "column was added afterwards. The next forecast appears here in race week.</div>"
-            )
+        s.append(status_line(prediction, stage or "pre_quali", rows, finished))
         s.append(primary(rows, prediction, finished))
+        s.append(rr.stage_track(stage or "pre_quali"))
+        present = {"race", "qualifying", "record"}
+        if (prediction.get("season_outlook") or {}).get("drivers"):
+            present.add("championship")
+        s.append(_index(present))
     s.append("</header>")
 
     if not prediction:
@@ -315,78 +386,69 @@ def build(
             )
         )
     if prediction:
-        details = {
-            f.get("driver_id"): f.get("why_detail")
-            for f in prediction.get("field_probs") or []
-            if f.get("why_detail")
-        }
-        sims = (prediction.get("meta") or {}).get("n_simulations", 10000)
         s.append(
             _section(
-                "Every driver",
-                f"Every percentage comes from the same {sims:,} simulated races, so they always "
-                "agree with each other. Select a driver to see why the model ranked them there.",
-                rr.race_board(rows, details, grid_known=bool(prediction.get("grid_known"))),
+                "Race forecast",
+                "Every driver's chances from 10,000 simulated races. Typical is the median finish: "
+                "half the simulated races end there or better.",
+                rr.race_board(rows, grid_known=bool(prediction.get("grid_known"))),
                 band=True,
             )
         )
 
+        qualified = bool(prediction.get("grid_known"))
         s.append(
             _section(
-                "Qualifying",
+                "Qualifying forecast",
                 (
-                    "The qualifying model's forecast, made before qualifying, beside where each "
-                    "driver actually qualified. Shown for comparison only: the race forecast uses "
-                    "the official starting grid."
-                    if prediction.get("grid_known")
-                    else "The qualifying model's forecast, from past qualifying and this weekend's "
-                    "practice pace where it has run. Each simulated race draws its own grid from it; "
-                    "it is a forecast, not the official grid."
+                    "The qualifying forecast, made before the session, with where each driver actually "
+                    "starts. The race forecast above uses the real grid."
+                    if qualified
+                    else "Chances in qualifying, from past qualifying and this weekend's practice where it "
+                    "has run. Each simulated race draws its own grid from this forecast."
                 ),
-                (
-                    "<details class='fold'><summary>Show the qualifying forecast</summary>"
-                    if prediction.get("grid_known")
-                    else ""
-                )
-                + rr.quali_board(
-                    prediction.get("quali_board") or [], qualified=bool(prediction.get("grid_known"))
-                )
-                + ("</details>" if prediction.get("grid_known") else ""),
+                rr.quali_board(prediction.get("quali_board") or [], qualified=qualified),
                 "<span>Predicted order</span>",
             )
         )
 
         # ---- championship -------------------------------------------------
         outlook = prediction.get("season_outlook") or {}
-        if outlook:
-            panels = (
-                "<div class='pair'>"
-                + rr.championship_panel("Drivers", outlook["drivers"], "name", "team")
-                + rr.championship_panel("Constructors", outlook["constructors"], "team_name", None)
-                + "</div>"
-            )
-            names = [d["name"] for d in outlook["drivers"]]
-            strip = rr.title_race(outlook, names[0], names[1] if len(names) > 1 else "")
+        if outlook and outlook.get("drivers"):
+            d = outlook["drivers"]
+            leader, rival = d[0]["name"], (d[1]["name"] if len(d) > 1 else "")
+            k, after = outlook.get("clinch_in"), outlook.get("after_round") or 0
             sprints = outlook.get("sprints_left")
+            lede = (
+                f"{rr.esc(leader)} leads {rr.esc(rival)} by {outlook.get('lead', 0):.0f} points with "
+                f"{outlook.get('points_available', 0)} still available over {outlook['n_races']} races"
+                + (f" and {sprints} sprint{'s' if sprints != 1 else ''}" if sprints else "")
+                + "."
+                + (
+                    f" The earliest it can be settled is round {after + k}."
+                    if k and k < outlook["n_races"]
+                    else ""
+                )
+                + " Projected from 10,000 simulated seasons; the range under each total covers 8 in 10."
+            )
+            body = (
+                f"<p class='cap'>{lede}</p>"
+                + "<div class='pair'>"
+                + rr.championship_panel("Drivers", d, "name", "team")
+                + rr.championship_panel("Constructors", outlook.get("constructors") or [], "team_name", None)
+                + "</div>"
+                + (
+                    rr.progression_chart(outlook["series"], outlook["last_actual_round"])
+                    if outlook.get("series")
+                    else ""
+                )
+            )
             s.append(
                 _section(
-                    "Championship",
-                    f"The {outlook['n_races']} remaining races"
-                    + (f" and {sprints} sprint{'s' if sprints != 1 else ''}" if sprints else "")
-                    + f" simulated {int(outlook.get('n_sims') or 10000):,} times from each driver's "
-                    "recent form. Mean points, with the 10th\u201390th percentile beneath. "
-                    "<a href='method.html'>Method</a>.",
-                    strip
-                    + panels
-                    + (
-                        "<p class='cap' style='margin-top:30px'>Points so far (solid) and projected "
-                        "(dashed, with the 10th\u201390th percentile band). Hover or tap for figures.</p>"
-                        + rr.progression_chart(outlook["series"], outlook["last_actual_round"])
-                        if outlook.get("series")
-                        else ""
-                    ),
-                    f"<span>After round {outlook['last_actual_round']}</span>",
-                    band=True,
+                    "Championship projection",
+                    "",
+                    body,
+                    f"<span>after round {outlook['last_actual_round']}</span>",
                 )
             )
 
@@ -406,37 +468,45 @@ def build(
     return rr.document("".join(s), standalone=standalone, title=title)
 
 
+def _tested() -> tuple[list[dict], dict]:
+    """Per-race rows and the summary of the walk-forward test, if it has run."""
+    path = config.REPORTS / "backtest.json"
+    try:
+        bt = json.loads(path.read_text()) if path.exists() else {}
+    except json.JSONDecodeError:
+        return [], {}
+    return bt.get("races") or [], {r["method"]: r for r in bt.get("summary") or []}
+
+
 def track_record(history: list[dict]) -> str:
-    """Race by race: every forecast logged before the race, then the result."""
-    if not history:
-        return _section(
-            "Track record",
-            "Nothing graded yet. Each forecast is committed to <code>predictions/</code> "
-            "before its session runs and marked against the result afterwards; this fills "
-            "in from the first completed race.",
-            "",
-            band=True,
+    """The live record race by race, then every race the model was tested on."""
+    races, summary = _tested()
+    body = []
+    if history:
+        body.append(
+            "<h3 class='sub'>Live forecasts</h3><p class='cap'>The chance the forecast gave the eventual "
+            "winner at each step of the weekend, and whether its pick was right.</p>"
+            + rr.record_table(history)
         )
-    n = len(history)
-    hits = sum(r["final_hit"] for r in history)
-    mean_p = sum(r["final_p_winner"] for r in history) / n
-    summary = (
-        "<dl class='rec-summary'>"
-        f"<div><dt>Races graded</dt><dd>{n}</dd></div>"
-        f"<div><dt>Winner called, final forecast</dt><dd>{hits} of {n}</dd></div>"
-        f"<div><dt>Final forecast gave the winner</dt><dd>{rr.pct(mean_p, 0)}<small>on average</small></dd></div>"
-        "</dl>"
-    )
-    return _section(
-        "Track record",
-        "Every forecast logged before each race, in the order it was published, then the result "
-        "observed afterwards. The bar is the chance each forecast gave the driver who went on to "
-        "win. Files in <code>predictions/</code> are never edited. "
-        + ("Too few races yet to read anything into the hit rate." if n < 10 else ""),
-        summary + rr.record_cards(history),
-        f"<span>{n} race{'s' if n != 1 else ''}</span>",
-        band=True,
-    )
+    else:
+        body.append("<p class='cap'>Live forecasts are graded here from the first completed race.</p>")
+    if races and summary.get("model"):
+        n, hits = len(races), sum(int(r.get("winner_hit") or 0) for r in races)
+        grid = summary.get("grid", {}).get("winner_hit")
+        body.append(
+            f"<p class='cap tested'>Before going live, it was tested on {n} past races, each forecast "
+            f"using only the races before it: its pick won {hits}"
+            + (f", and backing the car on pole won {round(grid * n)}" if grid is not None else "")
+            + ". <a href='method.html'>How good is it?</a></p>"
+        )
+    lead = "Every forecast is saved before the session and graded after the race."
+    return _section("Track record", lead, "".join(body))
+
+
+def _index(present: set[str]) -> str:
+    """The page's sections as one line of links, for scanning."""
+    links = "".join(f"<a href='#{k}'>{name}</a>" for k, name in SECTIONS if k in present)
+    return f"<nav class='onpage' aria-label='On this page'>{links}</nav>"
 
 
 def write(

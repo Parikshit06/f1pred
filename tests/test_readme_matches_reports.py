@@ -164,6 +164,19 @@ def test_title_brier_and_hit_rate_are_current():
     assert f"{len(checkpoints)} checkpoints" in text, f"{len(checkpoints)} checkpoints were graded"
 
 
+def test_the_leader_baseline_is_quoted():
+    """The title favourite is nearly always the points leader; the README has
+    to say so, with the leader's own record."""
+    checkpoints = _load("title_backtest.json").get("checkpoints") or []
+    if not checkpoints or "leader" not in checkpoints[0]:
+        pytest.skip("no leader recorded")
+    text = _readme()
+    same = sum(c["favourite"] == c["leader"] for c in checkpoints)
+    right = sum(c["leader_was_champion"] for c in checkpoints) / len(checkpoints)
+    assert f"points leader at {same} of {len(checkpoints)}" in text
+    assert f"backing the leader would have been right {right:.0%}" in text
+
+
 def test_the_high_confidence_bucket_is_current():
     """n above 95% and its Wilson floor match the report."""
     buckets = _load("title_backtest.json").get("calibration") or []
@@ -230,13 +243,19 @@ def test_the_ablation_headline_is_current():
 
 
 def test_the_practice_result_is_current():
+    """The held-out practice figures quoted are the picked design's, on the
+    untouched check seasons."""
     practice = _experiments().get("practice") or {}
-    with_practice = next((r for r in practice.get("qualifying") or [] if r.get("pole_logloss_ci")), None)
-    if not with_practice:
-        pytest.skip("no practice experiment recorded")
-    lo, hi = with_practice["pole_logloss_ci"]
-    assert f"{with_practice['pole_logloss_diff']:+.3f} ({lo:+.3f} to {hi:+.3f})" in _readme()
-    assert f"{practice['weekends_with_practice']} weekends" in _readme()
+    held = practice.get("qualifying_held_out") or {}
+    check = next((w for w in held if w.startswith("check")), None)
+    if not check:
+        pytest.skip("no held-out practice experiment recorded")
+    r = next(x for x in held[check] if x["variant"] == practice["picked_design"])
+    text = _readme()
+    for m in ("position_error", "pole_logloss", "ndcg5", "ndcg3"):
+        lo, hi = r[f"{m}_ci"]
+        assert f"{r[f'{m}_diff']:+.3f} ({lo:+.3f} to {hi:+.3f})" in text, f"practice {m}"
+    assert f"{practice['weekends_with_practice']} weekends" in text
 
 
 def test_the_number_of_data_checks_is_current():

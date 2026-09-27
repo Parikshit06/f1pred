@@ -396,6 +396,8 @@ def walk_forward_quali(
                         "round": int(race["round"].iloc[0]),
                         "race_seq": seq,
                         "pole_hit": rank.get("winner_hit"),
+                        "ndcg3": rank.get("ndcg3"),
+                        "position_error": float((pred_rank - actual).abs().dropna().mean()),
                         "pole_logloss": float(-np.log(max(p[pole], metrics.EPS))),
                         "ndcg5": rank.get("ndcg5"),
                         "top10_overlap": len(

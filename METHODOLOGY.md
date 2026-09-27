@@ -13,11 +13,12 @@ inside it instead of a single "winner" label (about 190 races since 2018 would
 be 190 positive examples for a classifier). Relevance is `24 - finishing
 position`, so retirements keep their classified place.
 
-Two forecasts are made per weekend, from different information:
+Three forecasts are logged per weekend, from different information:
 
 | Stage | Known | Model |
 |---|---|---|
-| Before qualifying | history; practice pace once FP1-FP3 have run | qualifying ranker predicts the grid; race ranker scores the *projected* weekend |
+| Before practice | history only | qualifying ranker predicts the grid; race ranker scores the *projected* weekend |
+| After practice | history and this weekend's FP1-FP3 | as above, with practice feeding the qualifying ranker |
 | After qualifying | the official starting grid and the qualifying result | race ranker on the real grid |
 
 Once qualifying has run, the qualifying forecast is shown only for comparison.
@@ -29,7 +30,7 @@ It never stands in for the result.
 |---|---|
 | [jolpica-f1](https://github.com/jolpica/jolpica-f1) | results, qualifying, sprints, standings, calendar |
 | [OpenF1](https://openf1.org) | the official starting grid (penalties applied) and per-session entry lists, 2023+ |
-| [FastF1](https://github.com/theOehrly/Fast-F1) | practice pace: per-driver aggregates of FP1-FP3 laps |
+| [FastF1](https://github.com/theOehrly/Fast-F1) | practice pace: per-driver aggregates of FP1-FP3 laps, this weekend only |
 
 Everything lands in DuckDB. `raw_*` tables hold what the sources returned;
 derived data (features) never overwrites them. HTTP responses are cached, jolpica
@@ -154,7 +155,11 @@ softmax structure and is refitted only on past races. Isotonic regression was
 considered and not used, because calibrating each driver's probability on its
 own breaks the constraint that a race's win probabilities sum to one.
 `make experiments` compares no calibration, a fixed temperature and the rolling
-one, and the mixture against each of its halves.
+one, and the mixture against each of its halves. It also tests fitting the
+temperature on the order of the first three finishers instead of the winner
+alone, aimed at the over-confident podium and top-10 calls: their calibration
+improves in both windows, but win log loss on 2022-23 gets worse (0.928 against
+0.883), so the winner-only fit stays.
 
 ## 6. Experiments (`make experiments` → `reports/experiments.json`)
 
@@ -180,16 +185,22 @@ the final configuration, and later runs report without re-deciding.
   decision in the project. A teammate gap measured within one session instead
   of on each driver's best lap was also tried, made no difference, and was
   dropped.
-* **Practice**: whether FP1-FP3 aggregates improve the qualifying forecast, and
-  whether they add anything to the race model beyond the grid. Tested on the
-  weekends with practice data only (2024 R1-13, 2026 R1-15), rather than
-  downloading every session since 2018 before knowing whether it helps. Those
-  weekends fall inside the reported window, so unlike the other choices this
-  one is not held out: it is the weakest-evidenced decision here. Practice
-  sharpens the qualifying order and adds nothing to the race once the grid is
-  known, so it feeds the qualifying model only. The live pipeline fetches the
-  current weekend's sessions, and the logged pre-qualifying call waits for them
-  until six hours before qualifying.
+* **Practice**: does this weekend's FP1-FP3 say anything about this weekend's
+  qualifying beyond history, and about the race beyond the official grid?
+  Practice is treated as current-weekend evidence only: gaps to each
+  session's fastest car (over 7% counts as no representative lap), the latest
+  session's gap and rank, the teammate and team gaps, the FP1-FP2-FP3 trend and
+  consistency. Stored for 59 weekends of 2024-26, compact numbers only, and
+  only sessions that started before qualifying. The rule was fixed first: pick
+  the design (compact or detailed) on 2024 by NDCG@5, then keep it only if it
+  is clearly better than history alone on the untouched 2025-26 weekends on
+  NDCG@5 or position error and clearly worse on nothing. The detailed design
+  passed: position error -0.280 places (-0.429 to -0.128), pole log loss
+  -0.203 (-0.404 to -0.009), NDCG@5 +0.028 (+0.000 to +0.059). It feeds the
+  qualifying model only; it adds nothing to the race once the grid is known.
+  The live pipeline fetches the current weekend's sessions. Each weekend logs
+  three forecasts: before practice (history only), after practice and after
+  qualifying.
 * **Season projection**: how to score a driver for the rest of the season,
   graded on every title-backtest checkpoint against final driver and team
   points, the final gap between teammates and the champion's probability.
@@ -256,14 +267,15 @@ included.
   winners only; fitting it on the first three places would be the next thing
   to try.
 
-* Races are noisy and the sample is small. About 60 test races is enough to
+* Races are noisy and the sample is small. 63 test races is enough to
   separate the model from naive baselines. Against the calibrated starting
-  grid it is level on probabilities and behind on ordering the field (podium
-  overlap and rank correlation), once qualifying has run.
+  grid it is level on probabilities and behind on ordering the whole field
+  (Kendall rank correlation), once qualifying has run.
 * Not modelled: weather, tyre and pit strategy, in-race penalties, team orders,
   upgrades, correlated failures, safety-car timing.
 * Before the official grid is published, penalties are unknown and the
   qualifying order stands in.
 * The season projection assumes current form holds, widened by a calibrated
   but simple pace-drift term.
-* Practice data covers only the weekends it was fetched for.
+* Practice data covers 59 weekends (2024-26); its gain is clear on position
+  error and pole probability, borderline on NDCG@5.

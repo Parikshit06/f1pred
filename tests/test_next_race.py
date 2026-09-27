@@ -75,7 +75,7 @@ def test_a_calendar_without_start_times_still_works():
 # ---------------------------------------------------------------------------
 # What gets committed to predictions/
 # ---------------------------------------------------------------------------
-def _forecast(tmp_path, monkeypatch, *, start, grid_known=False, quali=None, practice=False):
+def _forecast(tmp_path, monkeypatch, *, start, grid_known=False, quali=None, practice=False, complete=True):
     from f1pred import config
     from f1pred.predict import Prediction
 
@@ -89,7 +89,7 @@ def _forecast(tmp_path, monkeypatch, *, start, grid_known=False, quali=None, pra
         generated_at_utc=datetime.now(UTC).isoformat(),
         grid_known=grid_known,
         quali_start_utc=quali.isoformat() if quali else None,
-        meta={"practice_data": practice},
+        meta={"practice_data": practice, "practice_complete": practice and complete},
     )
 
 
@@ -130,19 +130,36 @@ def test_one_file_per_race_per_stage(tmp_path, monkeypatch):
     assert len(list(tmp_path.glob("*.json"))) == 1
 
 
-def test_the_pre_qualifying_call_waits_for_practice(tmp_path, monkeypatch):
-    """Practice pace improves the qualifying forecast, so the logged call is
-    made once it is in rather than on the first run of race week."""
+def test_a_weekend_logs_before_practice_after_practice_and_after_qualifying(tmp_path, monkeypatch):
+    """Three stages, one file each: the forecast building up over the weekend."""
     now = datetime.now(UTC)
-    early = _forecast(tmp_path, monkeypatch, start=now + timedelta(days=2), quali=now + timedelta(days=1))
-    assert early.save() is None
-    with_practice = _forecast(
-        tmp_path, monkeypatch, start=now + timedelta(days=2), quali=now + timedelta(days=1), practice=True
+    kw = {"start": now + timedelta(days=2), "quali": now + timedelta(days=1)}
+    before = _forecast(tmp_path, monkeypatch, **kw)
+    assert before.save() is not None and "prepractice" in before.save().name
+    after = _forecast(tmp_path, monkeypatch, practice=True, **kw)
+    assert after.save() is not None and "prequali" in after.save().name
+    grid = _forecast(tmp_path, monkeypatch, grid_known=True, **kw)
+    assert "postquali" in grid.save().name
+    assert len(list(tmp_path.glob("*.json"))) == 3, "each stage logs once"
+
+
+def test_the_after_practice_call_waits_for_the_last_session_but_not_past_qualifying(tmp_path, monkeypatch):
+    now = datetime.now(UTC)
+    early = _forecast(
+        tmp_path,
+        monkeypatch,
+        start=now + timedelta(days=2),
+        quali=now + timedelta(hours=20),
+        practice=True,
+        complete=False,
     )
-    assert with_practice.save() is not None
-
-
-def test_a_practice_outage_cannot_cost_the_record_a_race(tmp_path, monkeypatch):
-    now = datetime.now(UTC)
-    late = _forecast(tmp_path, monkeypatch, start=now + timedelta(hours=26), quali=now + timedelta(hours=3))
-    assert late.save() is not None
+    assert early.save() is None, "FP3 has not run yet"
+    late = _forecast(
+        tmp_path,
+        monkeypatch,
+        start=now + timedelta(days=1),
+        quali=now + timedelta(minutes=40),
+        practice=True,
+        complete=False,
+    )
+    assert late.save() is not None, "qualifying is close: log with the practice there is"

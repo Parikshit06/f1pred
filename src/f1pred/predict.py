@@ -54,15 +54,20 @@ class Prediction:
     meta: dict = field(default_factory=dict)
     quali_start_utc: str | None = None
 
+    def tag(self) -> str:
+        """The weekend stage this forecast belongs to: before practice, after
+        practice (before qualifying), or after qualifying. One file each."""
+        if self.grid_known:
+            return "postquali"
+        return "prequali" if self.meta.get("practice_data") else "prepractice"
+
     def path(self) -> Path:
         stamp = self.generated_at_utc.replace(":", "").replace("-", "")[:15]
-        tag = "postquali" if self.grid_known else "prequali"
-        return config.PREDICTIONS / f"{self.season}-{self.round:02d}-{tag}-{stamp}.json"
+        return config.PREDICTIONS / f"{self.season}-{self.round:02d}-{self.tag()}-{stamp}.json"
 
     def existing(self) -> Path | None:
         """An earlier forecast for this race at this stage, if there is one."""
-        tag = "postquali" if self.grid_known else "prequali"
-        matches = sorted(config.PREDICTIONS.glob(f"{self.season}-{self.round:02d}-{tag}-*.json"))
+        matches = sorted(config.PREDICTIONS.glob(f"{self.season}-{self.round:02d}-{self.tag()}-*.json"))
         return matches[0] if matches else None
 
     def days_out(self) -> float | None:
@@ -70,9 +75,9 @@ class Prediction:
         return _days_until(self.race_start_utc)
 
     def waiting_for_practice(self) -> bool:
-        """A pre-qualifying call made before practice, with qualifying still
-        more than PRACTICE_WAIT_HOURS away: worth holding for the pace data."""
-        if self.grid_known or self.meta.get("practice_data"):
+        """An after-practice call made before the last practice session is in,
+        with qualifying still more than PRACTICE_WAIT_HOURS away."""
+        if self.tag() != "prequali" or self.meta.get("practice_complete", True):
             return False
         to_quali = _days_until(self.quali_start_utc)
         return to_quali is not None and to_quali * 24 > config.PRACTICE_WAIT_HOURS
@@ -108,7 +113,7 @@ class Prediction:
             return None
 
         if not force and self.waiting_for_practice():
-            log.info("not logging %d r%d yet: waiting for practice pace", self.season, self.round)
+            log.info("not logging %d r%d yet: waiting for the last practice session", self.season, self.round)
             return None
 
         p = self.path()
@@ -480,9 +485,13 @@ def run(
         ]
 
     with connect(read_only=True) as con:
-        race_name, quali_start = con.execute(
-            "SELECT race_name, quali_start_utc FROM raw_races WHERE season = ? AND round = ?", [season, rnd]
-        ).fetchone() or (None, None)
+        race_name, quali_start, sprint_start = con.execute(
+            "SELECT race_name, quali_start_utc, sprint_start_utc FROM raw_races WHERE season = ? AND round = ?",
+            [season, rnd],
+        ).fetchone() or (None, None, None)
+    practice = bool(race["practice_available"].max() > 0)
+    # Qualifying follows FP3, or only FP1 on a sprint weekend.
+    last_session = sprint_start is not None and pd.notna(sprint_start) or race["fp3_gap_pct"].notna().any()
 
     return Prediction(
         season=season,
@@ -526,7 +535,8 @@ def run(
             "quali_temperature": t_quali,
             "blend_weight": s.blend_weight,
             "recency_weight": s.recency,
-            "practice_data": bool(race["practice_available"].max() > 0),
+            "practice_data": practice,
+            "practice_complete": bool(practice and last_session),
             "circuit_seen_before": bool(pd.notna(meta_race["circuit_overtaking_score"])),
             # position_matrix rows follow this order, which is the order the
             # simulation ran in - not the sorted output order.

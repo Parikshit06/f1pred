@@ -79,10 +79,6 @@ def points_history(season: int) -> pd.DataFrame:
         ).fetchdf()
 
 
-def remaining_rounds(season: int, after_round: int) -> int:
-    return len(remaining_schedule(season, after_round))
-
-
 def remaining_schedule(season: int, after_round: int) -> pd.DataFrame:
     """Rounds still to run, and which of them have a sprint.
 

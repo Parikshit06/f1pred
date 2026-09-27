@@ -176,10 +176,6 @@ def train(
     return Ranker(boosters, feature_names, label, (int(last["season"]), int(last["round"])))
 
 
-def train_quali(df: pd.DataFrame, **kw) -> Ranker:
-    return train(df, features.QUALI_FEATURES, "quali_relevance", **kw)
-
-
 def train_race(df: pd.DataFrame, **kw) -> Ranker:
     return train(df, features.RACE_FEATURES, "race_relevance", **kw)
 

@@ -87,6 +87,8 @@ def run(
 
             drivers = out["drivers"].set_index("driver_id")
             top = out["drivers"].iloc[0]
+            # The naive call: whoever leads the standings at the checkpoint.
+            leader = str(drivers["now"].idxmax())
             said = float(drivers.loc[champion, "p_title"]) if champion in drivers.index else 0.0
 
             rows.append(
@@ -99,6 +101,8 @@ def run(
                     "champion": champion,
                     "favourite_was_right": int(top["driver_id"] == champion),
                     "p_on_actual_champion": said,
+                    "leader": leader,
+                    "leader_was_champion": int(leader == champion),
                 }
             )
             log.info(
@@ -147,6 +151,11 @@ def report(frame: pd.DataFrame) -> str:
         f"{len(frame)} checkpoints across {frame['season'].nunique()} completed seasons.",
         f"The favourite went on to win the title in {frame['favourite_was_right'].mean() * 100:.0f}% of them.",
         f"Brier score on the title call: {brier:.3f}.",
+        (
+            f"The favourite was the points leader at {int((frame['favourite'] == frame['leader']).sum())} "
+            f"checkpoints; backing the leader would have named the champion "
+            f"{frame['leader_was_champion'].mean() * 100:.0f}% of the time."
+        ),
         "",
         calibration(frame).to_string(index=False),
         "",
