@@ -20,7 +20,7 @@ beyond that grid improves the forecast.
 
 | | |
 |---|---|
-| **Predicts** | Every Grand Prix: each driver's chance to win, reach the podium and the top 5, and their typical (median) finish; also qualifying and the championship |
+| **Predicts** | Every Grand Prix: each driver's chance to win and to finish on the podium, in the top 5 and in the top 10; also qualifying and the championship |
 | **Data** | Results, qualifying and standings since 2018 (jolpica-f1); official grids and entry lists (OpenF1); this weekend's practice times (FastF1) |
 | **Model** | XGBoost learning-to-rank with one query group per race; a second ranker forecasts qualifying |
 | **Probabilities** | A Plackett–Luce distribution, temperature refitted on past races only, mixed with 10,000 Monte Carlo races |
@@ -84,7 +84,7 @@ flowchart TD
     G["Official starting grid<br/>(penalties applied)"] -- "after qualifying" --> R
     R --> P["Plackett–Luce distribution<br/>(temperature refitted on past races)"]
     R --> M["Monte Carlo, 10,000 races<br/>retirements, safety cars, grid"]
-    P --> F["One finishing-position distribution<br/>win · podium · top 5 · typical finish"]
+    P --> F["One finishing-position distribution<br/>win · podium · top 5 · top 10"]
     M --> F
     F --> W["Forecast committed to predictions/<br/>→ website"]
     F --> E["Walk-forward evaluation<br/>→ reports/*.json"]

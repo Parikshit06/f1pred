@@ -429,32 +429,39 @@ footer a{color:var(--ink-2)}
 .fav .pc{font-family:var(--mono); font-size:3.4rem; font-weight:600; letter-spacing:-.04em; line-height:1;
   margin-top:18px; color:var(--tc,var(--ink)); font-variant-numeric:tabular-nums}
 .fav .pcl{font-size:.85rem; color:var(--ink-3); margin-top:4px}
-/* The straight: cars placed by expected finish, flag on the right. */
-.finish{min-width:0}
-.frow{display:grid; grid-template-columns:108px 1fr 48px; gap:14px; align-items:center; padding:5px 0}
-.finish.fin .frow{grid-template-columns:108px 1fr 48px 62px}
-.fhead{font-family:var(--sans); font-size:12px; font-weight:500; letter-spacing:0; color:var(--ink-3); padding-bottom:8px}
+/* How each contender's race could end: one bar per driver, adding to 100%. */
+.outcomes{min-width:0}
+.orow{display:grid; grid-template-columns:118px 1fr 48px; gap:14px; align-items:center; padding:6px 0}
+.outcomes.fin .orow{grid-template-columns:118px 1fr 48px 56px}
+.ohead{font-size:12px; font-weight:500; color:var(--ink-3); padding-bottom:6px}
 .fr{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums}
-.frow b.fr{font-weight:600}
+.orow b.fr{font-weight:600}
 .ffin{font-size:.85rem; color:var(--ink-2)}
-.fname{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.track{position:relative; height:26px; border-bottom:1px dashed var(--hair)}
-.track .band{position:absolute; top:6px; height:14px; border-radius:7px;
-  background:color-mix(in srgb,var(--tc,var(--ink)) 16%,transparent)}
-.track .flag{position:absolute; right:0; top:0; bottom:-1px; width:10px; border-radius:1px;
-  background:repeating-conic-gradient(var(--ink) 0 25%, var(--paper) 0 50%) 0 0/5px 5px; opacity:.85}
-.carpos{position:absolute; bottom:3px; left:calc(var(--x) - 56px); display:flex; align-items:center; gap:4px;
-  animation:drive 1.1s cubic-bezier(.2,.7,.2,1) backwards; animation-delay:calc(var(--i) * 70ms + 150ms)}
-.carpos em{font-style:normal; font-family:var(--mono); font-size:10px; color:var(--ink-3)}
-.carsvg{width:40px; height:16px; fill:var(--tc,var(--ink)); flex:none}
-.carsvg .w{fill:var(--ink-3)}
-@keyframes drive{from{transform:translateX(-60%); opacity:0}}
-.fnote{font-size:.8rem; color:var(--ink-3); margin-top:10px}
+.oname{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  border-left:3px solid var(--tc,var(--ink)); padding-left:8px}
+.obar{display:flex; gap:2px; height:22px}
+.obar i{position:relative; display:flex; align-items:center; justify-content:center; min-width:0;
+  border-radius:3px; transform-origin:left; animation:grow .8s var(--ease) backwards;
+  animation-delay:calc(var(--i,0) * 50ms + 100ms)}
+.obar em{font-style:normal; font-family:var(--mono); font-size:10.5px; font-weight:600; overflow:hidden}
+.b0{background:var(--ink)}
+.b1{background:color-mix(in srgb,var(--ink) 62%,var(--paper))}
+.b2{background:color-mix(in srgb,var(--ink) 38%,var(--paper))}
+.b3{background:color-mix(in srgb,var(--ink) 20%,var(--paper))}
+.b4{background:var(--chip)}
+.b0 em, .b1 em{color:var(--paper)}
+.b2 em, .b3 em, .b4 em{color:var(--ink)}
+.obar i.hit{box-shadow:0 0 0 2px var(--paper), 0 0 0 4px var(--accent); z-index:1}
+.okey{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:12px; font-size:12px; color:var(--ink-3)}
+.okey span{display:inline-flex; align-items:center; gap:6px}
+.okey i{display:inline-block; width:12px; height:12px; border-radius:2px}
+.okey i.bhit{background:transparent; box-shadow:inset 0 0 0 2px var(--accent)}
+.fnote{font-size:.8rem; color:var(--ink-3); margin-top:8px}
 @media (max-width:480px){
-  .frow{grid-template-columns:70px 1fr 38px; gap:8px}
-  .finish.fin .frow{grid-template-columns:64px 1fr 34px 36px; gap:6px}
-  .carpos em{display:none}
-  .carpos{left:calc(var(--x) - 42px)}
+  .orow{grid-template-columns:92px 1fr 36px; gap:8px}
+  .outcomes.fin .orow{grid-template-columns:88px 1fr 34px 36px; gap:6px}
+  .oname{font-size:.84rem; padding-left:6px}
+  .obar em{display:none}
 }
 
 /* ---- forecast stage: one quiet line ----------------------------------- */
@@ -662,15 +669,6 @@ def _start_cell(r: dict) -> str:
     return f"<div class='v dim start'>P{int(grid)}{note}</div>"
 
 
-def _typical(r: dict) -> str:
-    """The median finish, or the mean for a forecast logged without its
-    distribution."""
-    if isinstance(r.get("typical"), int):
-        return f"P{r['typical']}"
-    exp = r.get("exp_position")
-    return f"{float(exp):.1f}" if isinstance(exp, (int, float)) else "&mdash;"
-
-
 def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> str:
     """The race forecast, one row per driver, all read off the same finishing
     distribution so win <= podium <= top 5 always holds. Rows past `shown` sit
@@ -680,7 +678,7 @@ def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> st
     head = (
         f"<div class='colhead {cls}'><span>#</span><span></span><span>Driver</span>"
         f"<span>{'Grid' if grid_known else 'Proj. grid'}</span><span>Win</span><span>Podium</span>"
-        "<span class='c-top5'>Top 5</span><span>Typical</span>"
+        "<span class='c-top5'>Top 5</span><span>Top 10</span>"
         + ("<span>Result</span>" if finished else "")
         + "</div>"
     )
@@ -698,7 +696,7 @@ def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> st
             + f"<div class='v'>{pct(r.get('p_podium') or 0, 0)}"
             + f"<span class='mbar'><i style='width:{min(float(r.get('p_podium') or 0), 1.0) * 100:.0f}%'></i></span></div>"
             + f"<div class='v dim c-top5'>{pct(r.get('p_top5') or 0, 0)}</div>"
-            + f"<div class='v dim'>{_typical(r)}</div>"
+            + f"<div class='v dim'>{pct(r.get('p_top10') or 0, 0)}</div>"
             + (
                 (
                     f"<div class='v fin'>P{int(fin)}</div>"
@@ -724,60 +722,58 @@ def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> st
     return "".join(out)
 
 
-CAR = (
-    "<svg class='carsvg' viewBox='0 0 44 18' aria-hidden='true'>"
-    "<g class='w'><rect x='7' y='0' width='7' height='4' rx='1'/><rect x='7' y='14' width='7' height='4' rx='1'/>"
-    "<rect x='30' y='0' width='6' height='4' rx='1'/><rect x='30' y='14' width='6' height='4' rx='1'/></g>"
-    "<path d='M1 6.5h7l5-2h15l7 2.5h8v2h-8l-7 2.5H13l-5-2H1z'/></svg>"
-)
+OUTCOMES = ("Win", "2nd–3rd", "4th–5th", "6th–10th", "Lower or out")
 
 
-def finish_line(rows: list[dict], finished: bool = False, n: int = 8) -> str:
-    """The leading drivers as cars on a straight. Each car sits at the driver's
-    typical (median) finish, with a band over the middle half of simulated
-    outcomes: the closer to the chequered flag, the better. Forecasts logged
-    without their distribution fall back to the mean."""
+def outcome_shares(r: dict) -> list[float]:
+    """Win, 2nd-3rd, 4th-5th, 6th-10th, lower or retired: the published
+    chances taken apart, so the bar always agrees with the table."""
+    win = float(r.get("p_win") or 0)
+    pod = max(float(r.get("p_podium") or 0), win)
+    top5 = max(float(r.get("p_top5") or 0), pod)
+    top10 = max(float(r.get("p_top10") or 0), top5)
+    return [win, pod - win, top5 - pod, top10 - top5, max(1.0 - top10, 0.0)]
 
-    def centre(r: dict) -> float | None:
-        v = r.get("typical", r.get("exp_position"))
-        return float(v) if isinstance(v, (int, float)) else None
 
-    lead = sorted(
-        (r for r in rows if centre(r) is not None), key=lambda r: (centre(r), -float(r.get("p_win") or 0))
-    )[:n]
+def _band_of(position: int) -> int:
+    return 0 if position == 1 else 1 if position <= 3 else 2 if position <= 5 else 3 if position <= 10 else 4
+
+
+def outcome_bars(rows: list[dict], finished: bool = False, n: int = 8) -> str:
+    """The contenders, one bar each: how their race could end, from the
+    simulated races. Once the race is run, the part they landed in is ringed."""
+    lead = rows[:n]
     if not lead:
         return ""
-    far = max(10.0, max(float(r.get("q75") or centre(r)) for r in lead) + 1)
-
-    def x(pos: float) -> float:
-        return (1 - (min(pos, far) - 1) / (far - 1)) * 100
-
+    key = "".join(f"<span><i class='b{k}'></i>{label}</span>" for k, label in enumerate(OUTCOMES))
+    if finished:
+        key += "<span><i class='bhit'></i>where they finished</span>"
     out = [
-        f"<div class='finish{' fin' if finished else ''}'>"
-        "<div class='frow fhead'><span></span><span>Typical finish</span><span class='fr'>Win</span>"
+        f"<div class='outcomes{' fin' if finished else ''}'>"
+        "<div class='orow ohead'><span></span><span>How their race could end</span><span class='fr'>Win</span>"
         + ("<span class='fr'>Result</span>" if finished else "")
         + "</div>"
     ]
     for i, r in enumerate(lead):
-        c = centre(r)
-        lo, hi = r.get("q75"), r.get("q25")
-        band = (
-            f"<i class='band' style='left:{x(lo):.1f}%; width:{max(x(hi) - x(lo), 0.8):.1f}%'></i>"
-            if isinstance(lo, int) and isinstance(hi, int)
-            else ""
-        )
-        label = f"P{int(c)}" if isinstance(r.get("typical"), int) else f"P{c:.1f}"
+        name = r.get("short") or r.get("name", "")
         fin = r.get("finished")
+        hit = _band_of(int(fin)) if isinstance(fin, (int, float)) else None
+        segs = "".join(
+            f"<i class='b{k}{' hit' if k == hit else ''}' style='width:{s * 100:.1f}%' "
+            f"title='{esc(name)}: {pct(s, 0)} chance to finish {OUTCOMES[k].lower()}'>"
+            + (f"<em>{pct(s, 0)}</em>" if s >= 0.12 else "")
+            + "</i>"
+            for k, s in enumerate(outcome_shares(r))
+            if s > 0.0005
+        )
         out.append(
-            f"<div class='frow' style='--tc:{team_colour(r.get('team'))}; --x:{x(c):.1f}%; --i:{i}'>"
-            f"<span class='fname'>{esc(r.get('short') or r.get('name', ''))}</span>"
-            f"<span class='track'>{band}<i class='flag'></i>"
-            f"<span class='carpos'><em>{label}</em>{CAR}</span></span>"
+            f"<div class='orow' style='--tc:{team_colour(r.get('team'))}; --i:{i}'>"
+            f"<span class='oname'>{esc(name)}</span><span class='obar'>{segs}</span>"
             f"<b class='fr'>{pct(r.get('p_win') or 0, 0)}</b>"
             + (
                 (
                     f"<span class='fr ffin'>P{int(fin)}</span>"
-                    if isinstance(fin, (int, float))
+                    if hit is not None
                     else "<span class='fr ffin'>&mdash;</span>"
                 )
                 if finished
@@ -786,9 +782,8 @@ def finish_line(rows: list[dict], finished: bool = False, n: int = 8) -> str:
             + "</div>"
         )
     out.append(
-        "<p class='fnote'>Each car sits at the driver's typical finish: half of the 10,000 simulated races "
-        "end there or better. The shaded band covers the middle half of outcomes. Nearest the flag is "
-        "best.</p></div>"
+        f"<div class='okey'>{key}</div><p class='fnote'>From 10,000 simulated races; each bar adds up to "
+        "100%. The same chances are in the table below.</p></div>"
     )
     return "".join(out)
 

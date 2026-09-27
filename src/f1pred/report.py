@@ -267,30 +267,7 @@ def primary(rows: list[dict], prediction: dict, finished: dict[str, int]) -> str
         f"<div class='pc'>{rr.pct(fav.get('p_win') or 0, 0)}</div>"
         "<div class='pcl'>chance to win</div></div>"
     )
-    return f"<div class='hero'>{card}{rr.finish_line(rows, bool(finished))}</div>"
-
-
-def _quantile(dist: list[float], q: float) -> int:
-    """The first finishing position whose cumulative chance reaches q."""
-    total = 0.0
-    for pos, p in enumerate(dist, 1):
-        total += float(p)
-        if total >= q - 1e-9:
-            return pos
-    return len(dist)
-
-
-def _spread(prediction: dict) -> dict[str, tuple[int, int, int]]:
-    """driver_id -> (25th, 50th, 75th percentile finish) from the logged
-    finishing-position distribution. The median is the typical finish: a
-    retirement moves it by one place at most, where it drags the mean."""
-    ids = (prediction.get("meta") or {}).get("matrix_driver_ids") or []
-    matrix = prediction.get("position_matrix") or []
-    if len(ids) != len(matrix):
-        return {}
-    return {
-        d: (_quantile(row, 0.25), _quantile(row, 0.5), _quantile(row, 0.75)) for d, row in zip(ids, matrix)
-    }
+    return f"<div class='hero'>{card}{rr.outcome_bars(rows, bool(finished))}</div>"
 
 
 def coherent(prediction: dict, tol: float = 0.02) -> bool:
@@ -315,12 +292,9 @@ def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     listed = prediction.get("race_board") or []
     board = {r.get("driver_id"): r for r in listed if r.get("driver_id")}
     field = prediction.get("field_probs") or []
-    spread = _spread(prediction)
     rows = []
     for f in sorted(field, key=lambda r: -(r.get("p_win") or 0)) if field else listed:
         row = {**f, "short": f.get("short") or f.get("name")}
-        if f.get("driver_id") in spread:
-            row["q25"], row["typical"], row["q75"] = spread[f["driver_id"]]
         if field and f.get("driver_id") in board:
             row["name"] = board[f["driver_id"]].get("name", row.get("name"))
         if finished:
@@ -416,8 +390,8 @@ def build(
         s.append(
             _section(
                 "Race forecast",
-                "Every driver's chances from 10,000 simulated races. Typical is the median finish: "
-                "half the simulated races end there or better.",
+                "Every driver's chances from 10,000 simulated races, the same numbers the bars above "
+                "are built from.",
                 rr.race_board(rows, grid_known=bool(prediction.get("grid_known"))),
                 band=True,
             )
