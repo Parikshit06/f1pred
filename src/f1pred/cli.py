@@ -352,6 +352,12 @@ def main(argv: list[str] | None = None) -> int:
 
         path = report.write(prediction)
         print(f"wrote {path}")
+        # Every graded race keeps a page of its final forecast beside the
+        # result, exactly as logged (its own championship panel included).
+        for (season, rnd), final in report.final_forecasts(preds).items():
+            if report.actual_result(season, rnd):
+                page = report.write(final, path=config.REPORTS / report.page_name(season, rnd))
+                print(f"wrote {page}")
 
         from . import method_page
 

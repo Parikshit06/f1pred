@@ -185,7 +185,7 @@ INPUTS = [
 ]
 
 WEEKEND = [
-    ("Before practice", "Past races only."),
+    ("Before practice", "Past races only, on the Wednesday of race week."),
     ("After practice", "Adds this weekend's lap times."),
     ("After qualifying", "Adds the real starting grid."),
     ("After the race", "Graded against the result."),

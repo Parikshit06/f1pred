@@ -298,6 +298,9 @@ section > .body{min-width:0}
 .race{display:grid; grid-template-columns:minmax(200px,1fr) 2.6fr; gap:14px 32px; align-items:center;
   padding:18px 0 18px 18px; border-bottom:1px solid var(--hair); box-shadow:inset 3px 0 0 var(--tc,var(--ink))}
 .race .rh b{display:block; font-size:1rem}
+.race .rh a{color:inherit; text-decoration:underline; text-decoration-color:var(--ink-3);
+  text-underline-offset:3px}
+.race .rh a:hover{text-decoration-color:var(--ink)}
 .race .rh span{font-size:.82rem; color:var(--ink-3)}
 .weekend{display:grid; grid-template-columns:repeat(3,1fr); gap:10px 24px}
 .wk{display:grid; gap:6px}
@@ -1097,7 +1100,7 @@ def record_table(history: list[dict]) -> str:
             )
         rows.append(
             f"<article class='race' style='--tc:{team_colour(r.get('winner_team'))}'>"
-            f"<div class='rh'><b>{esc(r['race'])}</b>"
+            f"<div class='rh'><b><a href='race-{int(r['season'])}-{int(r['round']):02d}.html'>{esc(r['race'])}</a></b>"
             f"<span>{r['season']} round {r['round']} &middot; won by {esc(r['winner'])}</span></div>"
             "<div class='weekend'>" + "".join(cells) + "</div></article>"
         )

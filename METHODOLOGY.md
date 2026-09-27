@@ -199,8 +199,8 @@ the final configuration, and later runs report without re-deciding.
   -0.203 (-0.404 to -0.009), NDCG@5 +0.028 (+0.000 to +0.059). It feeds the
   qualifying model only; it adds nothing to the race once the grid is known.
   The live pipeline fetches the current weekend's sessions. Each weekend logs
-  three forecasts: before practice (history only), after practice and after
-  qualifying.
+  three forecasts: before practice (history only, logged on the Wednesday of
+  race week), after practice and after qualifying.
 * **Season projection**: how to score a driver for the rest of the season,
   graded on every title-backtest checkpoint against final driver and team
   points, the final gap between teammates and the champion's probability.

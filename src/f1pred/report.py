@@ -74,6 +74,24 @@ def _step_key(p: dict) -> tuple[str, str]:
     ) else "before practice data"
 
 
+def page_name(season: int, rnd: int) -> str:
+    """The archived page for one race's final forecast."""
+    return f"race-{int(season)}-{int(rnd):02d}.html"
+
+
+def final_forecasts(preds: list[dict]) -> dict[tuple[int, int], dict]:
+    """(season, round) -> the last forecast logged before that race started.
+    Anything made after the start is not a forecast and is ignored."""
+    out: dict[tuple[int, int], dict] = {}
+    for p in sorted(preds, key=lambda p: p.get("generated_at_utc", "")):
+        start = str(p.get("race_start_utc") or "").replace(" ", "T")
+        if start and p.get("generated_at_utc", "") > start:
+            continue
+        if p.get("season") and p.get("round"):
+            out[(int(p["season"]), int(p["round"]))] = p
+    return out
+
+
 def race_history() -> list[dict]:
     """Each completed race with every forecast logged for it, in order.
 
@@ -485,8 +503,8 @@ def track_record(history: list[dict]) -> str:
     if history:
         body.append(
             "<h3 class='sub'>Live forecasts</h3><p class='cap'>The chance the forecast gave the eventual "
-            "winner at each step of the weekend, and whether its pick was right.</p>"
-            + rr.record_table(history)
+            "winner at each step of the weekend, and whether its pick was right. Select a race to see "
+            "its full forecast beside the result.</p>" + rr.record_table(history)
         )
     else:
         body.append("<p class='cap'>Live forecasts are graded here from the first completed race.</p>")

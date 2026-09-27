@@ -725,3 +725,27 @@ def test_a_forecast_whose_win_chances_disagree_with_its_distribution_is_flagged(
     assert report.coherent(ok) and not report.coherent(off)
     line = report.status_line({**off, "race_start_utc": None}, "post_quali", [], {})
     assert "earlier version of the pipeline" in line
+
+
+def test_each_race_keeps_its_final_forecast_made_before_the_start():
+    """The archived page shows the last forecast logged before the race, never
+    one made after it started."""
+    preds = [
+        {"season": 2026, "round": 3, "race_start_utc": "2026-03-10 14:00:00", "generated_at_utc": t}
+        for t in ("2026-03-08T09:00:00+00:00", "2026-03-09T20:00:00+00:00", "2026-03-10T15:00:00+00:00")
+    ]
+    final = report.final_forecasts(preds)
+    assert final[(2026, 3)]["generated_at_utc"] == "2026-03-09T20:00:00+00:00"
+    assert report.page_name(2026, 3) == "race-2026-03.html"
+
+
+def test_the_track_record_links_each_race_to_its_page():
+    race = {
+        "season": 2026,
+        "round": 3,
+        "race": "Test GP",
+        "winner": "A",
+        "winner_team": "ferrari",
+        "steps": [],
+    }
+    assert "href='race-2026-03.html'" in rr.record_table([race])

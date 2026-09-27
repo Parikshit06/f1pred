@@ -6,9 +6,9 @@ Forecasts each Formula 1 race as probabilities (win, podium, top 5, expected
 finish), publishes the forecast before the session, and grades it against the
 result afterwards.
 
-Each weekend it logs three forecasts: before practice (history only), after
-practice (which feeds a qualifying forecast, and so a projected grid) and after
-qualifying (on the official grid). It then measures honestly whether anything
+Each weekend it logs three forecasts: before practice (on the Wednesday of race
+week, history only), after practice (which feeds a qualifying forecast, and so
+a projected grid) and after qualifying (on the official grid). It then measures honestly whether anything
 beyond that grid improves the forecast.
 
 **[Live forecast](https://parikshit06.github.io/f1pred/)** ·
