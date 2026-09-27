@@ -705,15 +705,17 @@ def test_a_finished_race_shows_the_result_beside_the_unchanged_forecast(monkeypa
     assert "Result in" in html, "the stage shown is the result, not a live forecast"
 
 
-def test_each_outcome_bar_adds_up_and_agrees_with_the_table():
-    """The hero bar is the table's own chances taken apart: win, 2nd-3rd,
-    4th-5th, 6th-10th, the rest. It sums to one and can't disagree."""
-    r = {"p_win": 0.3, "p_podium": 0.6, "p_top5": 0.8, "p_top10": 0.95}
-    shares = rr.outcome_shares(r)
-    assert abs(sum(shares) - 1) < 1e-9
-    assert [round(s, 2) for s in shares] == [0.3, 0.3, 0.2, 0.15, 0.05]
-    html = rr.outcome_bars([{"name": "A", "team": "ferrari", **r, "finished": 4}], finished=True)
-    assert "class='b2 hit'" in html, "a P4 finish rings the 4th-5th segment"
+def test_each_car_has_come_as_far_as_its_chance_to_win():
+    """One meaning only: distance along the straight is the win chance, the
+    flag is 100%, and the cars keep the table's order."""
+    rows = [
+        {"name": "A", "team": "ferrari", "p_win": 0.34, "finished": 1},
+        {"name": "B", "team": "mclaren", "p_win": 0.07, "finished": 5},
+    ]
+    html = rr.win_track(rows, finished=True)
+    assert "--p:0.340" in html and "--p:0.070" in html
+    assert html.index(">A<") < html.index(">B<")
+    assert "the flag is 100%" in html and ">P5<" in html
 
 
 def test_a_forecast_whose_win_chances_disagree_with_its_distribution_is_flagged():

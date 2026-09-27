@@ -267,7 +267,7 @@ def primary(rows: list[dict], prediction: dict, finished: dict[str, int]) -> str
         f"<div class='pc'>{rr.pct(fav.get('p_win') or 0, 0)}</div>"
         "<div class='pcl'>chance to win</div></div>"
     )
-    return f"<div class='hero'>{card}{rr.outcome_bars(rows, bool(finished))}</div>"
+    return f"<div class='hero'>{card}{rr.win_track(rows, bool(finished))}</div>"
 
 
 def coherent(prediction: dict, tol: float = 0.02) -> bool:
@@ -390,8 +390,7 @@ def build(
         s.append(
             _section(
                 "Race forecast",
-                "Every driver's chances from 10,000 simulated races, the same numbers the bars above "
-                "are built from.",
+                "Every driver's chances from 10,000 simulated races.",
                 rr.race_board(rows, grid_known=bool(prediction.get("grid_known"))),
                 band=True,
             )
