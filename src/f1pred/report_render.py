@@ -190,6 +190,7 @@ p{margin:0}
   .bar .inner{padding-left:14px; gap:4px 10px}
   .state{display:none}
   .bar .long{display:none}
+  .brand > span:not(.lights){display:none}
   .bar a{padding:7px 10px}
 }
 .lights{display:inline-flex; gap:3px; align-items:center; margin-right:4px}
@@ -301,6 +302,9 @@ section > .body{min-width:0}
 .race .rh a{color:inherit; text-decoration:underline; text-decoration-color:var(--ink-3);
   text-underline-offset:3px}
 .race .rh a:hover{text-decoration-color:var(--ink)}
+.racelist{margin:8px 0 72px}
+.archived{margin-bottom:14px; font-size:.88rem; color:var(--ink-3)}
+.archived a{color:var(--ink); text-underline-offset:3px; text-decoration-color:var(--ink-3)}
 .race .rh span{font-size:.82rem; color:var(--ink-3)}
 .weekend{display:grid; grid-template-columns:repeat(3,1fr); gap:10px 24px}
 .wk{display:grid; gap:6px}
@@ -1130,6 +1134,7 @@ def top_bar(
     bits.append("<span class='sep'></span>")
     nav = [
         ("forecast", "index.html", "Forecast"),
+        ("races", "races.html", "Past races"),
         ("method", "method.html", "Method<span class='long'> &amp; accuracy</span>"),
     ]
     links = []

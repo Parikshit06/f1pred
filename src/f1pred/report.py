@@ -357,6 +357,7 @@ def build(
     calibration: pd.DataFrame | None = None,
     params: dict | None = None,
     standalone: bool = True,
+    archived: bool = False,
 ) -> str:
     history = race_history()
     generated = rr.utcnow()
@@ -372,11 +373,19 @@ def build(
             finished = actual_result(int(prediction["season"]), int(prediction["round"]))
         stage = "result" if finished else weekend_stage(prediction)
 
-    s: list[str] = [rr.top_bar(prediction, generated, stage), "<main class='wrap'>"]
+    s: list[str] = [
+        rr.top_bar(prediction, generated, stage, page="races" if archived else "forecast"),
+        "<main class='wrap'>",
+    ]
 
     # ---- masthead: race, status, the forecast itself -----------------------
     rows = _board_rows(prediction, finished) if prediction else []
     s.append("<header class='mast'>")
+    if archived:
+        s.append(
+            "<p class='archived'>Archived forecast, exactly as it was published. "
+            "<a href='index.html'>Latest forecast</a> &middot; <a href='races.html'>All past races</a></p>"
+        )
     if prediction:
         s.append(
             f"<div class='kicker'>Round {prediction.get('round', '?')} &middot; "
@@ -521,6 +530,40 @@ def track_record(history: list[dict]) -> str:
     return _section("Track record", lead, "".join(body))
 
 
+def races_page(standalone: bool = True) -> str:
+    """Every graded race, newest first, each linking to its archived page."""
+    history = race_history()
+    n, hits = len(history), sum(r["final_hit"] for r in history)
+    body = (
+        rr.record_table(history)
+        if history
+        else "<div class='notice'>No race has been graded yet. Races appear here once their result is in.</div>"
+    )
+    s = [
+        rr.top_bar(None, rr.utcnow(), page="races"),
+        "<main class='wrap'><header class='mast'><h1>Past races</h1>",
+        (
+            "<p class='status'>Every race since the forecast went live: the chance it gave the eventual "
+            "winner at each step of the weekend, and whether its pick was right. Select a race to see its "
+            "full forecast beside the result.</p>"
+        ),
+        (
+            f"<p class='meta'>The final forecast named the winner in {hits} of {n} race{'s' if n != 1 else ''}.</p>"
+            if history
+            else ""
+        ),
+        "</header>",
+        f"<div class='racelist'>{body}</div>",
+        (
+            "<footer><span>Data: jolpica-f1 &middot; OpenF1 &middot; FastF1</span>"
+            "<span><a href='index.html'>Forecast</a> &middot; <a href='method.html'>Method and accuracy</a> &middot; "
+            f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"
+        ),
+        "</main>",
+    ]
+    return rr.document("".join(s), standalone=standalone, title="Past races")
+
+
 def _index(present: set[str]) -> str:
     """The page's sections as one line of links, for scanning."""
     links = "".join(f"<a href='#{k}'>{name}</a>" for k, name in SECTIONS if k in present)
@@ -533,9 +576,10 @@ def write(
     calibration: pd.DataFrame | None = None,
     params: dict | None = None,
     path: Path | None = None,
+    archived: bool = False,
 ) -> Path:
     path = path or (config.REPORTS / "index.html")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(build(prediction, backtest_summary, calibration, params))
+    path.write_text(build(prediction, backtest_summary, calibration, params, archived=archived))
     log.info("Wrote %s", path)
     return path

@@ -356,8 +356,11 @@ def main(argv: list[str] | None = None) -> int:
         # result, exactly as logged (its own championship panel included).
         for (season, rnd), final in report.final_forecasts(preds).items():
             if report.actual_result(season, rnd):
-                page = report.write(final, path=config.REPORTS / report.page_name(season, rnd))
+                page = report.write(final, path=config.REPORTS / report.page_name(season, rnd), archived=True)
                 print(f"wrote {page}")
+        races = config.REPORTS / "races.html"
+        races.write_text(report.races_page())
+        print(f"wrote {races}")
 
         from . import method_page
 

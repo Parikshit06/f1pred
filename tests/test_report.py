@@ -749,3 +749,15 @@ def test_the_track_record_links_each_race_to_its_page():
         "steps": [],
     }
     assert "href='race-2026-03.html'" in rr.record_table([race])
+
+
+def test_past_races_are_one_click_from_every_page(no_track_record):
+    """The nav reaches the list of graded races, and an archived race page says
+    it is archived and links back to the latest forecast."""
+    assert "href='races.html'" in report.build(prediction=None)
+    assert "Past races" in report.races_page()
+    archived = report.build(
+        prediction={"season": 2026, "round": 3, "race_name": "Test GP", "field_probs": _field(3)},
+        archived=True,
+    )
+    assert "Archived forecast" in archived and "href='index.html'" in archived
