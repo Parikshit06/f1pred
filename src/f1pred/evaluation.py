@@ -176,6 +176,7 @@ def feature_sets() -> dict[str, list[str]]:
     sets = {"grid only": ["grid"]}
     for name, cols in GROUPS.items():
         sets[f"grid + {name}"] = ["grid", *cols]
+    sets["grid + driver form + team form"] = ["grid", *GROUPS["driver form"], *GROUPS["team form"]]
     sets["full model"] = full
     for name, cols in GROUPS.items():
         sets[f"full - {name}"] = [f for f in full if f not in cols]
@@ -249,7 +250,7 @@ def pre_quali_ablation(df, windows, settings, n_seeds=1, retrain_every=1) -> dic
     return out
 
 
-def calibration_variants(df, start, settings, n_seeds, retrain_every) -> list[dict]:
+def calibration_variants(df, start, settings, n_seeds, retrain_every, end=None) -> list[dict]:
     """Does calibration help, and does the simulation earn its place?
 
     raw          ranker scores read directly as Plackett-Luce strengths (T=1)
@@ -259,8 +260,11 @@ def calibration_variants(df, start, settings, n_seeds, retrain_every) -> list[di
     All share one set of out-of-sample scores, so only the probability step differs.
     """
     targets_df = backtest.completed_races(df, 0)
-    first = backtest.completed_races(df, start)["race_seq"].min()
-    targets = targets_df[targets_df["race_seq"] >= first - backtest.CALIBRATION_WARMUP]["race_seq"].tolist()
+    window = backtest.completed_races(df, start, end)
+    first, last = window["race_seq"].min(), window["race_seq"].max()
+    targets = targets_df[
+        (targets_df["race_seq"] >= first - backtest.CALIBRATION_WARMUP) & (targets_df["race_seq"] <= last)
+    ]["race_seq"].tolist()
     scored = backtest.oos_scores(df, targets, backtest.race_trainer(settings, n_seeds=n_seeds), retrain_every)
 
     variants = {
@@ -269,11 +273,14 @@ def calibration_variants(df, start, settings, n_seeds, retrain_every) -> list[di
         "rolling temperature (deployed)": {},
         "rolling, no simulation": {"blend_weight": 1.0},
         "rolling, simulation only": {"blend_weight": 0.0},
+        "rolling, fitted on the top three": {"temperature_depth": 3},
     }
     rows = []
     for name, change in variants.items():
         s = backtest.Settings(**{**asdict(settings), **change})
-        res = backtest.walk_forward(df, start, settings=s, include_baselines=False, scored=scored)
+        res = backtest.walk_forward(
+            df, start, end_season=end, settings=s, include_baselines=False, scored=scored
+        )
         m = res.races
         rows.append(
             {
@@ -339,11 +346,30 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
         keys = df[df["race_seq"].isin(with_practice)][["season", "round"]].drop_duplicates()
         race_results[name] = r.merge(keys, on=["season", "round"])
     seasons = sorted(df[df["race_seq"].isin(with_practice)]["season"].unique().tolist())
+
+    # Held out: the choice is read off the first season with practice data and
+    # checked on the later ones, so the evidence isn't graded on the weekends
+    # that decided it.
+    def split(results: dict, reference: str, metric_cols: list[str]) -> dict:
+        periods = (
+            {f"decide {seasons[0]}": seasons[:1], f"check {seasons[-1]}": seasons[1:]}
+            if len(seasons) > 1
+            else {}
+        )
+        return {
+            label: _paired_table(
+                {k: v[v["season"].isin(ss)] for k, v in results.items()}, reference, metric_cols
+            )
+            for label, ss in periods.items()
+        }
+
     return {
         "weekends_with_practice": len(with_practice),
         "seasons": [int(x) for x in seasons],
         "qualifying": _paired_table(quali_results, "without practice", cols),
         "race": _paired_table(race_results, "race model", race_cols),
+        "qualifying_held_out": split(quali_results, "without practice", cols),
+        "race_held_out": split(race_results, "race model", race_cols),
     }
 
 
@@ -563,6 +589,10 @@ def run_experiments(
         "ablation": lambda: ablation(df, windows, settings, retrain_every=2),
         "pre_quali_ablation": lambda: pre_quali_ablation(df, windows, settings, retrain_every=2),
         "calibration": lambda: calibration_variants(df, start_season, settings, n_seeds=1, retrain_every=1),
+        # The same comparison on the tuning seasons: any change is decided here.
+        "calibration_tuning": lambda: calibration_variants(
+            df, tune_window[0], settings, n_seeds=1, retrain_every=1, end=tune_window[1]
+        ),
         "form_statistic": lambda: definition_experiment(
             {stat: frame(stat, form_stat=stat) for stat in ("mean", "median")},
             features.FORM_STAT,
@@ -600,6 +630,7 @@ EXPERIMENTS = (
     "ablation",
     "pre_quali_ablation",
     "calibration",
+    "calibration_tuning",
     "form_statistic",
     "practice",
     "redundancy",

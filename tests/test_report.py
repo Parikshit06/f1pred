@@ -129,7 +129,7 @@ def test_unknown_constructor_still_gets_a_colour():
 def no_track_record(monkeypatch):
     """Isolate the page from whatever is sitting in predictions/ on this
     machine - otherwise the test passes or fails depending on local state."""
-    monkeypatch.setattr(report, "scoreboard", lambda: pd.DataFrame())
+    monkeypatch.setattr(report, "race_history", list)
 
 
 def test_report_renders_without_data(no_track_record):
@@ -188,8 +188,7 @@ def test_scoreboard_handles_predictions_for_unrun_races(monkeypatch, tmp_path):
     (tmp_path / "p.json").write_text(json.dumps(pred))
     monkeypatch.setattr(report.config, "PREDICTIONS", tmp_path)
 
-    board = report.scoreboard()
-    assert board.empty, "a race that has not run must not be graded"
+    assert report.history_of([pred], lambda s, r: {}, {}) == [], "a race that has not run must not be graded"
 
 
 SERIES = [
@@ -320,7 +319,7 @@ def test_the_method_page_builds_and_links_back():
     html = method_page.build()
     assert html.startswith("<!doctype html>")
     assert "index.html" in html, "no way back to the forecast"
-    assert "Method and accuracy" in html
+    assert "Method &amp; accuracy" in html
 
 
 def test_the_forecast_page_links_to_the_evidence():
@@ -372,10 +371,8 @@ def test_the_method_page_reports_whether_the_range_holds(tmp_path, monkeypatch):
         )
     )
     html = method_page.build()
-    # The section was folded into "The championship" - grading who wins and
-    # grading how close are the same question, and splitting them made a reader
-    # hold the first to follow the second.
-    assert "The championship" in html
+    # Who wins and how close are graded in one Championship section.
+    assert "<b>Championship</b>" in html
     assert "46%" in html and "71%" in html, "the graded coverage is not on the page"
     assert "80%" in html, "the target the band is being held to is not stated"
 
@@ -465,9 +462,9 @@ def test_both_pages_build_with_no_database(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "absent.duckdb")
     assert not store.database_exists()
 
-    assert report.scoreboard().empty, "a missing database invented a track record"
+    assert report.race_history() == [], "a missing database invented a track record"
     assert "method.html" in report.build(prediction=None)
-    assert "Model specification" in method_page.build()
+    assert "How the forecast works" in method_page.build()
 
 
 def test_a_missing_database_is_not_confused_with_an_empty_one(tmp_path, monkeypatch):
@@ -528,10 +525,10 @@ def test_the_high_end_paragraph_counts_the_table_it_sits_under(tmp_path, monkeyp
     )
     html = method_page.build()
     assert "right 1 times out of 1" in html, "the count is not read off the table"
-    assert "true rate of 20%" in html, "the Wilson floor is not read off the table"
+    assert "as low as 20%" in html, "the Wilson floor is not read off the table"
     assert "16 of 16" not in html
-    # The one miss is named, with the probability the table recorded for it.
-    assert "2025 r9 favoured Piastri at 61.0%" in html
+    # The season of every miss is named.
+    assert "misses were all in 2025" in html
 
 
 def test_the_calibration_section_is_drawn_from_the_report(tmp_path, monkeypatch):
@@ -560,9 +557,9 @@ def test_the_calibration_section_is_drawn_from_the_report(tmp_path, monkeypatch)
         )
     )
     html = method_page.build()
-    assert "win 0.012" in html and "podium 0.046" in html
-    assert html.count("<figure class='fig-rel'>") == 2
-    assert "stated 27.0%, happened 31.0% (n=40" in html
+    assert html.count("class='cal-row") == 2, "one row per band with enough cases, per event"
+    assert "Said <b>27%</b>" in html and "happened <b>31%</b>" in html
+    assert "40 cases" in html
 
 
 def test_an_old_forecast_without_the_new_fields_still_renders():
@@ -735,3 +732,80 @@ def test_a_signed_difference_keeps_its_sign_in_a_table():
     assert ">+0.043<" in html and ">-0.018<" in html
     plain = rr.table(pd.DataFrame({"variant": ["a"], "value": ["0.5"]}))
     assert ">+0.5<" not in plain
+
+
+def test_the_record_reads_race_by_race_and_merges_reruns():
+    """A race card lists its forecasts in order - re-runs of the same step
+    merged - and ignores anything made after the start."""
+
+    def fc(when, stage, pick, p):
+        return {
+            "season": 2026,
+            "round": 3,
+            "race_name": "Test GP",
+            "race_start_utc": "2026-03-10 14:00:00",
+            "generated_at_utc": when,
+            "meta": {"stage": stage},
+            "race_board": [{"driver_id": pick, "p_win": p}],
+            "field_probs": [
+                {"driver_id": "a", "name": "A", "p_win": p if pick == "a" else 0.2},
+                {"driver_id": "b", "name": "B", "p_win": p if pick == "b" else 0.1},
+            ],
+        }
+
+    preds = [
+        fc("2026-03-07T09:00:00+00:00", "pre_quali", "b", 0.5),
+        fc("2026-03-08T09:00:00+00:00", "pre_quali", "b", 0.55),
+        fc("2026-03-09T20:00:00+00:00", "post_quali", "a", 0.6),
+        fc("2026-03-10T15:00:00+00:00", "post_quali", "b", 0.9),
+    ]
+    [race] = report.history_of(preds, lambda s, r: {"a": 1, "b": 2}, {})
+    assert [st["stage"] for st in race["steps"]] == ["pre_quali", "post_quali"]
+    assert race["steps"][0]["runs"] == 2 and race["steps"][0]["p_pick_high"] == 0.55
+    assert race["final_hit"] and race["winner"] == "A"
+    html = rr.record_cards([race])
+    assert "Pre-qualifying" in html and "Post-qualifying" in html and "A</b> won" in html
+
+
+def _field(n):
+    return [
+        {
+            "driver_id": f"d{i}",
+            "name": f"D{i}",
+            "team": "ferrari",
+            "p_win": 0.5 / (i + 1),
+            "p_podium": 0.6 / (i + 1),
+            "p_top5": 0.9 / (i + 1),
+            "exp_position": i + 1.5,
+            "grid": i + 1,
+            "why": "Helped by starting position",
+            "why_detail": {"starting position": 0.5, "reliability record": -0.1},
+        }
+        for i in range(n)
+    ]
+
+
+def test_the_board_shows_the_whole_field_and_explains_without_claiming_cause(no_track_record):
+    html = rr.race_board(_field(20), {r["driver_id"]: r["why_detail"] for r in _field(20)})
+    assert "Show the other 10 drivers" in html
+    assert html.count("<summary class='row") == 20
+    assert "Pushed up the order" in html and "Pulled down the order" in html
+    assert "associated with the model" in html and "not causes" in html
+
+
+def test_a_finished_race_shows_the_result_beside_the_unchanged_forecast(monkeypatch, no_track_record):
+    monkeypatch.setattr(report, "actual_result", lambda season, rnd: {"d1": 1, "d0": 2})
+    pred = {
+        "season": 2026,
+        "round": 3,
+        "race_name": "Test GP",
+        "grid_known": True,
+        "generated_at_utc": "2026-03-09T20:00:00+00:00",
+        "race_board": [],
+        "quali_board": [],
+        "field_probs": _field(5),
+        "meta": {"stage": "post_quali"},
+    }
+    html = report.build(prediction=pred)
+    assert "Race finished" in html and "Finished" in html
+    assert "Result in" in html, "the stage shown is the result, not a live forecast"

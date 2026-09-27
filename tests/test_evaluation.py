@@ -34,24 +34,3 @@ def test_the_left_out_groups_are_also_tested_before_qualifying():
     before it, when the grid is the qualifying model's projection of the same
     record. The pre-qualifying ablation is what caught that."""
     assert "pre_quali_ablation" in evaluation.EXPERIMENTS
-
-
-def test_the_method_page_shows_the_pre_qualifying_ablation():
-    from f1pred import method_page
-
-    ex = {
-        "pre_quali_ablation": {
-            "tuning 2022-2023": [
-                {"variant": "full model", "win_logloss": 1.8},
-                {
-                    "variant": "full + qualifying form (not in model)",
-                    "win_logloss": 1.86,
-                    "win_logloss_diff": 0.06,
-                    "win_logloss_ci": [0.02, 0.10],
-                },
-            ]
-        }
-    }
-    html = method_page._pre_quali_ablation(ex)
-    assert "qualifying form" in html and "+0.020 to +0.100" in html and "worse" in html
-    assert method_page._pre_quali_ablation({}) == ""

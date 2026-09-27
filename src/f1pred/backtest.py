@@ -55,6 +55,8 @@ class Settings:
     quali_temperature: float = config.DEFAULT_QUALI_TEMPERATURE
     adaptive_temperature: bool = True
     n_sims: int = 3000
+    # How many of the first finishers the temperature is fitted on (1 = winner).
+    temperature_depth: int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +122,13 @@ def winner_index(race: pd.DataFrame, column: str = "position") -> int | None:
     if not np.isfinite(pos).any():
         return None
     return int(np.nanargmin(pos))
+
+
+def top_order(race: pd.DataFrame, k: int, column: str = "position") -> list[int] | None:
+    """Row indices of the first k finishers, in order."""
+    pos = pd.to_numeric(race[column], errors="coerce").to_numpy(dtype=float)
+    ranked = [int(i) for i in np.argsort(np.where(np.isfinite(pos), pos, np.inf))[:k] if np.isfinite(pos[i])]
+    return ranked if ranked else None
 
 
 def projected_weekend(race: pd.DataFrame, quali_scores: np.ndarray) -> pd.DataFrame:
@@ -244,7 +253,7 @@ def walk_forward(
             probability.rolling_temperature(groups, winners, fallback) if s.adaptive_temperature else fallback
         )
 
-    def remember(method: str, sc: np.ndarray, win: int | None) -> None:
+    def remember(method: str, sc: np.ndarray, win) -> None:
         if win is not None:
             seen[method][0].append(np.asarray(sc))
             seen[method][1].append(win)
@@ -256,6 +265,7 @@ def walk_forward(
         season, rnd = int(race["season"].iloc[0]), int(race["round"].iloc[0])
         actual = pd.Series(race["position"].to_numpy(), index=race["driver_id"].to_numpy())
         win = winner_index(race)
+        target = top_order(race, s.temperature_depth) if s.temperature_depth > 1 else win
 
         # ---- the model ---------------------------------------------------
         t = temperature_for("model", s.temperature)
@@ -289,7 +299,7 @@ def walk_forward(
                 }
             )
             outcomes.append(metrics.outcome_rows(table, actual, method="model", season=season, round=rnd))
-        remember("model", sc, win)
+        remember("model", sc, target)
 
         # ---- baselines ---------------------------------------------------
         if not include_baselines:
@@ -317,7 +327,7 @@ def walk_forward(
                     }
                 )
                 outcomes.append(metrics.outcome_rows(table, actual, method=kind, season=season, round=rnd))
-            remember(kind, b_scores, win)
+            remember(kind, b_scores, target)
 
     return BacktestResult(
         pd.DataFrame(rows),
@@ -524,15 +534,15 @@ def trailing_temperatures(
         trail = [t for t in trail if t in quali]
     race = oos_scores(df, trail, race_trainer(settings), retrain_every, score)
 
-    def fitted(scored: dict, column: str, fallback: float) -> float:
+    def fitted(scored: dict, column: str, fallback: float, depth: int = 1) -> float:
         groups, wins = [], []
         for r, sc in scored.values():
-            w = winner_index(r, column)
+            w = top_order(r, depth, column) if depth > 1 else winner_index(r, column)
             if w is not None:
                 groups.append(sc)
                 wins.append(w)
         return probability.rolling_temperature(groups, wins, fallback)
 
-    return fitted(race, "position", settings.temperature), fitted(
+    return fitted(race, "position", settings.temperature, settings.temperature_depth), fitted(
         quali, "quali_position", settings.quali_temperature
     )

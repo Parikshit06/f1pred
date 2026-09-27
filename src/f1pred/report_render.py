@@ -173,6 +173,8 @@ p{margin:0}
   display:flex; flex-wrap:wrap; align-items:center; gap:6px 20px;
   font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase}
 .bar .sep{flex:1}
+.bar nav{display:flex; gap:18px}
+.bar nav a[aria-current]{opacity:1; border-bottom-color:var(--paper)}
 .bar b{font-weight:600}
 /* The bar inverts the page, so its link uses the bar's ink. */
 .bar a{color:var(--paper); text-decoration:none; opacity:.85;
@@ -189,7 +191,7 @@ p{margin:0}
 }
 
 /* ---- masthead --------------------------------------------------------- */
-.mast{padding:52px 0 34px; border-bottom:2px solid var(--rule)}
+.mast{padding:40px 0 34px; border-bottom:2px solid var(--rule)}
 .mast h1{font-size:clamp(2.3rem,7vw,4.4rem); line-height:.96; font-weight:800;
   letter-spacing:-.035em}
 .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.2em;
@@ -201,6 +203,11 @@ p{margin:0}
 .facts dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
   text-transform:uppercase; color:var(--ink-3)}
 .facts dd{margin:2px 0 0; font-family:var(--mono); font-size:.95rem; font-weight:500}
+@media (max-width:560px){
+  .facts{display:grid; grid-template-columns:1fr 1fr; gap:10px 18px}
+  .facts dd{font-size:.84rem}
+  .bar nav{gap:14px}
+}
 
 /* ---- section: label in the margin, content beside it ------------------- */
 /* Alternate sections sit on a slightly darker band; the hairline does the separating. */
@@ -307,19 +314,50 @@ section > .body{min-width:0}
 .panel h3{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
   text-transform:uppercase; color:var(--ink-2); margin-bottom:10px}
 
-/* ---- track record strip ------------------------------------------------ */
-.strip{margin-bottom:18px}
-.strip svg{display:block; max-width:100%; height:auto; overflow:visible}
-.strip .rec rect{transition:opacity .15s}
-.strip .rec.hit rect{fill:var(--good)}
-.strip .rec.miss rect{fill:none; stroke:var(--ink-3); stroke-width:1}
-.strip .rec:hover rect{opacity:.65}
-.strip svg line{stroke:var(--hair); stroke-width:1}
-.strip .key{margin-top:8px; font-family:var(--mono); font-size:10px; color:var(--ink-3)}
-.strip .sw{display:inline-block; width:9px; height:9px; border-radius:2px; margin:0 5px 0 0;
-  vertical-align:-1px}
-.strip .sw.hit{background:var(--good)}
-.strip .sw.miss{border:1px solid var(--ink-3); margin-left:14px}
+/* ---- track record: published before, observed after -------------------- */
+.rec-summary{display:flex; flex-wrap:wrap; gap:14px 34px; margin:0 0 18px}
+.rec-summary div{min-width:150px}
+.rec-summary dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3)}
+.rec-summary dd{margin:3px 0 0; font-family:var(--mono); font-size:1.35rem; font-weight:600;
+  font-variant-numeric:tabular-nums}
+.rec-summary dd small{font-size:.72rem; font-weight:400; color:var(--ink-3); margin-left:5px}
+.rcards{display:grid; gap:18px}
+.rcard{background:var(--paper); border:1px solid var(--hair); border-radius:6px; padding:18px 20px 16px}
+.rcard header{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 14px; margin-bottom:14px}
+.rcard .rnd{font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3)}
+.rcard h3{font-size:1.1rem}
+.rcard .won{margin-left:auto; font-family:var(--mono); font-size:.8rem; color:var(--ink-2)}
+.rcard .won b{color:var(--ink)}
+.rsteps{list-style:none; margin:0; padding:0; display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0}
+.rsteps li{position:relative; padding:14px 16px 4px 0; border-top:2px solid var(--hair)}
+.rsteps li::before{content:""; position:absolute; top:-6px; left:0; width:10px; height:10px;
+  border-radius:50%; background:var(--paper); border:2px solid var(--ink-3)}
+.rsteps li.res{border-top-color:var(--ink)}
+.rsteps li.res::before{background:var(--ink); border-color:var(--ink)}
+.rsteps .st{font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+  font-weight:600; color:var(--ink)}
+.rsteps .when{display:block; font-size:.74rem; color:var(--ink-3); margin-top:2px}
+.rsteps .pick{margin-top:9px; font-size:.88rem}
+.rsteps .pick b{font-weight:600}
+.rsteps .pick .mono{color:var(--ink-2)}
+.wbar{display:block; height:6px; margin-top:8px; background:var(--chip); border-radius:3px; overflow:hidden}
+.wbar i{display:block; height:100%; background:var(--ink-2); border-radius:3px}
+.rsteps .wtxt{display:block; font-family:var(--mono); font-size:.74rem; color:var(--ink-3); margin-top:4px}
+.mark{font-family:var(--mono); font-size:.72rem; font-weight:600; padding:1px 6px; border-radius:3px;
+  margin-left:6px; vertical-align:1px}
+.mark.hit{color:var(--good); background:color-mix(in srgb,var(--good) 12%,transparent)}
+.mark.miss{color:var(--ink-3); background:var(--chip)}
+@media (max-width:640px){
+  .rcard{padding:16px 14px 12px}
+  .rcard .won{margin-left:0; width:100%}
+  .rsteps{grid-template-columns:1fr}
+  .rsteps li{border-top:0; border-left:2px solid var(--hair); padding:0 0 14px 16px}
+  .rsteps li::before{top:2px; left:-6px}
+  .rsteps li.res{border-left-color:var(--ink)}
+}
 
 /* ---- plain tables ------------------------------------------------------ */
 /* 10px gutter for the emphasis marker, outside the text margin. */
@@ -381,18 +419,6 @@ tr.me td:first-child{box-shadow:-10px 0 0 -7px var(--ink)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
 .legend i{width:14px; height:3px; border-radius:1px}
 
-/* ---- numbered pipeline: these ARE a sequence, which is why they are numbered */
-.steps{list-style:none; margin:0; padding:0; display:grid; gap:22px}
-.steps li{display:grid; grid-template-columns:20px 1fr; gap:0 16px; align-items:start}
-.steps .sn{font-family:var(--mono); font-size:12px; font-weight:600; color:var(--ink-3);
-  font-variant-numeric:tabular-nums; text-align:right; line-height:1.5}
-.steps h3{font-size:.98rem; margin-bottom:5px}
-.steps p{color:var(--ink-2); font-size:.92rem; max-width:70ch}
-.steps code, .feat code, .cap code{font-family:var(--mono); font-size:.82em;
-  background:var(--chip); padding:1px 5px; border-radius:2px; color:var(--ink)}
-td.feat{white-space:normal; color:var(--ink-2); line-height:1.7}
-.lab span{display:block; margin-top:4px}
-
 /* ---- footer ------------------------------------------------------------ */
 .notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
   gap:20px 34px}
@@ -427,68 +453,250 @@ footer a{color:var(--ink-2)}
 
 /* ---- the race board: every column read off one distribution -------------- */
 .grid6{display:grid;
-  grid-template-columns:28px 3px minmax(120px,1.6fr) 58px 104px 56px 56px 56px 54px 16px;
-  align-items:center; gap:0 10px}
+  grid-template-columns:26px 3px minmax(120px,1.6fr) 64px 104px 60px 60px 52px 16px;
+  align-items:center; gap:0 12px}
+.grid6.fin{grid-template-columns:26px 3px minmax(120px,1.6fr) 64px 104px 60px 60px 52px 62px 16px}
 .board details{border-bottom:1px solid var(--hair)}
-.board details:last-child{border-bottom:0}
+.board > details:last-child{border-bottom:0}
 .board summary{list-style:none; cursor:pointer; border-bottom:0}
 .board summary::-webkit-details-marker{display:none}
 .board summary:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
 .board .row{border-bottom:0}
-.twist{font-family:var(--mono); font-size:12px; color:var(--ink-3); text-align:center;
+.twist{font-family:var(--mono); font-size:13px; color:var(--ink-3); text-align:center;
   transition:transform .18s}
-.board details[open] .twist{transform:rotate(90deg); color:var(--ink)}
+.board details[open] > summary .twist{transform:rotate(90deg); color:var(--ink)}
+.board details[open] > summary{background:color-mix(in srgb,var(--tc,var(--ink)) 6%,transparent);
+  box-shadow:inset 3px 0 0 var(--tc,var(--ink))}
 .start small{display:block; font-size:9px; color:var(--ink-3); letter-spacing:.02em}
+.v.fin{font-weight:600; color:var(--ink)}
 .winc{display:flex; flex-direction:column; align-items:flex-end; gap:4px}
-.pbar{display:block; width:100%; height:3px; border-radius:2px; background:var(--chip); overflow:hidden}
+.pbar{display:block; width:100%; height:4px; border-radius:2px; background:var(--chip); overflow:hidden}
 .pbar i{display:block; height:100%; border-radius:2px; background:var(--tc,var(--ink));
   transform-origin:left; animation:grow .7s cubic-bezier(.2,.7,.3,1) backwards;
   animation-delay:calc(var(--i,0) * 35ms + 120ms)}
 @keyframes grow{from{transform:scaleX(0)}}
-.why{padding:4px 0 16px 41px; display:grid; grid-template-columns:minmax(0,1fr); gap:10px}
-.why p{color:var(--ink-2); font-size:.88rem}
-.contrib{display:grid; grid-template-columns:minmax(120px,190px) 1fr 52px; gap:6px 12px;
-  align-items:center; max-width:560px; font-size:.8rem}
+.board .more{border-bottom:0}
+.board .more > summary{padding:12px 0 4px; font-family:var(--mono); font-size:11px;
+  letter-spacing:.06em; color:var(--ink-2); text-decoration:underline;
+  text-decoration-color:var(--ink-3); text-underline-offset:3px}
+.board .more > summary:hover{color:var(--ink)}
+.board .more[open] > summary{display:none}
+
+/* The opened row: numbers first, then what the model leaned on. */
+.why{padding:6px 0 20px 41px; display:grid; grid-template-columns:minmax(0,1fr); gap:14px}
+.why p{color:var(--ink-2); font-size:.88rem; max-width:70ch}
+.stats{display:flex; flex-wrap:wrap; gap:10px 28px; margin:0}
+.stats dt{font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3)}
+.stats dd{margin:2px 0 0; font-family:var(--mono); font-size:.98rem; font-weight:600;
+  font-variant-numeric:tabular-nums}
+.pushes{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:14px 34px;
+  max-width:760px}
+.pushes h5{margin:0 0 8px; font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-2); font-weight:600}
+.contrib{display:grid; grid-template-columns:minmax(110px,1fr) minmax(60px,1fr) 44px; gap:7px 10px;
+  align-items:center; font-size:.82rem}
 .contrib span{color:var(--ink-2)}
-.contrib .axis{position:relative; height:10px; border-left:0}
-.contrib .axis::before{content:""; position:absolute; left:50%; top:-3px; bottom:-3px;
-  width:1px; background:var(--hair)}
-.contrib .axis i{position:absolute; top:1px; height:8px; border-radius:2px}
-.contrib .axis i.up{left:50%; background:var(--good)}
-.contrib .axis i.down{right:50%; background:var(--bad)}
+.contrib .none{grid-column:1/-1; color:var(--ink-3); font-size:.8rem}
+.cbar{height:8px; background:var(--chip); border-radius:2px; overflow:hidden}
+.cbar i{display:block; height:100%; border-radius:2px}
+.cbar i.up{background:var(--good)}
+.cbar i.down{background:var(--bad)}
 .contrib em{font-family:var(--mono); font-style:normal; font-size:.76rem; text-align:right;
   color:var(--ink-3); font-variant-numeric:tabular-nums}
-.why .note{font-size:.76rem; color:var(--ink-3)}
+.why .note{font-size:.78rem; color:var(--ink-3)}
 @media (max-width:860px){
-  .grid6{grid-template-columns:26px 3px minmax(96px,1fr) 50px 92px 52px 50px 14px}
-  .grid6 > .c-top5, .grid6 > .c-top10{display:none}
+  .grid6{grid-template-columns:24px 3px minmax(96px,1fr) 52px 88px 52px 44px 14px}
+  .grid6.fin{grid-template-columns:24px 3px minmax(96px,1fr) 52px 88px 52px 44px 50px 14px}
+  .grid6 > .c-top5{display:none}
 }
 @media (max-width:480px){
-  .grid6{grid-template-columns:18px 3px minmax(64px,1fr) 38px 70px 44px 40px 10px; gap:0 7px}
+  .grid6{grid-template-columns:18px 3px minmax(64px,1fr) 38px 64px 42px 36px 10px; gap:0 7px}
+  .grid6.fin{grid-template-columns:18px 3px minmax(60px,1fr) 34px 58px 38px 32px 34px 10px; gap:0 6px}
   .why{padding-left:0}
-  .contrib{grid-template-columns:minmax(90px,1fr) 1fr 42px}
+  .stats{gap:8px 18px}
+}
+
+/* ---- primary prediction ---------------------------------------------------- */
+.lead-grid{display:grid; grid-template-columns:minmax(220px,300px) 1fr; gap:26px 44px; align-items:start}
+@media (max-width:760px){ .lead-grid{grid-template-columns:1fr} }
+.fav{border-left:4px solid var(--tc,var(--ink)); padding:4px 0 4px 18px}
+.fav .k{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3)}
+.fav .nm{font-size:1.65rem; font-weight:800; letter-spacing:-.02em; line-height:1.1; margin-top:6px}
+.fav .tm{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink-3); margin-top:3px}
+.fav .pc{font-family:var(--mono); font-size:3rem; font-weight:600; letter-spacing:-.04em;
+  line-height:1; margin-top:16px; font-variant-numeric:tabular-nums}
+.fav .pc small{font-size:.8rem; font-weight:400; letter-spacing:0; color:var(--ink-3); margin-left:6px}
+.fav dl{display:grid; grid-template-columns:repeat(3,auto); justify-content:start; gap:4px 22px;
+  margin:16px 0 0}
+.fav dt{font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3)}
+.fav dd{margin:0; font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums}
+.ladder{display:grid; gap:9px}
+.lrow{display:grid; grid-template-columns:minmax(80px,120px) 1fr 132px; gap:12px; align-items:center}
+.lname{font-weight:600; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.lbar{position:relative; height:14px; background:var(--chip); border-radius:3px; overflow:hidden}
+.lbar i{position:absolute; left:0; top:0; bottom:0; border-radius:3px;
+  transform-origin:left; animation:grow .8s cubic-bezier(.2,.7,.3,1) backwards}
+.lbar i.t5, .lkey i.t5{background:color-mix(in srgb,var(--tc,var(--ink)) 22%,var(--chip))}
+.lbar i.pod, .lkey i.pod{background:color-mix(in srgb,var(--tc,var(--ink)) 55%,var(--chip))}
+.lbar i.win, .lkey i.win{background:var(--tc,var(--ink))}
+.lnum{display:grid; grid-template-columns:repeat(3,1fr); font-family:var(--mono); font-size:.82rem;
+  text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-2)}
+.lnum b{color:var(--ink); font-weight:600}
+.lnum em{font-style:normal; color:var(--ink-3)}
+.lkey{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:6px; font-family:var(--mono);
+  font-size:10px; color:var(--ink-3); --tc:var(--ink-2)}
+.lkey span{display:inline-flex; align-items:center; gap:6px}
+.lkey i{width:14px; height:8px; border-radius:2px}
+.lkey .lcols{margin-left:auto}
+@media (max-width:480px){
+  .lrow{grid-template-columns:70px 1fr 104px; gap:8px}
+  .lkey .lcols{margin-left:0}
+}
+
+/* ---- forecast stage -------------------------------------------------------- */
+.stages{list-style:none; margin:22px 0 0; padding:0; display:grid;
+  grid-template-columns:repeat(3,1fr); gap:0}
+.stages li{position:relative; padding:14px 18px 2px 0; border-top:2px solid var(--hair); color:var(--ink-3)}
+.stages li .dot{position:absolute; top:-6px; left:0; width:10px; height:10px; border-radius:50%;
+  background:var(--paper); border:2px solid var(--hair)}
+.stages li b{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
+  text-transform:uppercase; font-weight:600}
+.stages li p{font-size:.8rem; margin-top:3px; max-width:36ch; line-height:1.4}
+.stages li.done{border-top-color:var(--ink-3)}
+.stages li.done .dot{background:var(--ink-3); border-color:var(--ink-3)}
+.stages li.now{border-top-color:var(--accent); color:var(--ink)}
+.stages li.now .dot{background:var(--accent); border-color:var(--accent)}
+.stages li.now p{color:var(--ink-2)}
+@media (max-width:640px){
+  .stages li{padding:12px 8px 0 0}
+  .stages li b{font-size:9.5px; letter-spacing:.08em}
+  .stages li p{display:none}
 }
 
 /* ---- empty and notice states --------------------------------------------- */
 .notice{border:1px solid var(--hair); border-left:3px solid var(--ink-3); padding:14px 16px;
   color:var(--ink-2); font-size:.9rem; max-width:64ch; background:var(--paper)}
 .notice b{color:var(--ink)}
+.notice.result{border-left-color:var(--good); margin:18px 0 0; max-width:none}
+.mast .sub a{color:var(--ink); text-underline-offset:3px}
+.meta{margin-top:12px; font-family:var(--mono); font-size:11px; letter-spacing:.02em; color:var(--ink-3);
+  line-height:1.8}
+.meta b{color:var(--ink-2); font-weight:500}
+.mast .lead-grid{margin-top:30px; padding-top:26px; border-top:1px solid var(--hair)}
+details.fold > summary{cursor:pointer; font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+  color:var(--ink-2); list-style:none; padding:4px 0}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary::before{content:"+ "; color:var(--ink-3)}
+details.fold[open] > summary{margin-bottom:14px}
+details.fold[open] > summary::before{content:"\2212 "}
 
-/* ---- method page: figures -------------------------------------------------- */
-.figs{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:26px 34px; margin:6px 0 10px}
-.fig-rel svg{display:block; width:100%; height:auto; max-width:420px}
-.fig-rel h4{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
-  color:var(--ink-2); margin:0 0 8px; font-weight:600}
-.fig-rel .diag{stroke:var(--ink-3); stroke-dasharray:3 4; stroke-width:1}
-.fig-rel .frame{stroke:var(--hair); fill:none}
-.fig-rel .ci{stroke:var(--ink-2); stroke-width:1.2}
-.fig-rel .dot{fill:var(--accent); stroke:var(--paper); stroke-width:1.5}
-.fig-rel text{font-family:var(--mono); font-size:9.5px; fill:var(--ink-3)}
-.verdicts{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px}
-.pill{font-family:var(--mono); font-size:10.5px; padding:3px 9px; border-radius:999px;
-  border:1px solid var(--hair); color:var(--ink-2)}
-.pill.model{border-color:color-mix(in srgb,var(--good) 55%,var(--hair)); color:var(--good)}
-.pill.grid{border-color:color-mix(in srgb,var(--bad) 55%,var(--hair)); color:var(--bad)}
+/* ---- method page ------------------------------------------------------------ */
+/* Verdicts as pale badges: green where the model is clearly better, red where
+   the reference is, grey where the evidence can't tell. */
+.pill{display:inline-block; font-family:var(--mono); font-size:10.5px; letter-spacing:.03em;
+  padding:2px 8px; border-radius:999px; background:var(--chip); color:var(--ink-2); white-space:nowrap}
+.pill.model{background:color-mix(in srgb,var(--good) 14%,var(--paper)); color:var(--good)}
+.pill.grid{background:color-mix(in srgb,var(--bad) 12%,var(--paper)); color:var(--bad)}
+.keyres td:nth-child(2){color:var(--ink-2)}
+.keyres td small{display:block; font-size:.74rem; color:var(--ink-3); font-weight:400}
+.keyres tr.grp td{border-top:2px solid var(--hair)}
+.keyres td{vertical-align:top}
+/* The pipeline: numbered stages, what and why up front, detail on request. */
+.steps{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+.steps li{display:grid; grid-template-columns:28px 1fr; gap:0 14px; align-items:start;
+  background:var(--paper); border:1px solid var(--hair); border-radius:8px; padding:18px 20px}
+.steps .sn{font-family:var(--mono); font-size:12px; font-weight:600; color:var(--ink-3);
+  font-variant-numeric:tabular-nums; line-height:1.6}
+.steps h3{font-size:1rem; margin-bottom:8px}
+.ww{display:grid; grid-template-columns:44px 1fr; gap:4px 12px; margin:0; max-width:74ch}
+.ww dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3); padding-top:4px}
+.ww dd{margin:0; color:var(--ink-2); font-size:.92rem}
+.tech{margin-top:10px}
+.tech summary{cursor:pointer; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em;
+  color:var(--ink-2); list-style:none}
+.tech summary::-webkit-details-marker{display:none}
+.tech summary::before{content:"+ "; color:var(--ink-3)}
+.tech[open] summary::before{content:"\2212 "}
+.tech p{margin-top:8px; padding-left:12px; border-left:2px solid var(--hair); color:var(--ink-2);
+  font-size:.86rem; max-width:74ch}
+.steps code, .feat code, .cap code{font-family:var(--mono); font-size:.82em;
+  background:var(--chip); padding:1px 5px; border-radius:3px; color:var(--ink)}
+td.feat{white-space:normal; color:var(--ink-2); line-height:1.7}
+.lab span{display:block; margin-top:4px}
+@media (max-width:560px){
+  .steps li{grid-template-columns:1fr; padding:16px}
+  .steps .sn{margin-bottom:2px}
+  .ww{grid-template-columns:1fr; gap:0}
+  .ww dd{margin-bottom:8px}
+}
+/* The idea: three stages, four concepts in plain words. */
+.lede{font-size:1.35rem; font-weight:700; letter-spacing:-.01em; line-height:1.3; max-width:34ch;
+  margin-bottom:22px}
+.idea{list-style:none; margin:0 0 30px; padding:0; display:grid; grid-template-columns:repeat(3,1fr);
+  gap:12px}
+.idea li{border:1px solid var(--hair); border-radius:8px; padding:16px 18px; background:var(--paper)}
+.idea .k{display:block; font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:8px}
+.idea b{display:block; font-size:.95rem; font-weight:600}
+.idea .to{display:block; color:var(--ink-2); font-size:.9rem; margin-top:4px}
+.concepts{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 36px; max-width:880px}
+.concepts h3{font-size:.98rem; margin-bottom:5px}
+.concepts p{color:var(--ink-2); font-size:.9rem}
+.takeaways{margin:16px 0 0; padding-left:18px; max-width:70ch; color:var(--ink-2); font-size:.9rem}
+.takeaways li{margin-bottom:6px}
+@media (max-width:760px){
+  .idea{grid-template-columns:1fr}
+  .concepts{grid-template-columns:1fr}
+}
+/* Calibration dot plot. */
+.tabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px}
+.tabs input{position:absolute; opacity:0; pointer-events:none}
+.tabs label{font-family:var(--mono); font-size:11px; letter-spacing:.06em; padding:5px 12px;
+  border:1px solid var(--hair); border-radius:6px; cursor:pointer; color:var(--ink-2)}
+.tabs input:checked + label{background:var(--ink); border-color:var(--ink); color:var(--paper)}
+.tabs input:focus-visible + label{outline:2px solid var(--ink); outline-offset:2px}
+.tab-panel{display:none; flex-basis:100%; margin-top:14px}
+#cal-podium:checked ~ [data-for=cal-podium], #cal-win:checked ~ [data-for=cal-win],
+#cal-top10:checked ~ [data-for=cal-top10]{display:block}
+.cal{max-width:760px}
+.cal-axis, .cal-row{display:grid; grid-template-columns:92px 1fr 150px; gap:0 16px; align-items:center}
+.cal-axis .ticks{position:relative; height:16px}
+.cal-axis .ticks i{position:absolute; transform:translateX(-50%); font-family:var(--mono);
+  font-style:normal; font-size:9.5px; color:var(--ink-3)}
+.cal-axis .ticks i:first-child{transform:none}
+.cal-axis .ticks i:last-child{transform:translateX(-100%)}
+.cal-row{padding:9px 0; border-top:1px solid var(--hair)}
+.cal-lab{font-size:.86rem; color:var(--ink-2)}
+.cal-lab b{font-family:var(--mono); color:var(--ink); font-weight:600}
+.cal-track{position:relative; height:18px; background:
+  linear-gradient(to right, var(--hair) 1px, transparent 1px) 0 0/25% 100%}
+.cal-track i{position:absolute; top:50%}
+.cal-track .ci{height:10px; margin-top:-5px; background:var(--chip); border-radius:3px}
+.cal-track .gap{height:2px; margin-top:-1px; background:var(--ink-3)}
+.cal-track .said, .cal-track .got{width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%}
+.cal-track .said{background:var(--paper); border:2px solid var(--ink-3)}
+.cal-track .got{background:var(--ink); box-shadow:0 0 0 2px var(--paper)}
+.cal-row.off .cal-track .got{background:var(--bad)}
+.cal-num{font-size:.84rem; color:var(--ink-2)}
+.cal-num b{font-family:var(--mono); color:var(--ink); font-weight:600}
+.cal-num em{font-style:normal; font-family:var(--mono); font-size:.72rem; color:var(--ink-3); margin-left:8px}
+.cal-key{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:12px; font-family:var(--mono);
+  font-size:10px; color:var(--ink-3)}
+.cal-key span{display:inline-flex; align-items:center; gap:6px}
+.cal-key i{display:inline-block; width:12px; height:12px; border-radius:50%}
+.cal-key i.said{border:2px solid var(--ink-3)}
+.cal-key i.got{background:var(--ink)}
+.cal-key i.ci{width:18px; height:8px; border-radius:3px; background:var(--chip)}
+@media (max-width:560px){
+  .cal-axis, .cal-row{grid-template-columns:64px 1fr; gap:4px 10px}
+  .cal-num{grid-column:2}
+  .cal-axis > span:last-child{display:none}
+}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important; transition:none!important}
@@ -536,78 +744,194 @@ def _start_cell(r: dict) -> str:
     return f"<div class='v dim start'>P{int(grid)}{note}</div>"
 
 
-def contributions(detail: dict | None, scale: float) -> str:
-    """Grouped SHAP contributions as diverging bars: right pushes the driver up
-    the order, left down. Values are in the same units as the ranking score."""
-    if not detail:
-        return ""
+def _contrib_rows(items: list[tuple[str, float]], scale: float, cls: str) -> str:
     rows = []
-    for label, value in detail.items():
-        width = min(abs(float(value)) / scale, 1.0) * 50 if scale > 0 else 0.0
-        cls = "up" if value > 0 else "down"
+    for label, value in items:
+        width = min(abs(value) / scale, 1.0) * 100 if scale > 0 else 0.0
         rows.append(
             f"<span>{esc(label)}</span>"
-            f"<div class='axis'><i class='{cls}' style='width:{width:.1f}%'></i></div>"
-            f"<em>{float(value):+.2f}</em>"
+            f"<div class='cbar'><i class='{cls}' style='width:{width:.1f}%'></i></div>"
+            f"<em>{value:+.2f}</em>"
         )
-    return "<div class='contrib'>" + "".join(rows) + "</div>"
+    return "".join(rows)
 
 
-def race_board(rows: list[dict], details: dict[str, dict] | None = None) -> str:
-    """The race forecast. Every figure in a row is read off the same finishing
-    distribution, so win <= podium <= top 5 <= top 10 always holds.
+def contributions(detail: dict | None, scale: float, n: int = 3) -> str:
+    """The strongest SHAP groups on each side of a driver's score: what pushed
+    the model's ranking of them up, and what pulled it down. Values are in the
+    ranking score's units, relative to the field average."""
+    if not detail:
+        return ""
+    vals = [(k, float(v)) for k, v in detail.items()]
+    up = sorted((kv for kv in vals if kv[1] > 0), key=lambda kv: -kv[1])[:n]
+    down = sorted((kv for kv in vals if kv[1] < 0), key=lambda kv: kv[1])[:n]
+    out = ["<div class='pushes'>"]
+    for title, items, cls in (("Pushed up the order", up, "up"), ("Pulled down the order", down, "down")):
+        body = _contrib_rows(items, scale, cls) if items else "<span class='none'>nothing notable</span>"
+        out.append(f"<div><h5>{title}</h5><div class='contrib'>{body}</div></div>")
+    out.append("</div>")
+    return "".join(out)
 
-    Each row opens to say why: the SHAP contributions behind the driver's
-    score, grouped so near-duplicate features don't split the credit.
-    """
-    details = details or {}
-    scale = max(
-        (abs(float(v)) for d in details.values() for v in (d or {}).values()),
-        default=0.0,
-    )
-    out = [
-        "<div class='board'>",
-        (
-            "<div class='colhead grid6'><span></span><span></span><span>Driver</span>"
-            "<span>Start</span><span>Win</span><span>Podium</span><span class='c-top5'>Top 5</span>"
-            "<span class='c-top10'>Top 10</span><span>Exp.</span><span></span></div>"
+
+def _stat(label: str, value: str) -> str:
+    return f"<div><dt>{esc(label)}</dt><dd>{value}</dd></div>"
+
+
+def _explain_panel(i: int, r: dict, detail: dict | None, scale: float, grid_known: bool) -> str:
+    """What a reader wants after clicking a driver: the numbers, then why."""
+    grid = r.get("grid")
+    exp = r.get("exp_position")
+    stats = [
+        _stat("Forecast rank", f"{i + 1}"),
+        _stat(
+            "Grid" if grid_known else "Projected grid",
+            f"P{int(grid)}" if isinstance(grid, (int, float)) else "&mdash;",
         ),
+        _stat("Win", pct(r.get("p_win") or 0)),
+        _stat("Podium", pct(r.get("p_podium") or 0, 0)),
+        _stat("Top 5", pct(r.get("p_top5") or 0, 0)),
+        _stat("Expected finish", f"{float(exp):.1f}" if isinstance(exp, (int, float)) else "&mdash;"),
     ]
-    for i, r in enumerate(rows):
+    if isinstance(r.get("finished"), (int, float)):
+        stats.append(_stat("Finished", f"P{int(r['finished'])}"))
+    why = r.get("why") or ""
+    out = ["<div class='why'>", "<dl class='stats'>" + "".join(stats) + "</dl>"]
+    if detail:
+        out.append(contributions(detail, scale))
+        out.append(
+            "<p class='note'>Each bar is a group of inputs and how far it moved this driver's ranking "
+            "score from the field average (SHAP). These inputs were associated with the model's "
+            "prediction; they are not causes of the result.</p>"
+        )
+    elif why:
+        out.append(
+            f"<p>{esc(why)}.</p><p class='note'>Only the summary sentence was logged with this "
+            "forecast; newer forecasts carry the full breakdown.</p>"
+        )
+    else:
+        out.append("<p class='note'>No explanation was logged with this forecast.</p>")
+    out.append("</div>")
+    return "".join(out)
+
+
+def race_board(
+    rows: list[dict],
+    details: dict[str, dict] | None = None,
+    grid_known: bool = True,
+    shown: int = 10,
+) -> str:
+    """The race forecast, one row per driver, all read off the same finishing
+    distribution so win <= podium <= top 5 always holds. Each row opens to the
+    driver's numbers and the SHAP groups behind their ranking. Rows past
+    `shown` sit behind a toggle so the page leads with the contenders."""
+    details = details or {}
+    scale = max((abs(float(v)) for d in details.values() for v in (d or {}).values()), default=0.0)
+    finished = any(isinstance(r.get("finished"), (int, float)) for r in rows)
+    cls = "grid6 fin" if finished else "grid6"
+    head = (
+        f"<div class='colhead {cls}'><span>#</span><span></span><span>Driver</span>"
+        f"<span>{'Grid' if grid_known else 'Proj. grid'}</span><span>Win</span><span>Podium</span>"
+        "<span class='c-top5'>Top 5</span><span>Exp.</span>"
+        + ("<span>Finished</span>" if finished else "")
+        + "<span></span></div>"
+    )
+
+    def one(i: int, r: dict) -> str:
         p = float(r.get("p_win") or 0)
         exp = r.get("exp_position")
-        why = r.get("why") or ""
-        detail = details.get(r.get("driver_id"))
-        out.append(
-            f"<details><summary class='row grid6{' podium' if i < 3 else ''}' "
-            f'style="--i:{i}; --tc:{team_colour(r.get("team"))}">'
+        fin = r.get("finished")
+        return (
+            f"<details><summary class='row {cls}{' podium' if i < 3 else ''}' "
+            f'style="--i:{min(i, 12)}; --tc:{team_colour(r.get("team"))}">'
             + _row_head(i, r)
             + _start_cell(r)
             + f"<div class='v lead winc'><span data-count>{pct(p)}</span>"
             + f"<span class='pbar'><i style='width:{min(p, 1.0) * 100:.1f}%'></i></span></div>"
             + f"<div class='v'>{pct(r.get('p_podium') or 0, 0)}</div>"
             + f"<div class='v dim c-top5'>{pct(r.get('p_top5') or 0, 0)}</div>"
-            + f"<div class='v dim c-top10'>{pct(r.get('p_top10') or 0, 0)}</div>"
             + (
                 f"<div class='v dim'>{float(exp):.1f}</div>"
                 if isinstance(exp, (int, float))
                 else "<div class='v dim'>&mdash;</div>"
             )
-            + "<div class='twist' aria-hidden='true'>&rsaquo;</div>"
-            + "</summary>"
-            + "<div class='why'>"
-            + (f"<p>{esc(why)}.</p>" if why else "<p>No explanation was logged with this forecast.</p>")
-            + contributions(detail, scale)
             + (
-                "<p class='note'>What the model leaned on for this forecast (SHAP, relative to the "
-                "field average) &mdash; not what causes a result.</p>"
-                if detail
+                (
+                    f"<div class='v fin'>P{int(fin)}</div>"
+                    if isinstance(fin, (int, float))
+                    else "<div class='v dim'>&mdash;</div>"
+                )
+                if finished
                 else ""
             )
-            + "</div></details>"
+            + "<div class='twist' aria-hidden='true'>&rsaquo;</div>"
+            + "</summary>"
+            + _explain_panel(i, r, details.get(r.get("driver_id")), scale, grid_known)
+            + "</details>"
+        )
+
+    out = ["<div class='board'>", head]
+    out += [one(i, r) for i, r in enumerate(rows[:shown])]
+    rest = rows[shown:]
+    if rest:
+        out.append(
+            f"<details class='more'><summary>Show the other {len(rest)} drivers</summary>"
+            + "".join(one(i + shown, r) for i, r in enumerate(rest))
+            + "</details>"
         )
     out.append("</div>")
     return "".join(out)
+
+
+def prob_ladder(rows: list[dict], n: int = 5) -> str:
+    """Win, podium and top-5 chances as one nested bar per driver.
+
+    The three are cumulative (win is part of podium, podium part of top 5), so
+    they are drawn inside one another rather than as three separate bars that
+    invite adding up.
+    """
+    rows = rows[:n]
+    if not rows:
+        return ""
+    out = ["<div class='ladder'>"]
+    for r in rows:
+        w, pod, t5 = (float(r.get(k) or 0) for k in ("p_win", "p_podium", "p_top5"))
+        out.append(
+            f"<div class='lrow' style='--tc:{team_colour(r.get('team'))}'>"
+            f"<span class='lname'>{esc(r.get('short') or r.get('name', ''))}</span>"
+            "<span class='lbar'>"
+            f"<i class='t5' style='width:{min(t5, 1) * 100:.1f}%'></i>"
+            f"<i class='pod' style='width:{min(pod, 1) * 100:.1f}%'></i>"
+            f"<i class='win' style='width:{min(w, 1) * 100:.1f}%'></i>"
+            "</span>"
+            f"<span class='lnum'><b>{pct(w, 0)}</b>{pct(pod, 0)}<em>{pct(t5, 0)}</em></span>"
+            "</div>"
+        )
+    out.append(
+        "<div class='lkey'><span><i class='win'></i>win</span><span><i class='pod'></i>podium</span>"
+        "<span><i class='t5'></i>top 5</span><span class='lcols'>win &middot; podium &middot; top 5</span></div>"
+    )
+    out.append("</div>")
+    return "".join(out)
+
+
+STAGES = [
+    ("pre_quali", "Before qualifying", "Past races + this weekend's practice forecast the grid."),
+    ("post_quali", "After qualifying", "The official starting grid replaces the forecast grid."),
+    ("result", "After the race", "Forecast frozen and graded against the result."),
+]
+
+
+def stage_track(current: str) -> str:
+    """Where this forecast sits in the weekend. The two forecast stages use
+    different information, and the predicted qualifying order is never
+    treated as the official grid."""
+    keys = [k for k, *_ in STAGES]
+    at = keys.index(current) if current in keys else 0
+    items = []
+    for i, (key, name, text) in enumerate(STAGES):
+        state = "now" if i == at else ("done" if i < at else "")
+        items.append(f"<li class='{state}'><span class='dot'></span><b>{name}</b><p>{esc(text)}</p></li>")
+    return "<ol class='stages' aria-label='Forecast stage'>" + "".join(items) + "</ol>"
 
 
 def quali_board(rows: list[dict], qualified: bool = False) -> str:
@@ -902,41 +1226,61 @@ def progression_chart(
     return "".join(out)
 
 
-def record_strip(board) -> str:
-    """One bar per graded race: height is the probability published for the
-    model's pick, fill is whether it won.
-    """
-    if board is None or board.empty or "winner_hit" not in board:
+STEP_NAMES = {"pre_quali": "Pre-qualifying", "post_quali": "Post-qualifying"}
+
+
+def _before(hours: float | None) -> str:
+    if hours is None or pd.isna(hours):
         return ""
-    rows = list(board.itertuples())
-    w, h, gap = 10.0, 44.0, 4.0
-    width = len(rows) * (w + gap)
-    bars = []
-    for i, r in enumerate(rows):
-        p = float(getattr(r, "p_top_pick", 0.0) or 0.0)
-        p = min(max(p, 0.0), 1.0)
-        bh = max(3.0, p * h)
-        x = i * (w + gap)
-        hit = bool(getattr(r, "winner_hit", 0))
-        cls = "rec hit" if hit else "rec miss"
-        label = f"{getattr(r, 'race', '')}: said {p:.0%} for {getattr(r, 'picked', '?')}, "
-        label += "correct" if hit else f"{getattr(r, 'actual', '?')} won"
-        bars.append(
-            f"<g class='{cls}'><title>{esc(label)}</title>"
-            f"<rect x='{x:.1f}' y='{h - bh:.1f}' width='{w}' height='{bh:.1f}' rx='1.5'/></g>"
+    return f"{hours / 24:.1f} days before" if hours >= 48 else f"{hours:.0f} h before"
+
+
+def record_cards(history: list[dict]) -> str:
+    """One card per graded race: each logged forecast in order, then the result.
+    The bar under each step is the chance that forecast gave the eventual winner."""
+    cards = []
+    for r in history:
+        steps = []
+        for st in r["steps"]:
+            made = st.get("made")
+            when = f"{made:%a %d %b, %H:%M} UTC" if made else ""
+            before = _before(st.get("hours_before"))
+            runs = f" &middot; {st['runs']} runs" if st.get("runs", 1) > 1 else ""
+            p_txt = (
+                f"{pct(st['p_pick_low'], 0)}&ndash;{pct(st['p_pick_high'], 0)}"
+                if st.get("runs", 1) > 1 and round(st["p_pick_low"], 2) != round(st["p_pick_high"], 2)
+                else pct(st["p_pick"], 0)
+            )
+            note = f" &middot; {esc(st['note'])}" if st.get("note") else ""
+            steps.append(
+                "<li>"
+                f"<span class='st'>{STEP_NAMES.get(st['stage'], st['stage'])}</span>"
+                f"<span class='when'>{when}{' &middot; ' + before if before else ''}{runs}{note}</span>"
+                f"<div class='pick'>Picked <b>{esc(st['pick'])}</b> <span class='mono'>{p_txt}</span>"
+                f"<span class='mark {'hit' if st['hit'] else 'miss'}'>{'right' if st['hit'] else 'wrong'}</span></div>"
+                f"<span class='wbar'><i style='width:{min(st['p_winner'], 1) * 100:.1f}%'></i></span>"
+                f"<span class='wtxt'>{esc(r['winner'])} (winner): {pct(st['p_winner'], 0)}</span>"
+                "</li>"
+            )
+        verdict = (
+            "The final forecast named the winner"
+            if r["final_hit"]
+            else "The final forecast missed the winner"
         )
-    # Drawn at its own pixel size: scaled to the column, four races became four
-    # giant pills and a band of empty page.
-    return (
-        f"<div class='strip'><svg viewBox='0 0 {max(width, 1):.0f} {h + 12:.0f}' "
-        f"width='{max(width, 1):.0f}' height='{h + 12:.0f}' "
-        f"preserveAspectRatio='xMinYMid meet' role='img' "
-        f"aria-label='Winner called or missed, per graded race'>"
-        + "".join(bars)
-        + f"<line x1='0' y1='{h + 0.5}' x2='{max(width, 1):.0f}' y2='{h + 0.5}'/></svg>"
-        "<p class='key'><span class='sw hit'></span>winner called"
-        "<span class='sw miss'></span>missed &middot; bar height is the probability published</p></div>"
-    )
+        steps.append(
+            "<li class='res'><span class='st'>Result</span>"
+            f"<span class='when'>observed after the race</span>"
+            f"<div class='pick'><b>{esc(r['winner'])}</b> won</div>"
+            f"<span class='wtxt'>{verdict}; {r['final_top5']} of its top 5 finished top 5.</span></li>"
+        )
+        cards.append(
+            "<article class='rcard'><header>"
+            f"<span class='rnd'>{r['season']} &middot; Round {r['round']}</span>"
+            f"<h3>{esc(r['race'])}</h3>"
+            f"<span class='won'>Winner <b>{esc(r['winner'])}</b></span></header>"
+            f"<ol class='rsteps'>{''.join(steps)}</ol></article>"
+        )
+    return "<div class='rcards'>" + "".join(cards) + "</div>"
 
 
 def _is_numeric_column(series: pd.Series) -> bool:
@@ -1012,16 +1356,30 @@ def table(df: pd.DataFrame, emphasise: str | None = None, best_cols: dict | None
     return f"<div class='scroll'><table class='fig'><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>"
 
 
-def top_bar(prediction: dict | None, generated: datetime) -> str:
-    """A broadcast strap: solid, dense, one line of state."""
+STAGE_LABELS = {
+    "pre_quali": "Pre-qualifying forecast",
+    "post_quali": "Post-qualifying forecast",
+    "result": "Result in",
+}
+
+
+def top_bar(
+    prediction: dict | None, generated: datetime, stage: str | None = None, page: str = "forecast"
+) -> str:
+    """A broadcast strap: state on the left, navigation on the right."""
     bits = ["<span class='lights'>" + "".join(f"<i style='--n:{n}'></i>" for n in range(5)) + "</span>"]
-    if prediction:
-        bits.append(f"<b>{'Grid known' if prediction.get('grid_known') else 'Before qualifying'}</b>")
+    if prediction and stage:
+        bits.append(f"<b>{STAGE_LABELS.get(stage, stage)}</b>")
         start = prediction.get("race_start_utc")
-        if start:
+        if start and stage != "result":
             bits.append(f"<span data-countdown='{esc(start)}'>&mdash;</span>")
     bits.append("<span class='sep'></span>")
-    bits.append(f"<span data-since='{generated.isoformat()}'>updated {generated:%d %b %H:%M} UTC</span>")
+    nav = [("forecast", "index.html", "Forecast"), ("method", "method.html", "Method &amp; accuracy")]
+    links = []
+    for key, href, label in nav:
+        current = " aria-current='page'" if key == page else ""
+        links.append(f"<a href='{href}'{current}>{label}</a>")
+    bits.append("<nav>" + "".join(links) + "</nav>")
     return f"<div class='bar'><div class='inner'>{''.join(bits)}</div></div>"
 
 
@@ -1180,46 +1538,71 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def reliability_chart(rows: list[dict], title: str, size: int = 260) -> str:
-    """Stated probability against how often it happened, one dot per bucket,
-    with its 95% interval. On the diagonal is calibrated; below it, over-confident.
+def calibration_dots(rows: list[dict], min_n: int = 10) -> str:
+    """'When the model said X%, how often did it happen?' as a dot plot.
 
-    Axes are square-root scaled so the long tail of small probabilities -
-    where most of a 22-car field lives - isn't crushed into a corner.
+    One row per confidence band: a ring at what the model said, a dot at what
+    happened, a line between them, and a pale band for the range the result
+    could land in by chance (95% interval). The numbers sit beside each row, so
+    the chart doubles as its own table. Bands with fewer than `min_n` cases
+    are left out: they are noise.
     """
+    rows = [r for r in rows or [] if int(r.get("n", 0)) >= min_n]
     if not rows:
         return ""
-    pad, plot = 30, size - 40
-
-    def sc(v: float) -> float:
-        return float(max(v, 0.0)) ** 0.5
-
-    def X(v: float) -> float:
-        return pad + sc(v) * plot
-
-    def Y(v: float) -> float:
-        return 10 + plot - sc(v) * plot
-
-    parts = [
-        f"<rect class='frame' x='{pad}' y='10' width='{plot}' height='{plot}'/>",
-        f"<line class='diag' x1='{X(0)}' y1='{Y(0)}' x2='{X(1)}' y2='{Y(1)}'/>",
-    ]
-    for t in (0.05, 0.25, 0.5, 1.0):
-        parts.append(f"<text x='{X(t):.1f}' y='{size - 14}' text-anchor='middle'>{t:.0%}</text>")
-        parts.append(f"<text x='{pad - 4}' y='{Y(t) + 3:.1f}' text-anchor='end'>{t:.0%}</text>")
-    for r in rows:
-        stated, observed = float(r["stated"]), float(r["observed"])
-        lo, hi, n = float(r["ci_low"]), float(r["ci_high"]), int(r["n"])
-        parts.append(
-            f"<g><title>stated {stated:.1%}, happened {observed:.1%} (n={n}, 95% interval "
-            f"{lo:.0%}-{hi:.0%})</title>"
-            f"<line class='ci' x1='{X(stated):.1f}' x2='{X(stated):.1f}' y1='{Y(lo):.1f}' y2='{Y(hi):.1f}'/>"
-            f"<circle class='dot' cx='{X(stated):.1f}' cy='{Y(observed):.1f}' r='{2.5 + min(n, 400) ** 0.5 / 4:.1f}'/></g>"
-        )
-    parts.append(f"<text x='{pad + plot / 2}' y='{size - 1}' text-anchor='middle'>stated</text>")
-    return (
-        f"<figure class='fig-rel'><h4>{esc(title)}</h4>"
-        f"<svg viewBox='0 0 {size} {size + 4}' role='img' aria-label='{esc(title)} reliability'>"
-        + "".join(parts)
-        + "</svg></figure>"
+    out = ["<div class='cal'>"]
+    out.append(
+        "<div class='cal-axis' aria-hidden='true'><span></span><span class='ticks'>"
+        + "".join(f"<i style='left:{t}%'>{t}%</i>" for t in (0, 25, 50, 75, 100))
+        + "</span><span></span></div>"
     )
+    for r in rows:
+        said, happened = float(r["stated"]), float(r["observed"])
+        lo, hi, n = float(r["ci_low"]), float(r["ci_high"]), int(r["n"])
+        inside = lo <= said <= hi
+        a, b = sorted((said, happened))
+        tip = (
+            f"Said {said:.0%} on average across {n} cases; it happened {happened:.0%} of the time "
+            f"(by chance alone, anywhere from {lo:.0%} to {hi:.0%})."
+        )
+        out.append(
+            f"<div class='cal-row{'' if inside else ' off'}' title='{esc(tip)}'>"
+            f"<span class='cal-lab'>Said <b>{said:.0%}</b></span>"
+            "<span class='cal-track'>"
+            f"<i class='ci' style='left:{lo * 100:.1f}%; width:{(hi - lo) * 100:.1f}%'></i>"
+            f"<i class='gap' style='left:{a * 100:.1f}%; width:{(b - a) * 100:.1f}%'></i>"
+            f"<i class='said' style='left:{said * 100:.1f}%'></i>"
+            f"<i class='got' style='left:{happened * 100:.1f}%'></i>"
+            "</span>"
+            f"<span class='cal-num'>happened <b>{happened:.0%}</b><em>{n:,} cases</em></span>"
+            "</div>"
+        )
+    out.append(
+        "<div class='cal-key'><span><i class='said'></i>what the model said</span>"
+        "<span><i class='got'></i>what happened</span>"
+        "<span><i class='ci'></i>range expected from chance alone</span></div>"
+    )
+    out.append("</div>")
+    return "".join(out)
+
+
+def calibration_tabs(reliability: dict) -> str:
+    """Win, podium and top-ten calibration behind three tabs. Pure CSS (radio
+    inputs), so it works without the page script."""
+    panels = [
+        (k, label, calibration_dots(reliability.get(k) or []))
+        for k, label in (("podium", "Podium"), ("win", "Win"), ("top10", "Top 10"))
+    ]
+    panels = [(k, label, body) for k, label, body in panels if body]
+    if not panels:
+        return ""
+    out = ["<div class='tabs'>"]
+    for i, (k, label, _) in enumerate(panels):
+        out.append(
+            f"<input type='radio' name='cal' id='cal-{k}'{' checked' if i == 0 else ''}>"
+            f"<label for='cal-{k}'>{label}</label>"
+        )
+    for k, _, body in panels:
+        out.append(f"<div class='tab-panel' data-for='cal-{k}'>{body}</div>")
+    out.append("</div>")
+    return "".join(out)

@@ -98,10 +98,18 @@ def fit_temperature(
     for t in grid:
         losses = []
         for scores, win in zip(score_groups, winner_idx):
-            if win is None or win < 0 or win >= len(scores):
+            # A sequence of indices is the observed order of the first few
+            # finishers: fitted on their Plackett-Luce likelihood, one place at a time.
+            order = [win] if np.isscalar(win) else list(win)
+            if not order or any(i is None or i < 0 or i >= len(scores) for i in order):
                 continue
-            p = plackett_luce(scores, t)
-            losses.append(-np.log(max(p[win], 1e-12)))
+            left = np.ones(len(scores), dtype=bool)
+            loss = 0.0
+            for i in order:
+                p = plackett_luce(np.where(left, scores, -np.inf), t)
+                loss -= np.log(max(p[i], 1e-12))
+                left[i] = False
+            losses.append(loss / len(order))
         if losses:
             loss = float(np.mean(losses))
             if loss < best_loss:

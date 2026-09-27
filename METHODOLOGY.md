@@ -248,12 +248,13 @@ included.
 ## 10. Limitations
 
 * Win probabilities are well calibrated overall (expected calibration error
-  under 1%), though the 12 win calls above 70% came true less often than
-  stated. Podium and top-10 probabilities are over-confident at the top end:
-  in `make verify`, a stated 93% podium chance happened 80% of the time, and a
-  stated 96% top-ten 87%; mid-range top-ten chances are under-confident. The
-  temperature is fitted on winners only; fitting it on the first three places
-  would be the next thing to try.
+  under 1%), though the few win calls above 70% came true less often than
+  stated. The most confident podium and top-10 calls are over-confident:
+  podium calls averaging 94% came true 78% of the time, and top-10 calls
+  averaging 96% came true 87% (`reliability` in `reports/backtest.json`);
+  mid-range top-ten chances are under-confident. The temperature is fitted on
+  winners only; fitting it on the first three places would be the next thing
+  to try.
 
 * Races are noisy and the sample is small. About 60 test races is enough to
   separate the model from naive baselines. Against the calibrated starting

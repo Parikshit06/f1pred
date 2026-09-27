@@ -179,3 +179,19 @@ def test_dnf_probability_is_bounded():
     df = pd.DataFrame({"drv_dnf_rate_10": [0.0, 1.0, np.nan], "team_dnf_rate_10": [0.0, 1.0, np.nan]})
     p = simulate.dnf_probability(df)
     assert (p >= 0.02).all() and (p <= 0.35).all()
+
+
+def test_a_temperature_can_be_fitted_on_the_first_few_finishers():
+    """Depth 1 is the winner-only fit; an order of indices fits the same
+    Plackett-Luce likelihood one place at a time."""
+    from f1pred import probability
+
+    rng = np.random.default_rng(0)
+    groups = [rng.normal(size=12) for _ in range(40)]
+    winners = [int(np.argmax(g + rng.normal(scale=0.5, size=12))) for g in groups]
+    assert probability.fit_temperature(groups, winners) == probability.fit_temperature(
+        groups, [[w] for w in winners]
+    )
+    orders = [list(np.argsort(-(g + rng.normal(scale=0.5, size=12)))[:3]) for g in groups]
+    t = probability.fit_temperature(groups, orders)
+    assert 0 < t < 10

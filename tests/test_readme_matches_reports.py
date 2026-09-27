@@ -245,3 +245,26 @@ def test_the_number_of_data_checks_is_current():
     n = len(validate._CHECKS)
     assert f"{n} data checks" in _readme(), f"validate runs {n} checks"
     assert f"runs {n} checks" in (ROOT / "METHODOLOGY.md").read_text()
+
+
+@pytest.mark.parametrize("metric", ["ndcg3", "ndcg5", "win_logloss", "podium_brier", "kendall"])
+def test_the_key_results_table_quotes_the_measured_interval(metric):
+    r = _comparison("comparison_vs_grid").get(metric)
+    if not r:
+        pytest.skip(f"no {metric} comparison")
+    quoted = f"{r['difference']:+.3f} ({r['ci_low']:+.3f} to {r['ci_high']:+.3f})"
+    assert quoted in _readme(), f"{metric} against the grid should read {quoted}"
+
+
+def test_the_calibration_limitation_quotes_the_top_bands():
+    """The README, METHODOLOGY and the method page all name the most confident
+    podium and top-10 bands; the figures come from the same buckets."""
+    rel = _load("backtest.json").get("reliability") or {}
+    for key in ("podium", "top10"):
+        rows = [r for r in rel.get(key) or [] if int(r["n"]) >= 20]
+        if not rows:
+            continue
+        top = max(rows, key=lambda r: float(r["stated"]))
+        phrase = f"averaging {float(top['stated']):.0%} came true {float(top['observed']):.0%}"
+        assert phrase in _readme(), f"{key}: README should say {phrase}"
+        assert phrase in (ROOT / "METHODOLOGY.md").read_text(), f"{key}: METHODOLOGY should say {phrase}"
