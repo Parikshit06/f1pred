@@ -285,10 +285,10 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
             "2. Input coverage",
             WARN,
             "Qualifying and past results are live; practice pace is absent (optional)",
-            "Practice feeds only the pre-qualifying forecast, where it roughly doubles\n"
-            "the pole hit rate (18% -> 32% at realistic FP3 correlation). It is not in\n"
-            "the race model at all - once the grid is known it adds nothing measurable.\n"
-            "To enable: make data-fastf1 SEASONS=2024-2026",
+            "Practice feeds only the qualifying model, where it clearly improved the\n"
+            "forecast on held-out weekends (practice in reports/experiments.json). It is\n"
+            "not in the race model: once the grid is known it adds nothing measurable.\n"
+            "To enable: python -m f1pred.cli ingest-fastf1 --seasons 2024-2026",
             table,
         )
     return Audit("2. Input coverage", PASS, "All input classes carry data", "", table)
