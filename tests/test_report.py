@@ -7,11 +7,12 @@ internal leaks into a page other people will read.
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
 
-from f1pred import report
+from f1pred import config, report
 from f1pred import report_render as rr
 
 
@@ -136,7 +137,7 @@ def test_report_renders_without_data(no_track_record):
     fails on an empty repository."""
     out = report.build(prediction=None)
     assert out.startswith("<!doctype html>")
-    assert "No race scheduled" in out
+    assert "No forecast yet" in out
     assert "<h1>" in out
 
 
@@ -623,7 +624,7 @@ def test_the_championship_panel_uses_the_latest_projection(tmp_path, monkeypatch
 
 def test_title_odds_say_what_the_simulation_can_and_cannot_resolve():
     assert rr._odds(0.0) == "&lt;0.1%"  # still mathematically alive
-    assert rr._odds(0.0, alive=False) == "out"
+    assert ">out<" in rr._odds(0.0, alive=False)
     assert rr._odds(1.0) == "clinched"
     assert rr._odds(0.9995) == "99.9%"
     assert rr._odds(0.008) == "0.8%"
@@ -702,7 +703,7 @@ def test_a_finished_race_shows_the_result_beside_the_unchanged_forecast(monkeypa
     }
     html = report.build(prediction=pred)
     assert "Race finished" in html and "<span>Result</span>" in html
-    assert "Result in" in html, "the stage shown is the result, not a live forecast"
+    assert "<b>Race finished</b>" in html, "the stage shown is the result, not a live forecast"
 
 
 def test_each_car_has_come_as_far_as_its_chance_to_win():
@@ -715,7 +716,7 @@ def test_each_car_has_come_as_far_as_its_chance_to_win():
     html = rr.win_track(rows, finished=True)
     assert "--p:0.340" in html and "--p:0.070" in html
     assert html.index(">A<") < html.index(">B<")
-    assert "the flag is 100%" in html and ">P5<" in html
+    assert "chequered flag" in html and ">100%<" in html and ">P5<" in html
 
 
 def test_a_forecast_whose_win_chances_disagree_with_its_distribution_is_flagged():
@@ -726,7 +727,37 @@ def test_a_forecast_whose_win_chances_disagree_with_its_distribution_is_flagged(
     off = {**base, "field_probs": [{"driver_id": "a", "p_win": 0.5}, {"driver_id": "b", "p_win": 0.4}]}
     assert report.coherent(ok) and not report.coherent(off)
     line = report.status_line({**off, "race_start_utc": None}, "post_quali", [], {})
-    assert "earlier version of the pipeline" in line
+    assert "earlier version of the probability pipeline" in line
+
+
+def test_only_a_coherent_forecast_claims_its_columns_agree(monkeypatch, tmp_path):
+    """The race board says win, podium, top 5 and top 10 come from one set of
+    finishing orders. An archived forecast that predates that must not say it."""
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "absent.duckdb")
+    base = {
+        "season": 2026,
+        "round": 3,
+        "race_name": "Test Grand Prix",
+        "generated_at_utc": "2026-03-01T12:00:00+00:00",
+        "meta": {"matrix_driver_ids": ["a", "b"]},
+        "position_matrix": [[0.6, 0.4], [0.4, 0.6]],
+    }
+    ok = {**base, "field_probs": [{"driver_id": "a", "p_win": 0.6}, {"driver_id": "b", "p_win": 0.4}]}
+    off = {**base, "field_probs": [{"driver_id": "a", "p_win": 0.5}, {"driver_id": "b", "p_win": 0.4}]}
+    assert "always agree" in report.build(prediction=ok)
+    assert "always agree" not in report.build(prediction=off)
+
+
+def test_a_title_chance_above_95_percent_carries_its_track_record(monkeypatch, tmp_path):
+    """99.9% is arithmetic, not a promise: the page quotes how projections that
+    sure have done, and only when one is on the page."""
+    monkeypatch.setattr(config, "REPORTS", tmp_path)
+    (tmp_path / "title_backtest.json").write_text(
+        json.dumps({"calibration": [{"bucket": "over 95%", "happened": "1.0", "n": "14"}]})
+    )
+    assert "14 times in 14" in report._odds_note([{"p_title": 0.982}])
+    assert report._odds_note([{"p_title": 0.6}]) == ""
+    assert report._odds_note([{"p_title": 1.0, "alive": False}]) == ""
 
 
 def test_each_race_keeps_its_final_forecast_made_before_the_start():

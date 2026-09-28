@@ -218,7 +218,7 @@ def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[s
         lead = f"<span class='pill live'>After qualifying</span> Race starts {_when(prediction.get('race_start_utc'))}."
     elif stage == "pre_practice":
         lead = (
-            "<span class='pill'>Before practice</span> Made from past races only; it updates once "
+            "<span class='pill'>Before practice</span> Made from past races only. It updates once "
             f"practice has run. Race starts {_when(prediction.get('race_start_utc'))}."
         )
     else:
@@ -234,14 +234,15 @@ def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[s
     )
     return (
         f"<p class='status'>{lead}</p>"
-        f"<p class='meta'>Forecast published {_when(prediction.get('generated_at_utc'))}, before the session, "
+        f"<p class='meta'>Forecast published {_when(prediction.get('generated_at_utc'))}, before the race, "
         f"from {int(meta.get('n_simulations', 10000)):,} simulated races.{note}</p>"
         + (
             ""
             if coherent(prediction)
-            else "<p class='meta legacy'>Logged by an earlier version of the pipeline, whose win chances "
-            "were not read from the same simulated finishing order as the other figures. It is shown "
-            "exactly as it was published; current forecasts take every figure from one distribution.</p>"
+            else "<p class='legacy'>Archived forecast from an earlier version of the probability pipeline, "
+            "in which some columns were calculated separately from the finishing-order distribution. "
+            "It is shown unchanged for the record. Current forecasts read every figure from one "
+            "consistent distribution.</p>"
         )
     )
 
@@ -303,6 +304,36 @@ def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     return rows
 
 
+# What the site is, before anything about this race: a visitor who has never
+# seen it should not have to work that out from the tables.
+ABOUT = (
+    "<p class='about'><b>Probabilistic forecasts for every Formula 1 Grand Prix.</b> Race, qualifying "
+    "and championship chances, updated as the weekend goes on and graded after the race.</p>"
+)
+
+
+def _odds_note(rows: list[dict]) -> str:
+    """How far to trust a title chance above 95%, from the title backtest.
+
+    The simulation can print 99.9%, but only a handful of past projections
+    were ever that sure, so the page says how many and how they did."""
+    if not any(r.get("alive", True) and float(r.get("p_title") or 0) >= 0.95 for r in rows):
+        return ""
+    try:
+        tb = json.loads((config.REPORTS / "title_backtest.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return ""
+    top = next((b for b in tb.get("calibration") or [] if b.get("bucket") == "over 95%"), None)
+    if not top:
+        return ""
+    n, hit = int(top["n"]), round(float(top["happened"]) * int(top["n"]))
+    return (
+        f"<p class='odds-note'>Read chances above 95% as very likely, not certain. When past seasons were "
+        f"replayed, projections that sure came true {hit} times in {n}, too few to tell 98% from 99.9%. "
+        "<a href='method.html'>How it was tested</a></p>"
+    )
+
+
 SECTIONS = [
     ("race", "Race forecast"),
     ("qualifying", "Qualifying forecast"),
@@ -325,14 +356,7 @@ def _section(label: str, caption: str, body: str, note: str = "", band: bool = F
     )
 
 
-def build(
-    prediction: dict | None = None,
-    backtest_summary: pd.DataFrame | None = None,
-    calibration: pd.DataFrame | None = None,
-    params: dict | None = None,
-    standalone: bool = True,
-    archived: bool = False,
-) -> str:
+def build(prediction: dict | None = None, archived: bool = False) -> str:
     history = race_history()
     generated = rr.utcnow()
     finished: dict[str, int] = {}
@@ -355,6 +379,8 @@ def build(
     # ---- masthead: race, status, the forecast itself -----------------------
     rows = _board_rows(prediction, finished) if prediction else []
     s.append("<header class='mast'>")
+    if not archived:
+        s.append(ABOUT)
     if archived:
         s.append(
             "<p class='archived'>Archived forecast, exactly as it was published. "
@@ -365,7 +391,7 @@ def build(
             f"<div class='kicker'>Round {prediction.get('round', '?')} &middot; "
             f"{rr.esc(prediction.get('season', ''))} season</div>"
         )
-    s.append(f"<h1>{rr.esc(prediction['race_name']) if prediction else 'No race scheduled'}</h1>")
+    s.append(f"<h1>{rr.esc(prediction['race_name']) if prediction else 'No forecast yet'}</h1>")
     if prediction:
         s.append(status_line(prediction, stage or "pre_quali", rows, finished))
         s.append(primary(rows, prediction, finished))
@@ -381,16 +407,21 @@ def build(
             _section(
                 "Race",
                 "",
-                "<div class='notice'><b>No forecast published yet.</b> Forecasts are made in race "
-                "week and committed to <code>predictions/</code> before each session; this page "
-                "fills in with the first one.</div>",
+                "<div class='notice'><b>No forecast published yet.</b> Forecasts are published in "
+                "race week, before each session. This page fills in with the first one.</div>",
             )
         )
     if prediction:
         s.append(
             _section(
                 "Race forecast",
-                "Every driver's chances from 10,000 simulated races.",
+                "Every driver's chances from 10,000 simulated races."
+                + (
+                    " Win, podium, top 5 and top 10 are all counted from the same simulated finishing "
+                    "orders, so they always agree with each other."
+                    if coherent(prediction)
+                    else ""
+                ),
                 rr.race_board(rows, grid_known=bool(prediction.get("grid_known"))),
                 band=True,
             )
@@ -429,7 +460,7 @@ def build(
                     if k and k < outlook["n_races"]
                     else ""
                 )
-                + " Projected from 10,000 simulated seasons; the range under each total covers 8 in 10."
+                + " Projected from 10,000 simulated seasons. The range under each total covers 8 in 10."
             )
             body = (
                 f"<p class='cap'>{lede}</p>"
@@ -437,8 +468,13 @@ def build(
                 + rr.championship_panel("Drivers", d, "name", "team")
                 + rr.championship_panel("Constructors", outlook.get("constructors") or [], "team_name", None)
                 + "</div>"
+                + _odds_note(d + (outlook.get("constructors") or []))
                 + (
-                    rr.progression_chart(outlook["series"], outlook["last_actual_round"])
+                    "<p class='chart-cap'>Points after each round for the top five drivers. Solid lines "
+                    "are results so far, dashed lines the projection, and each shaded band the range 8 in "
+                    "10 simulated seasons fall inside.</p>"
+                    "<p class='chart-hint'>Swipe the chart sideways to see the projection.</p>"
+                    + rr.progression_chart(outlook["series"], outlook["last_actual_round"])
                     if outlook.get("series")
                     else ""
                 )
@@ -456,16 +492,11 @@ def build(
     # Shown even when empty, so it doesn't only appear once results look good.
     s.append(track_record(history))
 
-    s.append(
-        "<footer>"
-        "<span>Data: jolpica-f1 &middot; OpenF1 &middot; FastF1</span>"
-        "<span><a href='method.html'>Method and accuracy</a> &middot; "
-        f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"
-    )
+    s.append(rr.footer(config.REPO_URL))
     s.append("</main>")
 
     title = f"{prediction['race_name']} forecast" if prediction else "F1 forecast"
-    return rr.document("".join(s), standalone=standalone, title=title)
+    return rr.document("".join(s), title=title)
 
 
 def _tested() -> tuple[list[dict], dict]:
@@ -478,9 +509,23 @@ def _tested() -> tuple[list[dict], dict]:
     return bt.get("races") or [], {r["method"]: r for r in bt.get("summary") or []}
 
 
+def _tested_line() -> str:
+    """One sentence on the walk-forward test, or "" before it has run."""
+    races, summary = _tested()
+    if not (races and summary.get("model")):
+        return ""
+    n, hits = len(races), sum(int(r.get("winner_hit") or 0) for r in races)
+    grid = summary.get("grid", {}).get("winner_hit")
+    return (
+        f" Before going live, it was tested on {n} past races, each forecast using only the races "
+        f"before it: its pick after qualifying won {hits}"
+        + (f", and backing the car on pole won {round(grid * n)}" if grid is not None else "")
+        + "."
+    )
+
+
 def track_record(history: list[dict]) -> str:
     """The live record race by race, then every race the model was tested on."""
-    races, summary = _tested()
     body = []
     if history:
         body.append(
@@ -490,20 +535,14 @@ def track_record(history: list[dict]) -> str:
         )
     else:
         body.append("<p class='cap'>Live forecasts are graded here from the first completed race.</p>")
-    if races and summary.get("model"):
-        n, hits = len(races), sum(int(r.get("winner_hit") or 0) for r in races)
-        grid = summary.get("grid", {}).get("winner_hit")
-        body.append(
-            f"<p class='cap tested'>Before going live, it was tested on {n} past races, each forecast "
-            f"using only the races before it: its pick won {hits}"
-            + (f", and backing the car on pole won {round(grid * n)}" if grid is not None else "")
-            + ". <a href='method.html'>How good is it?</a></p>"
-        )
+    tested = _tested_line()
+    if tested:
+        body.append(f"<p class='cap tested'>{tested.strip()} <a href='method.html'>How good is it?</a></p>")
     lead = "Every forecast is saved before the session and graded after the race."
     return _section("Track record", lead, "".join(body))
 
 
-def races_page(standalone: bool = True) -> str:
+def races_page() -> str:
     """Every graded race, newest first, each linking to its archived page."""
     history = race_history()
     n, hits = len(history), sum(r["final_hit"] for r in history)
@@ -516,25 +555,22 @@ def races_page(standalone: bool = True) -> str:
         rr.top_bar(None, rr.utcnow(), page="races"),
         "<main class='wrap'><header class='mast'><h1>Past races</h1>",
         (
-            "<p class='status'>Every race since the forecast went live: the chance it gave the eventual "
+            "<p class='status lede'>Every race since the forecast went live: the chance it gave the eventual "
             "winner at each step of the weekend, and whether its pick was right. Select a race to see its "
             "full forecast beside the result.</p>"
         ),
         (
-            f"<p class='meta'>The final forecast named the winner in {hits} of {n} race{'s' if n != 1 else ''}.</p>"
+            f"<p class='meta'>The final forecast named the winner in {hits} of {n} race{'s' if n != 1 else ''}."
+            f"{_tested_line()}</p>"
             if history
             else ""
         ),
         "</header>",
         f"<div class='racelist'>{body}</div>",
-        (
-            "<footer><span>Data: jolpica-f1 &middot; OpenF1 &middot; FastF1</span>"
-            "<span><a href='index.html'>Forecast</a> &middot; <a href='method.html'>Method and accuracy</a> &middot; "
-            f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"
-        ),
+        rr.footer(config.REPO_URL),
         "</main>",
     ]
-    return rr.document("".join(s), standalone=standalone, title="Past races")
+    return rr.document("".join(s), title="Past races")
 
 
 def _index(present: set[str]) -> str:
@@ -543,16 +579,9 @@ def _index(present: set[str]) -> str:
     return f"<nav class='onpage' aria-label='On this page'>{links}</nav>"
 
 
-def write(
-    prediction: dict | None = None,
-    backtest_summary: pd.DataFrame | None = None,
-    calibration: pd.DataFrame | None = None,
-    params: dict | None = None,
-    path: Path | None = None,
-    archived: bool = False,
-) -> Path:
+def write(prediction: dict | None = None, path: Path | None = None, archived: bool = False) -> Path:
     path = path or (config.REPORTS / "index.html")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(build(prediction, backtest_summary, calibration, params, archived=archived))
+    path.write_text(build(prediction, archived=archived))
     log.info("Wrote %s", path)
     return path

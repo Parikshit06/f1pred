@@ -130,9 +130,10 @@ def _headline(bt: dict) -> str:
     through = w.get("through") or ["", ""]
     tuned = w.get("tuned_on") or ["", ""]
     return (
-        f"<p class='kr-cap'>Walk-forward test on {w.get('n_races')} races, {w.get('start_season')} round 1 to "
-        f"{through[0]} round {through[1]}, with settings fixed on {tuned[0]}&ndash;{tuned[1]}. "
-        "A verdict is clear only when the paired 95% interval over races excludes zero.</p>"
+        f"<p class='kr-cap'>Tested on {w.get('n_races')} past races, {w.get('start_season')} round 1 to "
+        f"{through[0]} round {through[1]}, each forecast using only the races before it, with settings "
+        f"fixed beforehand on {tuned[0]}&ndash;{tuned[1]}. Each result is compared with a simple reference, "
+        "and a difference only counts as clear when its 95% interval over races excludes zero.</p>"
         f"<div class='keyrow'>{''.join(tiles)}</div>"
     )
 
@@ -209,10 +210,13 @@ def _dots(k: int = 36) -> str:
 
 def _to_chances() -> str:
     return (
-        "<div class='split'><div><p>A ranking is not a forecast yet. So the model plays the race out "
-        "10,000 times, adding crashes, breakdowns and the ordinary chaos of a Grand Prix.</p>"
+        "<div class='split'><div><p>A ranking is not a forecast yet. So the race is played out 10,000 "
+        "times in two ways: by drawing whole finishing orders from the ranking itself, and in a simple "
+        "race simulation that adds retirements, safety cars and the pull of the starting grid. The two "
+        "are blended, in a proportion set on past seasons.</p>"
         "<p>If a driver wins 3,600 of those races, their chance is 36%: about 36 in every 100. "
-        "Every percentage on the site is counted this way.</p></div>" + _dots() + "</div>"
+        "Every percentage on the site is counted this way, and win, podium, top 5 and top 10 all come "
+        "from the same finishing orders, so they never contradict each other.</p></div>" + _dots() + "</div>"
     )
 
 
@@ -319,9 +323,9 @@ def _good(bt: dict, tb: dict) -> str:
         "the races before each one, and was compared with simple guesses anyone could make.</p>"
         + claims
         + (
-            "<h3 class='sub'>Does 30% mean 30%?</h3><p>Every driver-race since "
+            "<h3 class='sub'>Does 30% mean 30%?</h3><p>Every driver in every race since "
             f"{w.get('start_season', '')}, grouped by the chance the forecast gave. On the dashed line, "
-            "the forecast meant exactly what it said; each whisker is the 95% interval on how often "
+            "the forecast meant exactly what it said. Each whisker is the 95% interval on how often "
             "it happened.</p>" + chart
             if chart
             else ""
@@ -351,8 +355,8 @@ def _hood(bt: dict) -> str:
         (
             "The test",
             (
-                f"Settings picked on {tuned[0]}&ndash;{tuned[1]}; every result measured on races from "
-                f"{w.get('start_season', '')} it had never seen"
+                f"Settings picked on {tuned[0]}&ndash;{tuned[1]}, then every result measured on races "
+                f"from {w.get('start_season', '')} onward that it had never seen"
             ),
             "walk-forward evaluation",
         ),
@@ -370,7 +374,7 @@ def _part(title: str, body: str, cls: str = "") -> str:
     return f"<section class='part {cls}'><h2>{title}</h2>{body}</section>" if body else ""
 
 
-def build(standalone: bool = True) -> str:
+def build() -> str:
     bt = _load("backtest.json")
     tb = _load("title_backtest.json")
 
@@ -392,14 +396,10 @@ def build(standalone: bool = True) -> str:
         _part("Every result", _detailed(bt)),
         _part("Under the hood", _hood(bt)),
         "</article>",
-        (
-            "<footer><span>Data: jolpica-f1 &middot; OpenF1 &middot; FastF1</span>"
-            f"<span><a href='index.html'>Forecast</a> &middot; "
-            f"<a href='{rr.esc(config.REPO_URL)}'>Source</a></span></footer>"
-        ),
+        rr.footer(config.REPO_URL),
         "</main>",
     ]
-    return rr.document("".join(s), standalone=standalone, title="How the forecast works")
+    return rr.document("".join(s), title="How the forecast works")
 
 
 def write(path: Path | None = None) -> Path:

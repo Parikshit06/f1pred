@@ -134,7 +134,7 @@ CSS = """
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --paper:#0b0c0f; --band:#0f1115; --card:#14161b; --chip:#1e2128; --ink:#f4f4f1; --ink-2:#a8aab2;
-    --ink-3:#80828a; --rule:#f4f4f1; --hair:#23262e; --bar-bg:#14161b; --bar-ink:#f4f4f1; --bar-bg:#14161b; --bar-ink:#f4f4f1;
+    --ink-3:#80828a; --rule:#f4f4f1; --hair:#23262e; --bar-bg:#14161b; --bar-ink:#f4f4f1;
     --accent:#ff3040;
     --good:#3cc98a; --bad:#ff6b7a;
     --car-edge:rgba(255,255,255,.26);
@@ -156,7 +156,7 @@ body{margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--sans); font-size:15.5px; line-height:1.55;
   -webkit-font-smoothing:antialiased}
 
-/* Faint noise on the dark theme so large dark areas don't look flat. */
+/* Faint noise so large plain areas don't look flat. */
 body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
   opacity:var(--grain); mix-blend-mode:var(--grain-blend);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -184,15 +184,19 @@ p{margin:0}
 .bar a{color:var(--bar-ink); text-decoration:none; opacity:.7; padding:7px 14px; border-radius:999px;
   transition:opacity .4s var(--ease), background .4s var(--ease)}
 .bar a:hover{opacity:1}
+.bar a.brand{opacity:1; padding:0; border-radius:0}
 .bar nav a[aria-current]{opacity:1; background:color-mix(in srgb,var(--bar-ink) 12%,transparent)}
 @media (max-width:640px){
   .bar{top:8px; margin-top:8px; padding-inline:8px}
   .bar .inner{padding-left:14px; gap:4px 10px}
   .state{display:none}
   .bar .long{display:none}
-  .brand > span:not(.lights){display:none}
-  .bar a{padding:7px 10px}
+  .bar .lights{display:none}
+  .bar a{padding:7px 8px}
+  .bar nav{gap:0}
 }
+/* The smallest phones keep all three links on one line and drop a word. */
+@media (max-width:370px){ .bar .mid{display:none} }
 .lights{display:inline-flex; gap:3px; align-items:center; margin-right:4px}
 .lights i{width:6px; height:6px; border-radius:50%;
   background:color-mix(in srgb, var(--bar-ink) 22%, transparent);
@@ -209,13 +213,20 @@ p{margin:0}
 .kicker{display:inline-block; margin-bottom:16px; padding:4px 12px; border-radius:999px; background:var(--chip);
   font-size:12.5px; font-weight:500; color:var(--ink-2)}
 .status{margin-top:16px; font-size:1.05rem; color:var(--ink-2)}
+.status.lede{max-width:70ch}
 .status b{color:var(--ink)}
 .pill{display:inline-block; font-size:12px; font-weight:500;
   padding:3px 10px; border-radius:999px; background:var(--chip); color:var(--ink-2);
-  vertical-align:2px; margin-right:6px}
+  vertical-align:2px; margin-right:6px; white-space:nowrap}
 .pill.done{background:color-mix(in srgb,var(--good) 14%,var(--paper)); color:var(--good)}
 .pill.live{background:color-mix(in srgb,var(--accent) 12%,var(--paper)); color:var(--accent)}
-.meta{margin-top:6px; font-size:.84rem; color:var(--ink-3)}
+.meta{margin-top:6px; max-width:88ch; font-size:.84rem; color:var(--ink-3)}
+/* What the site is, in one line, above the race name. */
+.about{margin-bottom:22px; max-width:62ch; font-size:.95rem; line-height:1.5; color:var(--ink-2)}
+.about b{color:var(--ink); font-weight:600}
+/* An archived forecast from an earlier pipeline: a quiet footnote, not a warning. */
+.legacy{margin-top:10px; padding-left:10px; border-left:2px solid var(--hair); max-width:78ch;
+  font-size:.8rem; line-height:1.5; color:var(--ink-3)}
 
 /* ---- sections: a plain heading, content under it ------------------------- */
 section{padding-block:80px; border-top:2px solid var(--rule); position:relative; scroll-margin-top:64px}
@@ -235,14 +246,16 @@ section > .lab span{font-size:.85rem; color:var(--ink-3)}
 section > .body{min-width:0}
 .cap{color:var(--ink-2); font-size:1rem; max-width:64ch; margin-bottom:28px}
 .scroll + .cap{margin-top:22px}
-.cap a, footer a, .stages-note a{color:var(--ink); text-decoration:underline;
+.cap a, footer a, .stages-note a, .odds-note a{color:var(--ink); text-decoration:underline;
   text-decoration-color:var(--ink-3); text-underline-offset:3px; text-decoration-thickness:1px}
 .cap a:hover, footer a:hover{text-decoration-color:var(--accent)}
 
 /* ---- data tables: rules, not cards ------------------------------------ */
 .colhead{padding:0 0 7px; border-bottom:2px solid var(--rule);
   font-family:var(--sans); font-size:12px; font-weight:500; letter-spacing:0; color:var(--ink-3)}
-.colhead span{text-align:right}
+.colhead span{text-align:right; line-height:1.25}
+/* A heading that wraps on a phone sits on the rule like the rest. */
+.colhead.gridC, .colhead.grid6, .colhead.gridq{align-items:end}
 .colhead span:nth-child(3){text-align:left}
 .row{padding:9px 0; border-bottom:1px solid var(--hair);
   transition:background .4s var(--ease), box-shadow .4s var(--ease);
@@ -285,6 +298,7 @@ section > .body{min-width:0}
   /* The chart scrolls sideways rather than shrinking its labels to nothing. */
   .chart{overflow-x:auto}
   .chart svg{min-width:620px}
+  p.chart-hint{display:block}
 }
 
 /* ---- two panels side by side (championship) --------------------------- */
@@ -379,6 +393,9 @@ td.n{font-family:var(--mono); font-variant-numeric:tabular-nums}
 .tip .r i{width:8px; height:2px; border-radius:1px; flex:none}
 .tip .r b{font-weight:600; margin-left:auto; font-variant-numeric:tabular-nums}
 .tip .r em{font-style:normal; color:var(--ink-3); font-size:9.5px}
+.chart-cap{font-size:.9rem; color:var(--ink-2); max-width:70ch; margin:34px 0 12px}
+.chart-hint{display:none; font-size:.8rem; color:var(--ink-3); margin:0 0 8px}
+.odds-note{font-size:.85rem; color:var(--ink-3); max-width:70ch; margin:18px 0 0}
 .legend{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:14px;
   font-size:12.5px; color:var(--ink-2)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
@@ -388,7 +405,7 @@ td.n{font-family:var(--mono); font-variant-numeric:tabular-nums}
 footer{border-top:1px solid var(--hair); margin-top:8px; padding:28px 0 64px;
   display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between;
   font-size:13px; color:var(--ink-3)}
-footer a{color:var(--ink-2)}
+footer a{color:var(--ink-2); white-space:nowrap}
 
 /* ---- the race board: every column read off one distribution -------------- */
 .grid6{display:grid;
@@ -460,6 +477,7 @@ footer a{color:var(--ink-2)}
   .wins.fin .wrow{grid-template-columns:88px 1fr 34px 36px; gap:6px}
   .wname{font-size:.84rem; padding-left:6px}
   .carsvg{width:32px; height:13px}
+  .waxis .wtrack i:nth-child(even){display:none}
 }
 
 /* ---- forecast stage: one quiet line ----------------------------------- */
@@ -499,18 +517,11 @@ details.fold[open] > summary{margin-bottom:20px}
 details.fold[open] > summary::after{transform:rotate(180deg)}
 
 /* ---- method page ------------------------------------------------------------ */
-/* Verdicts as pale badges: green where the model is clearly better, red where
-   the reference is, grey where the evidence can't tell. */
-.pill{display:inline-block; font-size:12px; font-weight:500;
-  padding:2px 8px; border-radius:999px; background:var(--chip); color:var(--ink-2); white-space:nowrap}
-.pill.model{background:color-mix(in srgb,var(--good) 14%,var(--paper)); color:var(--good)}
-.pill.grid{background:color-mix(in srgb,var(--bad) 12%,var(--paper)); color:var(--bad)}
 .keyres td small{display:block; font-size:.74rem; color:var(--ink-3); font-weight:400}
 .keyres tr.grp td{border-top:2px solid var(--hair)}
 .keyres td{vertical-align:top}
 .cap code{font-family:var(--mono); font-size:.82em;
   background:var(--chip); padding:1px 5px; border-radius:3px; color:var(--ink)}
-.panel{max-width:720px}
 /* One readable column: the method page is an article, not a dashboard. */
 .article{max-width:740px; margin-inline:auto}
 .article thead th{font-family:var(--sans); font-size:.8rem; letter-spacing:0; text-transform:none; color:var(--ink-3)}
@@ -563,11 +574,6 @@ section.part{padding-block:40px 30px}
 @media (max-width:560px){ .hood > div{grid-template-columns:1fr} }
 .links{display:flex; flex-wrap:wrap; gap:8px 22px}
 .links a{color:var(--ink); font-weight:500; text-underline-offset:3px; text-decoration-color:var(--ink-3)}
-.limits{margin:0; padding-left:20px; max-width:66ch; color:var(--ink-2); line-height:1.7}
-.limits li{margin-bottom:10px}
-.limits b{color:var(--ink); font-weight:600}
-.more-link{padding:30px 0 50px; border-top:1px solid var(--hair); color:var(--ink-3); font-size:.92rem}
-.more-link a{color:var(--ink); text-underline-offset:3px; text-decoration-color:var(--ink-3)}
 /* Method page: the key results before any detail. */
 .kr-cap{font-size:.9rem; line-height:1.55; color:var(--ink-3); max-width:70ch; margin:0 0 14px}
 .keyrow{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:0 28px;
@@ -737,8 +743,8 @@ def win_track(rows: list[dict], finished: bool = False, n: int = 8) -> str:
     grid = "".join(f"<i class='gl' style='--q:{q}'></i>" for q in (0.25, 0.5, 0.75))
     out = [
         f"<div class='wins{' fin' if finished else ''}'>"
-        "<div class='wrow whead'><span></span><span>Chance to win &middot; the flag is 100%</span>"
-        "<span class='fr'>Win</span>" + ("<span class='fr'>Result</span>" if finished else "") + "</div>"
+        "<div class='wrow whead'><span></span><span>Chance to win</span>"
+        "<span></span>" + ("<span class='fr'>Result</span>" if finished else "") + "</div>"
     ]
     for i, r in enumerate(lead):
         p = min(max(float(r.get("p_win") or 0), 0.0), 1.0)
@@ -762,8 +768,8 @@ def win_track(rows: list[dict], finished: bool = False, n: int = 8) -> str:
     ticks = "".join(f"<i style='--q:{q}'>{q:.0%}</i>" for q in (0, 0.25, 0.5, 0.75, 1))
     out.append(
         f"<div class='wrow waxis'><span></span><span class='wtrack'>{ticks}</span></div>"
-        "<p class='fnote'>The closer a car is to the chequered flag, the more likely that driver is to "
-        "win: the share of 10,000 simulated races they won.</p></div>"
+        "<p class='fnote'>Each percentage is the share of 10,000 simulated races that driver won. "
+        "The nearer a car is to the chequered flag, the likelier the win.</p></div>"
     )
     return "".join(out)
 
@@ -835,7 +841,7 @@ def _odds(p: float, alive: bool = True) -> str:
     hands out 100% once the title is settled.
     """
     if not alive:
-        return "out"
+        return "<span title='can no longer win the title'>out</span>"
     if p >= 1.0:
         return "clinched"
     if p < 0.0005:
@@ -1067,7 +1073,8 @@ def record_table(history: list[dict]) -> str:
             st = last.get(label)
             if not st:
                 cells.append(
-                    f"<div class='wk none'><span class='lbl'>{label}</span><span class='wv'>not logged</span></div>"
+                    f"<div class='wk none'><span class='lbl'>{label}</span>"
+                    "<span class='wv'>not available for this race</span></div>"
                 )
                 continue
             p, ok = float(st["p_winner"]), st["hit"]
@@ -1087,10 +1094,10 @@ def record_table(history: list[dict]) -> str:
 
 
 STAGE_LABELS = {
-    "pre_practice": "Pre-practice forecast",
-    "pre_quali": "Pre-qualifying forecast",
-    "post_quali": "Post-qualifying forecast",
-    "result": "Result in",
+    "pre_practice": "Before practice",
+    "pre_quali": "After practice",
+    "post_quali": "After qualifying",
+    "result": "Race finished",
 }
 
 
@@ -1099,7 +1106,8 @@ def top_bar(
 ) -> str:
     """A floating island: the wordmark and forecast state, then navigation."""
     lights = "<span class='lights'>" + "".join(f"<i style='--n:{n}'></i>" for n in range(5)) + "</span>"
-    bits = [f"<span class='brand'>{lights}<span>F1 Prediction<span class='long'> System</span></span></span>"]
+    name = "F1<span class='mid'> Prediction</span><span class='long'> System</span>"
+    bits = [f"<a class='brand' href='index.html'>{lights}<span>{name}</span></a>"]
     if prediction and stage:
         state = [f"<b>{STAGE_LABELS.get(stage, stage)}</b>"]
         start = prediction.get("race_start_utc")
@@ -1120,9 +1128,9 @@ def top_bar(
     return f"<div class='bar'><div class='inner'>{''.join(bits)}</div></div>"
 
 
-# The page's only script. Three jobs, each of which is something static HTML
-# genuinely cannot do: say how long ago the page was built, count down to the
-# race, and read values off the chart.
+# The page's only script: sections easing in, the countdown to the race, the
+# headline numbers counting up once, and reading values off the chart. The
+# page is complete without it.
 SCRIPT = r"""
 (function(){
   // Sections rise in as they reach the viewport; everything shows at once
@@ -1139,17 +1147,6 @@ SCRIPT = r"""
   }
 })();
 (function(){
-  var rtf = null;
-  try { rtf = new Intl.RelativeTimeFormat(undefined,{numeric:'auto'}); } catch(e){}
-
-  function ago(el){
-    var t = Date.parse(el.dataset.since); if(isNaN(t) || !rtf) return;
-    var mins = Math.round((t - Date.now())/60000), txt;
-    if(Math.abs(mins) < 60) txt = rtf.format(mins,'minute');
-    else if(Math.abs(mins) < 2880) txt = rtf.format(Math.round(mins/60),'hour');
-    else txt = rtf.format(Math.round(mins/1440),'day');
-    el.textContent = 'updated ' + txt;
-  }
   function counts(el){
     var t = Date.parse(el.dataset.countdown); if(isNaN(t)) return;
     var ms = t - Date.now();
@@ -1158,7 +1155,6 @@ SCRIPT = r"""
     el.textContent = 'lights out in ' + (d ? d+'d ' : '') + h + 'h ' + m + 'm';
   }
   function tick(){
-    document.querySelectorAll('[data-since]').forEach(ago);
     document.querySelectorAll('[data-countdown]').forEach(counts);
   }
   tick(); setInterval(tick, 30000);
@@ -1268,14 +1264,31 @@ SCRIPT = r"""
 """
 
 
-def document(body: str, standalone: bool = True, title: str = "Pit Wall") -> str:
-    """standalone=True writes a complete file for GitHub Pages; False returns
-    the fragment an artifact host wraps in its own skeleton."""
-    if not standalone:
-        return f"<title>{esc(title)}</title>{FONTS}<style>{CSS}</style>{body}<script>{SCRIPT}</script>"
+BRAND = "F1 Prediction System"
+DESCRIPTION = (
+    "Probabilistic forecasts for every Formula 1 Grand Prix: race, qualifying and championship "
+    "chances, published before each session and graded after the race."
+)
+
+
+def footer(repo_url: str) -> str:
+    """Where the data comes from and where the code lives, and nothing else."""
+    return (
+        "<footer><span>Unofficial, not associated with Formula 1. Data from "
+        "<a href='https://github.com/jolpica/jolpica-f1'>jolpica-f1</a>, "
+        "<a href='https://openf1.org'>OpenF1</a> and "
+        "<a href='https://github.com/theOehrly/Fast-F1'>FastF1</a>.</span>"
+        f"<span><a href='{esc(repo_url)}'>Source code on GitHub</a></span></footer>"
+    )
+
+
+def document(body: str, title: str = BRAND) -> str:
+    """A complete, self-contained HTML page."""
+    title = title if title == BRAND else f"{title} \u00b7 {BRAND}"
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>"
+        f"<meta name='description' content='{esc(DESCRIPTION)}'>"
         f"<title>{esc(title)}</title>{ICON}{FONTS}<style>{CSS}</style>"
         "<script>document.documentElement.classList.add('js')</script></head>"
         f"<body>{body}<script>{SCRIPT}</script></body></html>"
@@ -1320,7 +1333,7 @@ def _calibration_panel(title: str, rows: list[dict], min_n: int = 10) -> str:
         said, got = float(r["stated"]), float(r["observed"])
         lo, hi, n = float(r["ci_low"]), float(r["ci_high"]), int(r["n"])
         off = not (lo <= said <= hi)
-        tip = f"Said {said:.0%}, happened {got:.0%} ({n:,} cases; 95% interval {lo:.0%} to {hi:.0%})"
+        tip = f"Said {said:.0%}, happened {got:.0%} ({n:,} cases, 95% interval {lo:.0%} to {hi:.0%})"
         out.append(
             f"<g class='cpt{' off' if off else ''}'><title>{esc(tip)}</title>"
             f"<line class='ci' x1='{x(said):.1f}' x2='{x(said):.1f}' y1='{y(lo):.1f}' y2='{y(hi):.1f}'/>"
@@ -1349,5 +1362,5 @@ def calibration_plot(reliability: dict) -> str:
         "<div class='cal-key'><span><i class='k-diag'></i>perfect calibration</span>"
         "<span><i class='k-dot'></i>what happened, per band of forecasts</span>"
         "<span><i class='k-ci'></i>95% interval on how often it happened</span>"
-        "<span><i class='k-off'></i>perfect calibration outside that interval</span></div>"
+        "<span><i class='k-off'></i>stated chance outside that interval</span></div>"
     )
