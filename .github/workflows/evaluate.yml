@@ -8,9 +8,9 @@ name: Evaluate
 # what stops the published accuracy figures drifting away from the ones written
 # down in the README.
 #
-# All slow by design: the backtest fits its settings on 2022-23 and then refits
-# per race across the reported seasons, before and after qualifying; the title
-# backtest refits at four checkpoints in each of seven seasons. The experiments
+# All slow by design. The backtest fits its settings on 2022-23 and then refits
+# per race across the reported seasons, before and after qualifying. The title
+# backtest refits at checkpoints through each of seven seasons. The experiments
 # behind the design choices (make experiments) take about an hour more and are
 # run by hand when the model changes, not every month.
 
@@ -147,10 +147,11 @@ jobs:
       - name: Verify
         run: python -m f1pred.cli verify
 
-      # The pages quote these numbers, so they are rebuilt in the same run that
-      # refreshes them. Without this the evidence moves and the published pages
-      # keep showing the previous month's figures until the next race weekend.
-      - name: Rebuild the pages against the new evidence
+      # The pages read these reports, so render them here: a report the site
+      # cannot read fails this run rather than the next forecast. The site
+      # itself is deployed by predict.yml, which rebuilds it from the committed
+      # reports on its next scheduled run.
+      - name: Check the pages render against the new evidence
         run: python -m f1pred.cli dashboard
 
       - name: Commit evaluation
@@ -158,5 +159,9 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add reports
-          git diff --staged --quiet || git commit -m "Evaluation $(date -u +%Y-%m-%d)"
+          git diff --staged --quiet && exit 0
+          git commit -m "Evaluation $(date -u +%Y-%m-%d)"
+          # A forecast run may have pushed in the meantime. Its files and these
+          # never overlap (predictions/ against reports/), so a rebase is safe.
+          git pull --rebase origin "$GITHUB_REF_NAME"
           git push

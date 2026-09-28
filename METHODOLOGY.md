@@ -1,7 +1,7 @@
 # Methodology
 
 How f1pred turns race data into forecasts, and how it checks them. Figures
-quoted here come from `reports/*.json`; the README's headline numbers are
+quoted here come from `reports/*.json`, and the README's headline numbers are
 tested against those files (`tests/test_readme_matches_reports.py`).
 
 ## 1. The problem
@@ -17,7 +17,7 @@ Three forecasts are logged per weekend, from different information:
 
 | Stage | Known | Model |
 |---|---|---|
-| Before practice | history only | qualifying ranker predicts the grid; race ranker scores the *projected* weekend |
+| Before practice | history only | qualifying ranker predicts the grid, race ranker scores the *projected* weekend |
 | After practice | history and this weekend's FP1-FP3 | as above, with practice feeding the qualifying ranker |
 | After qualifying | the official starting grid and the qualifying result | race ranker on the real grid |
 
@@ -32,7 +32,7 @@ It never stands in for the result.
 | [OpenF1](https://openf1.org) | the official starting grid (penalties applied) and per-session entry lists, 2023+ |
 | [FastF1](https://github.com/theOehrly/Fast-F1) | practice pace: per-driver aggregates of FP1-FP3 laps, this weekend only |
 
-Everything lands in DuckDB. `raw_*` tables hold what the sources returned;
+Everything lands in DuckDB. `raw_*` tables hold what the sources returned, and
 derived data (features) never overwrites them. HTTP responses are cached, jolpica
 is paced under its hourly budget, OpenF1 under its per-minute one, and network
 errors are retried with backoff. A failure in a fallback source (OpenF1) never
@@ -50,7 +50,7 @@ then OpenF1's official grid, then the qualifying order (provisional, penalties
 missing, and recorded as such). Each candidate grid is checked: no driver twice,
 no two cars in one slot, every driver entered in this race (otherwise it is a
 stale grid from another session), at least 90% coverage. Pit-lane starters go
-to the back of the grid; they had been read as grid 0, ahead of pole.
+to the back of the grid. They had been read as grid 0, ahead of pole.
 
 `make validate` runs 21 checks before anything is modelled: coverage,
 referential integrity, positions, the retirement flag against laps completed,
@@ -60,11 +60,11 @@ grid slots, and time ordering (practice before qualifying and the race).
 
 One row per driver per race. Every feature uses only races strictly earlier:
 
-* rolling windows shift one race before aggregating;
+* rolling windows shift one race before aggregating,
 * team features collapse to one value per team per race *before* shifting,
   because shifting a team's rows would step back to the teammate in the same
-  race;
-* championship standing is the standing after the previous round;
+  race,
+* championship standing is the standing after the previous round,
 * the season-progress feature divides by the calendar length, known before the
   season. It used to divide by the number of rounds already run, so the same race
   got a different value depending on when features were built.
@@ -72,9 +72,9 @@ One row per driver per race. Every feature uses only races strictly earlier:
 Two tests treat the feature code as a black box:
 
 * **truncation invariance**: build features from data that stops after race
-  *k* and from all the data; every feature of every race up to *k* must be
-  identical (`tests/test_pipeline.py`, and `make verify` on the real data);
-* **result tampering**: reverse one race's result; no feature of that race or
+  *k* and from all the data. Every feature of every race up to *k* must be
+  identical (`tests/test_pipeline.py`, and `make verify` on the real data).
+* **result tampering**: reverse one race's result. No feature of that race or
   an earlier one may move, and later ones must.
 
 Race-model feature groups (27 features): driver form (median finish over the
@@ -89,7 +89,7 @@ Two groups were tested and left out of the race model:
 * the driver's own qualifying record (average grid and qualifying place, pole
   rate, one-lap gap to pole). It reaches the race through the grid already, and
   inside the race model it counted twice: adding it back made 2022-23 clearly
-  worse, both after qualifying and before;
+  worse, both after qualifying and before,
 * the teammate qualifying gap, which also made 2022-23 worse after
   qualifying.
 
@@ -165,7 +165,7 @@ improves in both windows, but win log loss on 2022-23 gets worse (0.928 against
 
 Each uses the same walk-forward. Decisions are read off 2022-23 and checked on
 2024-. The rule for a change is an improvement on 2022-23 with a 95% interval
-clear of zero. Many comparisons are made, so a marginal pass can be luck; to
+clear of zero. Many comparisons are made, so a marginal pass can be luck. To
 stop choices flipping with every refresh of the data, each was taken once, on
 the final configuration, and later runs report without re-deciding.
 
@@ -179,7 +179,7 @@ the final configuration, and later runs report without re-deciding.
   back when the grid columns hold the qualifying model's projection. A group
   can be harmless once the real grid is known and still count twice here.
 * **Feature definitions**: median against mean recent form. The median lowered
-  2022-23 log loss by 0.047 (interval 0.003 to 0.093) and is in use; on 2024-
+  2022-23 log loss by 0.047 (interval 0.003 to 0.093) and is in use. On 2024-
   the difference is not clear. An earlier configuration measured the same
   gain with an interval just touching zero, so this is the most marginal
   decision in the project. A teammate gap measured within one session instead
@@ -197,7 +197,7 @@ the final configuration, and later runs report without re-deciding.
   NDCG@5 or position error and clearly worse on nothing. The detailed design
   passed: position error -0.280 places (-0.429 to -0.128), pole log loss
   -0.203 (-0.404 to -0.009), NDCG@5 +0.028 (+0.000 to +0.059). It feeds the
-  qualifying model only; it adds nothing to the race once the grid is known.
+  qualifying model only. It adds nothing to the race once the grid is known.
   The live pipeline fetches the current weekend's sessions. Each weekend logs
   three forecasts: before practice (history only, logged on the Wednesday of
   race week), after practice and after qualifying.
@@ -232,10 +232,10 @@ real weekends, each scored on that race's full field. An earlier version
 scored a synthetic "typical weekend", which copied recent form into the
 circuit columns (counting it twice) and carried each driver's teammate gap.
 Against that old method, on the 2019–22 title-backtest checkpoints the new one
-was clearly better on final driver points and on the champion's probability;
-on 2023– it was clearly better on the final gap between teammates and level on
-the rest (`season_projection` in `reports/experiments.json`). Points
-already scored are carried; constructors' points are summed from the results as
+was clearly better on final driver points and on the champion's probability,
+and on 2023– it was clearly better on the final gap between teammates and level
+on the rest (`season_projection` in `reports/experiments.json`). Points
+already scored are carried. Constructors' points are summed from the results as
 awarded, because summing the current drivers' totals credited a team with points
 its new driver scored elsewhere. A per-team and a smaller per-driver pace
 offset, held all season, widen the range to its calibrated 10th-90th coverage
@@ -245,7 +245,7 @@ included.
 
 ## 9. Reproducibility and provenance
 
-* `uv.lock` pins every dependency; CI installs from it on Python 3.11-3.13.
+* `uv.lock` pins every dependency, and CI installs from it on Python 3.11-3.13.
   The reports were generated on 3.12 (pinned in `.python-version`) with
   XGBoost 3.4.1, and each report records its versions. XGBoost 3.4 needs
   Python 3.12+, so on 3.11 the lock resolves 3.2 and figures may differ in the
@@ -262,11 +262,10 @@ included.
   under 1%), though the few win calls above 70% came true less often than
   stated. The most confident podium and top-10 calls are over-confident:
   podium calls averaging 94% came true 78% of the time, and top-10 calls
-  averaging 96% came true 87% (`reliability` in `reports/backtest.json`);
-  mid-range top-ten chances are under-confident. The temperature is fitted on
-  winners only; fitting it on the first three places would be the next thing
-  to try.
-
+  averaging 96% came true 87% (`reliability` in `reports/backtest.json`),
+  and mid-range top-ten chances are under-confident. The temperature is fitted
+  on winners only. Fitting it on the first three places improves those calls
+  but worsens win log loss on 2022-23 (section 5), so it is not used.
 * Races are noisy and the sample is small. 63 test races is enough to
   separate the model from naive baselines. Against the calibrated starting
   grid it is level on probabilities and behind on ordering the whole field
@@ -277,5 +276,5 @@ included.
   qualifying order stands in.
 * The season projection assumes current form holds, widened by a calibrated
   but simple pace-drift term.
-* Practice data covers 59 weekends (2024-26); its gain is clear on position
+* Practice data covers 59 weekends (2024-26). Its gain is clear on position
   error and pole probability, borderline on NDCG@5.

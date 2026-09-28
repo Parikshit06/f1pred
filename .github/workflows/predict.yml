@@ -1,44 +1,22 @@
 name: Predict
 
-# Race weekends: Friday (pre-qualifying), Saturday evening (grid known),
-# and Monday to grade the result once it is in.
+# Hourly across the race weekend, on Monday to grade the result and move on to
+# the next race, and on Wednesday to log the next race's before-practice
+# forecast.
 on:
-  # Sessions move, so the schedule covers the shapes a weekend can take rather
-  # than assuming the usual one, and nothing here has to line up exactly with a
-  # session. Two rules in the code make an early or late run harmless:
+  # There is no "session finished" trigger, and session times move: sprint
+  # weekends qualify on Friday, some races run on Saturday or at night, and
+  # results reach a volunteer-run API some time after the flag. A run takes
+  # about two minutes, so the schedule runs often and the code decides what,
+  # if anything, to log:
   #
-  #   predict.next_race  skips any race whose start time has passed, so a run
-  #                      that lands after the flag rolls to the next round
-  #                      rather than forecasting a race that is already over
-  #   Prediction.save    writes one file per race per stage, and withholds a
-  #                      pre-qualifying forecast made more than five days out
+  #   predict.next_race  skips any race that has already started, so a late
+  #                      run forecasts the next round, never one under way
+  #   Prediction.save    writes at most one file per race per stage, and none
+  #                      for a before-qualifying call more than five days out
   #
-  # Azerbaijan is why the Saturday-morning run exists: it is the one Saturday race of
-  # 2026, at 11:00 UTC, so the Saturday-evening run arrives eight hours late.
-  # Its qualifying is on Friday, which the 20:00 Friday run already covers.
-  #
-  # Minutes are off the hour on purpose. GitHub queues every :00 cron in the
-  # world at once and drops what it cannot serve, so "0 6 * * 5" is the most
-  # contended minute available and the least likely to actually run.
-  # Hourly across the race weekend, rather than at five guessed times.
-  #
-  # There is no "qualifying has finished" trigger - GitHub only does wall
-  # clock - and session times move: sprint weekends qualify on Friday, Las
-  # Vegas on Saturday night US time, Azerbaijan races on a Saturday morning.
-  # Five carefully chosen slots still missed, because results reach a
-  # volunteer-run API some unknown time after the flag.
-  #
-  # Guessing precisely was only worth it when a run cost ninety minutes. It
-  # costs two, so run often and let the code decide what to do:
-  #
-  #   next_race     skips any race that has already started
-  #   save()        writes one file per race per stage, and nothing at all
-  #                 for a pre-qualifying call more than five days out
-  #
-  # So a run with nothing to do refreshes the page and exits. The cost is
-  # about thirty requests against jolpica's 500/hour budget, most of them
-  # cache hits, and runner minutes are free on a public repository. The
-  # benefit is that a dropped scheduled run costs an hour, not a weekend.
+  # A run with nothing new to log refreshes the site and exits. Minutes sit off
+  # the hour because GitHub drops scheduled runs at :00 first when it is busy.
   schedule:
     - cron: "17 * * * 5,6,0"  # hourly, Friday through Sunday
     - cron: "17 8,14 * * 1"   # Monday: grade the result, roll to the next
