@@ -74,7 +74,7 @@ SEASON_DRIVER_UNCERTAINTY = 0.0
 POSITIONS_PER_SCORE_SD = 5.62
 
 N_SIMULATIONS = 10_000
-TOP_N = 10  # rows published per board; the full field is still modelled
+TOP_N = 10  # rows shown in each table on the site; the full field is still modelled
 
 # A pre-qualifying forecast is only logged within this many days of the race,
 # so the record holds race-week calls rather than whatever the scheduler ran

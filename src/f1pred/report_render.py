@@ -422,9 +422,6 @@ footer a{color:var(--ink-2); white-space:nowrap}
   transform-origin:left; animation:grow .7s cubic-bezier(.2,.7,.3,1) backwards;
   animation-delay:calc(var(--i,0) * 35ms + 120ms)}
 @keyframes grow{from{transform:scaleX(0)}}
-.board .more{border-bottom:0}
-.board .more > summary{margin-top:22px}
-.board .more[open] > summary{display:none}
 
 @media (max-width:860px){
   .grid6{grid-template-columns:24px 3px minmax(96px,1fr) 60px 96px 56px 48px}
@@ -500,21 +497,6 @@ footer a{color:var(--ink-2); white-space:nowrap}
 .notice{border-left:3px solid var(--ink-3); padding:14px 18px;
   color:var(--ink-2); font-size:.9rem; max-width:64ch; background:var(--paper)}
 .notice b{color:var(--ink)}
-/* Buttons: a pill, the chevron nested in its own circle. */
-details.fold > summary, .board .more > summary{cursor:pointer; list-style:none; display:inline-flex;
-  align-items:center; gap:12px; padding:6px 6px 6px 18px; border-radius:999px; background:var(--card);
-  font-size:.9rem; font-weight:500; color:var(--ink);
-  box-shadow:0 0 0 1px var(--hair), 0 10px 24px -18px rgba(10,10,12,.35);
-  transition:transform .5s var(--ease), box-shadow .5s var(--ease)}
-details.fold > summary{margin-top:22px}
-details.fold > summary::-webkit-details-marker, .board .more > summary::-webkit-details-marker{display:none}
-details.fold > summary::after, .board .more > summary::after{content:""; width:28px; height:28px; border-radius:50%;
-  background:var(--chip) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat; transition:transform .5s var(--ease)}
-details.fold > summary:hover, .board .more > summary:hover{box-shadow:0 0 0 1px var(--ink-3), 0 14px 28px -18px rgba(10,10,12,.4)}
-details.fold > summary:hover::after, .board .more > summary:hover::after{transform:translateY(2px) scale(1.06)}
-details.fold > summary:active, .board .more > summary:active{transform:scale(.98)}
-details.fold[open] > summary{margin-bottom:20px}
-details.fold[open] > summary::after{transform:rotate(180deg)}
 
 /* ---- method page ------------------------------------------------------------ */
 .keyres td small{display:block; font-size:.74rem; color:var(--ink-3); font-weight:400}
@@ -656,7 +638,7 @@ def _row_head(i: int, r: dict) -> str:
     full = esc(r.get("name", ""))
     short = esc(r.get("short") or r.get("name", ""))
     return (
-        f"<div class='pos'>{r.get('rank') or i + 1}</div><div class='car'></div>"
+        f"<div class='pos'>{i + 1}</div><div class='car'></div>"
         f"<div class='who'><div class='name'>"
         f"<span class='n-full'>{full}</span><span class='n-short'>{short}</span></div>"
         f"<div class='team'>{esc(team_name(r.get('team')))}</div></div>"
@@ -674,9 +656,8 @@ def _start_cell(r: dict) -> str:
 
 
 def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> str:
-    """The race forecast, one row per driver, all read off the same finishing
-    distribution so win <= podium <= top 5 always holds. Rows past `shown` sit
-    behind a toggle so the page leads with the contenders."""
+    """The race forecast's top ten, all read off the same finishing
+    distribution so win <= podium <= top 5 always holds."""
     finished = any(isinstance(r.get("finished"), (int, float)) for r in rows)
     cls = "grid6 fin" if finished else "grid6"
     head = (
@@ -715,13 +696,6 @@ def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> st
 
     out = ["<div class='board'>", head]
     out += [one(i, r) for i, r in enumerate(rows[:shown])]
-    rest = rows[shown:]
-    if rest:
-        out.append(
-            f"<details class='more'><summary>Show the other {len(rest)} drivers</summary>"
-            + "".join(one(i + shown, r) for i, r in enumerate(rest))
-            + "</details>"
-        )
     out.append("</div>")
     return "".join(out)
 
@@ -798,9 +772,8 @@ def stage_track(current: str) -> str:
 
 
 def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> str:
-    """The qualifying forecast in its expected order, so a row's number is a
-    predicted position. Once qualifying has run, a last column shows where
-    each driver starts.
+    """The qualifying forecast's top ten, in expected order. Once qualifying
+    has run, a last column shows where each driver starts.
 
     The middle column is the top-5 chance. Forecasts logged before
     2026-09-30 filled their "podium" field with it, so reading top 5 keeps
@@ -814,22 +787,6 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
         p = float(r.get("p_win") or 0)
         top5 = float(r.get("p_top5") or 0)
         g = r.get("grid")
-        if r.get("unlogged"):
-            blank = "<div class='v dim'>&middot;</div>"
-            return (
-                f"<div class='row {cls}' title='This older forecast logged chances for ten drivers only' "
-                f'style="--i:{min(i, 12)}; --tc:{team_colour(r.get("team"))}">'
-                + _row_head(i, r)
-                + blank
-                + blank
-                + "<div class='v dim c-top5'>&middot;</div>"
-                + (
-                    (f"<div class='v fin'>P{int(g)}</div>" if isinstance(g, (int, float)) else blank)
-                    if qualified
-                    else ""
-                )
-                + "</div>"
-            )
         return (
             f"<div class='row {cls}{' podium' if i < 3 else ''}' "
             f'style="--i:{min(i, 12)}; --tc:{team_colour(r.get("team"))}">'
@@ -858,18 +815,6 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
         + "</div>"
     ]
     out += [one(i, r) for i, r in enumerate(rows[:shown])]
-    rest = rows[shown:]
-    if rest:
-        out.append(
-            f"<details class='more'><summary>Show the other {len(rest)} drivers</summary>"
-            + "".join(one(i + shown, r) for i, r in enumerate(rest))
-            + "</details>"
-        )
-    if any(r.get("unlogged") for r in rows):
-        out.append(
-            "<p class='fnote'>This forecast logged chances for ten drivers. The rest are listed in "
-            "their expected order.</p>"
-        )
     return "".join(out) + "</div>"
 
 

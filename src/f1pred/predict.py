@@ -466,11 +466,10 @@ def run(
     def lines(
         sort_col: str, win_col: str, pod: str, top5: str, top10: str, exp: str, ascending: bool = False
     ) -> list[dict]:
-        d = race.sort_values(sort_col, ascending=ascending)
         # The race board is the favourites, best chance first. The qualifying
-        # board is the whole field in its expected order, so a row's number
-        # reads as a predicted position rather than a rank of pole chances.
-        d = d if ascending else d.head(config.TOP_N)
+        # board is the top ten of the expected order, so a row's number reads
+        # as a predicted position rather than a rank of pole chances.
+        d = race.sort_values(sort_col, ascending=ascending).head(config.TOP_N)
         return [
             asdict(
                 DriverLine(

@@ -682,10 +682,10 @@ def _field(n):
     ]
 
 
-def test_the_board_shows_the_whole_field_leading_with_the_contenders(no_track_record):
+def test_the_race_board_shows_the_top_ten_only(no_track_record):
     html = rr.race_board(_field(20))
-    assert "Show the other 10 drivers" in html
-    assert html.count("<div class='row") == 20
+    assert html.count("<div class='row") == 10
+    assert "<details" not in html and "<div class='pos'>10</div>" in html
 
 
 def test_a_finished_race_shows_the_result_beside_the_unchanged_forecast(monkeypatch, no_track_record):
@@ -831,25 +831,17 @@ def test_the_qualifying_table_is_in_expected_order_and_labels_top_five():
     assert ">80%<" in html, "the top-5 chance is what the middle column shows"
 
 
-def test_a_short_qualifying_board_keeps_each_drivers_true_place():
-    """An older forecast logged only the ten likeliest pole sitters. The
-    numbering must not skip anyone: a driver left off is listed in place."""
-    pred = {
-        "quali_board": [
-            {"driver_id": "a", "name": "A", "p_win": 0.5, "p_top5": 0.9, "exp_position": 1.5},
-            {"driver_id": "c", "name": "C", "p_win": 0.01, "p_top5": 0.1, "exp_position": 3.2},
-        ],
-        "field_probs": [
-            {"driver_id": "a", "q_exp_position": 1.5},
-            {"driver_id": "b", "q_exp_position": 2.4},
-            {"driver_id": "c", "q_exp_position": 3.2},
-        ],
-    }
-    rows = report._quali_rows(pred)
-    assert [r["driver_id"] for r in rows] == ["a", "b", "c"], "the driver left off is listed in place"
-    assert [r["rank"] for r in rows] == [1, 2, 3] and rows[1].get("unlogged")
+def test_the_qualifying_board_shows_the_top_ten_in_expected_order():
+    """Ten rows, numbered one to ten with no gaps, best expected first."""
+    rows = [
+        {"driver_id": f"d{i}", "name": f"D{i}", "p_win": 0.01, "p_top5": 0.1, "exp_position": 12.0 - i}
+        for i in range(12)
+    ]
     html = rr.quali_board(rows)
-    assert "<div class='pos'>2</div>" in html and "logged chances for ten drivers" in html
+    assert html.count("<div class='row") == 10 and "<details" not in html
+    assert [int(x) for x in re.findall(r"<div class='pos'>(\d+)</div>", html)] == list(range(1, 11))
+    assert html.index(">D11<") < html.index(">D10<"), "best expected qualifier first"
+    assert ">D0<" not in html and ">D1<" not in html, "the two expected slowest are left off"
 
 
 def test_the_race_table_runs_in_expected_finishing_order():

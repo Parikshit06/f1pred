@@ -1,8 +1,8 @@
 """The method page: how the forecast is made and how well it has done.
 
 One short article in plain words. Every figure is read from reports/*.json so
-the page cannot drift from the evaluation; the full tables sit behind one fold
-and METHODOLOGY.md has the rest.
+the page cannot drift from the evaluation; the full comparison table closes
+the page and METHODOLOGY.md has the rest.
 """
 
 from __future__ import annotations

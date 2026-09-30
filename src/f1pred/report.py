@@ -292,39 +292,6 @@ def _by_expected_finish(rows: list[dict]) -> list[dict]:
     return rows
 
 
-def _quali_rows(prediction: dict) -> list[dict]:
-    """The logged qualifying board, each row numbered by its place in the
-    whole field's expected qualifying order.
-
-    Forecasts logged before 2026-09-30 kept only the ten likeliest pole
-    sitters, so counting rows would skip anyone expected to qualify ahead of
-    a listed driver but left off the board. field_probs holds every driver's
-    expected qualifying position, so the number is taken from there.
-    """
-    rows = prediction.get("quali_board") or []
-    field = [f for f in prediction.get("field_probs") or [] if f.get("q_exp_position") is not None]
-    if not field:
-        return rows
-    logged = {r.get("driver_id"): r for r in rows}
-    names = {r.get("driver_id"): r.get("name") for r in prediction.get("race_board") or []}
-    out = []
-    for i, f in enumerate(sorted(field, key=lambda f: f["q_exp_position"])):
-        row = logged.get(f.get("driver_id"))
-        if row is None:
-            # Left off an older board: its place is known, its chances were not logged.
-            row = {
-                "driver_id": f.get("driver_id"),
-                "name": names.get(f.get("driver_id")) or f.get("name"),
-                "short": f.get("name"),
-                "team": f.get("team"),
-                "exp_position": f["q_exp_position"],
-                "grid": f.get("grid") if prediction.get("grid_known") else None,
-                "unlogged": True,
-            }
-        out.append({**row, "rank": i + 1})
-    return out
-
-
 def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     """Every driver, most likely winner first.
 
@@ -457,7 +424,7 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
         s.append(
             _section(
                 "Race forecast",
-                "Every driver's chances from 10,000 simulated races, in their expected finishing order."
+                "The ten drivers expected to finish highest, from 10,000 simulated races."
                 + (
                     " Win, podium, top 5 and top 10 are all counted from the same simulated finishing "
                     "orders, so they always agree with each other."
@@ -474,13 +441,14 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
             _section(
                 "Qualifying forecast",
                 (
-                    "The qualifying forecast, made before the session, with where each driver actually "
-                    "starts. The race forecast above uses the real grid."
+                    "The top ten of the qualifying forecast, made before the session, with where each "
+                    "driver actually starts. The race forecast above uses the real grid."
                     if qualified
-                    else "Chances in qualifying, from past qualifying and this weekend's practice where it "
-                    "has run. Each simulated race draws its own grid from this forecast."
+                    else "The ten drivers expected to qualify highest, from past qualifying and this "
+                    "weekend's practice where it has run. Each simulated race draws its own grid from "
+                    "this forecast."
                 ),
-                rr.quali_board(_quali_rows(prediction), qualified=qualified),
+                rr.quali_board(prediction.get("quali_board") or [], qualified=qualified),
                 "<span>Predicted order</span>",
             )
         )
