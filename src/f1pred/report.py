@@ -283,6 +283,24 @@ def coherent(prediction: dict, tol: float = 0.02) -> bool:
     return all(abs(float(row[0]) - float(win.get(d) or 0)) <= tol for d, row in zip(ids, matrix) if d in win)
 
 
+def _quali_rows(prediction: dict) -> list[dict]:
+    """The logged qualifying board, each row numbered by its place in the
+    whole field's expected qualifying order.
+
+    Forecasts logged before 2026-09-30 kept only the ten likeliest pole
+    sitters, so counting rows would skip anyone expected to qualify ahead of
+    a listed driver but left off the board. field_probs holds every driver's
+    expected qualifying position, so the number is taken from there.
+    """
+    rows = prediction.get("quali_board") or []
+    field = [f for f in prediction.get("field_probs") or [] if f.get("q_exp_position") is not None]
+    if not field:
+        return rows
+    order = sorted(field, key=lambda f: f["q_exp_position"])
+    rank = {f.get("driver_id"): i + 1 for i, f in enumerate(order)}
+    return [{**r, "rank": rank.get(r.get("driver_id"))} for r in rows]
+
+
 def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     """Every driver, most likely winner first.
 
@@ -438,7 +456,7 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
                     else "Chances in qualifying, from past qualifying and this weekend's practice where it "
                     "has run. Each simulated race draws its own grid from this forecast."
                 ),
-                rr.quali_board(prediction.get("quali_board") or [], qualified=qualified),
+                rr.quali_board(_quali_rows(prediction), qualified=qualified),
                 "<span>Predicted order</span>",
             )
         )

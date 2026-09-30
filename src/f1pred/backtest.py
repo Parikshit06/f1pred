@@ -110,10 +110,15 @@ def race_trainer(
     )
 
 
-def quali_trainer(settings: Settings, feature_names: list[str] | None = None, n_seeds: int = model.N_SEEDS):
+def quali_trainer(
+    settings: Settings,
+    feature_names: list[str] | None = None,
+    n_seeds: int = model.N_SEEDS,
+    params: dict | None = None,
+):
     names = feature_names or features.QUALI_FEATURES
     return lambda h: model.train(
-        h, names, "quali_relevance", current_season_weight=settings.recency, n_seeds=n_seeds
+        h, names, "quali_relevance", current_season_weight=settings.recency, n_seeds=n_seeds, params=params
     )
 
 
@@ -350,6 +355,7 @@ def walk_forward_quali(
     races: list[int] | None = None,
     n_seeds: int = model.N_SEEDS,
     warmup: int = CALIBRATION_WARMUP,
+    params: dict | None = None,
 ) -> pd.DataFrame:
     """Grade the qualifying forecast: one row per race.
 
@@ -369,7 +375,7 @@ def walk_forward_quali(
     before = df[df["quali_position"].notna() & (df["race_seq"] < window["race_seq"].min())]
     warm = sorted(before["race_seq"].unique())[-warmup:]
     targets = list(warm) + window["race_seq"].tolist()
-    scored = oos_scores(df, targets, quali_trainer(s, quali_features, n_seeds), retrain_every)
+    scored = oos_scores(df, targets, quali_trainer(s, quali_features, n_seeds, params), retrain_every)
 
     graded = set(window["race_seq"])
     seen: dict[str, tuple[list, list]] = {}

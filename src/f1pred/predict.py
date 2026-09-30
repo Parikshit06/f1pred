@@ -429,7 +429,7 @@ def run(
     # ---- qualifying ------------------------------------------------------
     race["quali_score"] = quali_model.score(race)
     q = simulate.ranking_forecast(race["driver_id"].tolist(), race["quali_score"].to_numpy(), t_quali)
-    for col in ("p_win", "p_top5", "p_top10", "exp_position"):
+    for col in ("p_win", "p_podium", "p_top5", "p_top10", "exp_position"):
         race[f"q_{col}"] = q.column(col)
 
     # ---- race ------------------------------------------------------------
@@ -463,8 +463,14 @@ def run(
     names = _driver_names()
     meta_race = race.iloc[0]
 
-    def lines(sort_col: str, win_col: str, pod: str, top5: str, top10: str, exp: str) -> list[dict]:
-        d = race.sort_values(sort_col, ascending=False).head(config.TOP_N)
+    def lines(
+        sort_col: str, win_col: str, pod: str, top5: str, top10: str, exp: str, ascending: bool = False
+    ) -> list[dict]:
+        d = race.sort_values(sort_col, ascending=ascending)
+        # The race board is the favourites, best chance first. The qualifying
+        # board is the whole field in its expected order, so a row's number
+        # reads as a predicted position rather than a rank of pole chances.
+        d = d if ascending else d.head(config.TOP_N)
         return [
             asdict(
                 DriverLine(
@@ -502,7 +508,15 @@ def run(
         quali_start_utc=str(quali_start) if quali_start is not None and pd.notna(quali_start) else None,
         generated_at_utc=datetime.now(UTC).isoformat(timespec="seconds"),
         grid_known=known_grid,
-        quali_board=lines("q_p_win", "q_p_win", "q_p_top5", "q_p_top5", "q_p_top10", "q_exp_position"),
+        quali_board=lines(
+            "q_exp_position",
+            "q_p_win",
+            "q_p_podium",
+            "q_p_top5",
+            "q_p_top10",
+            "q_exp_position",
+            ascending=True,
+        ),
         race_board=lines("p_win", "p_win", "p_podium", "p_top5", "p_top10", "exp_position"),
         field_probs=[
             {

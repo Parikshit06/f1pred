@@ -312,6 +312,17 @@ def definition_experiment(
     return out
 
 
+def _clear(row: dict, metric: str) -> str:
+    """'better', 'worse' or 'unclear' for one paired difference."""
+    lo, hi = row.get(f"{metric}_ci", [0, 0])
+    good_if_positive = metric not in metrics.LOWER_IS_BETTER
+    if lo > 0:
+        return "better" if good_if_positive else "worse"
+    if hi < 0:
+        return "worse" if good_if_positive else "better"
+    return "unclear"
+
+
 PRACTICE_KEEP_METRICS = ("ndcg5", "position_error")
 PRACTICE_GUARD_METRICS = ("ndcg3", "ndcg5", "position_error", "pole_logloss")
 
@@ -371,19 +382,10 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
     checked = table(check, ["history only", picked]) if check else []
     row = next((r for r in checked if r["variant"] == picked), {})
 
-    def side(m):
-        lo, hi = row.get(f"{m}_ci", [0, 0])
-        good_if_positive = m not in metrics.LOWER_IS_BETTER
-        if lo > 0:
-            return "better" if good_if_positive else "worse"
-        if hi < 0:
-            return "worse" if good_if_positive else "better"
-        return "unclear"
-
     keep = (
         bool(row)
-        and any(side(m) == "better" for m in PRACTICE_KEEP_METRICS)
-        and not any(side(m) == "worse" for m in PRACTICE_GUARD_METRICS)
+        and any(_clear(row, m) == "better" for m in PRACTICE_KEEP_METRICS)
+        and not any(_clear(row, m) == "worse" for m in PRACTICE_GUARD_METRICS)
     )
 
     race_cols = ["ndcg5", "winner_hit", "spearman", "win_logloss", "podium_brier"]
@@ -412,6 +414,69 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
         "kept": keep,
         "qualifying_held_out": {f"decide {decide[0]}": decided, f"check {later}": checked},
         "race_held_out": race_split,
+    }
+
+
+QUALI_ORDER_KEEP = ("pole_logloss", "ndcg5", "spearman", "position_error")
+QUALI_ORDER_GUARD = ("pole_logloss", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap")
+
+
+def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1) -> dict:
+    """Two ways to make the qualifying model order the whole field better.
+
+    The live qualifying forecast gave backmarkers too good a chance of the
+    top ten, and one bad session moved a driver's recent average a lot. Tried:
+      median form   the median, not the mean, of recent qualifying positions
+      whole-field   ranking gains that grow linearly down the order, not
+                    exponentially, so the back of the grid counts in training
+    Rule, fixed before any result was seen: a variant is kept only if, on the
+    tuning seasons, it is clearly better on one of QUALI_ORDER_KEEP and
+    clearly worse on none of QUALI_ORDER_GUARD, and on the later seasons it
+    is clearly worse on none of QUALI_ORDER_GUARD.
+    """
+    median = df.copy()
+    for k in (3, 5):
+        median[f"drv_avg_quali_{k}"] = features._prior_rolling(
+            median, "driver_id", "quali_position", k, "median"
+        )
+    whole_field = {"ndcg_exp_gain": False}
+    variants = {
+        "current": (df, None),
+        "median form": (median, None),
+        "whole-field": (df, whole_field),
+        "median form + whole-field": (median, whole_field),
+    }
+    cols = ["pole_logloss", "pole_hit", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap"]
+    (decide_label, (d0, d1)), (check_label, (c0, _)) = list(windows.items())
+    results = {}
+    for name, (frame, params) in variants.items():
+        r = backtest.walk_forward_quali(
+            frame, d0, settings=settings, n_seeds=n_seeds, retrain_every=retrain_every, params=params
+        )
+        results[name] = r[r["method"] == "model"]
+    decided = _paired_table({k: v[v["season"].between(d0, d1)] for k, v in results.items()}, "current", cols)
+    checked = _paired_table({k: v[v["season"] >= c0] for k, v in results.items()}, "current", cols)
+    verdict = {}
+    for d, c in zip(decided[1:], checked[1:]):
+        passes = any(_clear(d, m) == "better" for m in QUALI_ORDER_KEEP) and not any(
+            _clear(d, m) == "worse" for m in QUALI_ORDER_GUARD
+        )
+        holds = not any(_clear(c, m) == "worse" for m in QUALI_ORDER_GUARD)
+        verdict[d["variant"]] = {
+            "passes_tuning": passes,
+            "holds_later": holds,
+            "kept": passes and holds,
+            "worse_later_on": [m for m in QUALI_ORDER_GUARD if _clear(c, m) == "worse"],
+        }
+    return {
+        "rule": (
+            "kept only if clearly better on the tuning seasons on one of "
+            f"{', '.join(QUALI_ORDER_KEEP)}, and clearly worse on none of "
+            f"{', '.join(QUALI_ORDER_GUARD)} in either window"
+        ),
+        decide_label: decided,
+        check_label: checked,
+        "verdict": verdict,
     }
 
 
@@ -642,6 +707,7 @@ def run_experiments(
             settings,
         ),
         "practice": lambda: practice_experiment(df, settings),
+        "quali_ordering": lambda: quali_ordering_experiment(df, windows, settings),
         "redundancy": lambda: redundancy(df, start_season, settings),
         "season_projection": lambda: season_projection_experiment(df),
         "parameter_stability": lambda: parameter_stability(
@@ -675,6 +741,7 @@ EXPERIMENTS = (
     "calibration_tuning",
     "form_statistic",
     "practice",
+    "quali_ordering",
     "redundancy",
     "season_projection",
     "parameter_stability",

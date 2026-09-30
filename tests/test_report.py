@@ -794,3 +794,56 @@ def test_past_races_are_one_click_from_every_page(no_track_record):
         archived=True,
     )
     assert "Archived forecast" in archived and "href='index.html'" in archived
+
+
+def test_the_qualifying_table_is_in_expected_order_and_labels_top_five():
+    """A row's number is a predicted qualifying position, not a rank of pole
+    chances, and the middle column is the top-5 chance it holds."""
+    rows = [
+        {
+            "name": "Slow",
+            "team": "haas",
+            "p_win": 0.007,
+            "p_top5": 0.05,
+            "p_top10": 0.2,
+            "exp_position": 13.9,
+        },
+        {
+            "name": "Fast",
+            "team": "mclaren",
+            "p_win": 0.2,
+            "p_top5": 0.8,
+            "p_top10": 0.99,
+            "exp_position": 3.5,
+        },
+        {
+            "name": "Mid",
+            "team": "williams",
+            "p_win": 0.003,
+            "p_top5": 0.1,
+            "p_top10": 0.4,
+            "exp_position": 11.0,
+        },
+    ]
+    html = rr.quali_board(rows)
+    assert html.index(">Fast<") < html.index(">Mid<") < html.index(">Slow<")
+    assert "<span>Top 5</span>" in html and "Top 3" not in html
+    assert ">80%<" in html, "the top-5 chance is what the middle column shows"
+
+
+def test_a_short_qualifying_board_keeps_each_drivers_true_place():
+    """An older forecast logged only the ten likeliest pole sitters. A driver
+    expected 3rd must not be shown as 2nd because the 2nd was left off."""
+    pred = {
+        "quali_board": [
+            {"driver_id": "a", "name": "A", "p_win": 0.5, "p_top5": 0.9, "exp_position": 1.5},
+            {"driver_id": "c", "name": "C", "p_win": 0.01, "p_top5": 0.1, "exp_position": 3.2},
+        ],
+        "field_probs": [
+            {"driver_id": "a", "q_exp_position": 1.5},
+            {"driver_id": "b", "q_exp_position": 2.4},
+            {"driver_id": "c", "q_exp_position": 3.2},
+        ],
+    }
+    html = rr.quali_board(report._quali_rows(pred))
+    assert "<div class='pos'>3</div>" in html and "<div class='pos'>2</div>" not in html

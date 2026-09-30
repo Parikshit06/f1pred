@@ -656,7 +656,7 @@ def _row_head(i: int, r: dict) -> str:
     full = esc(r.get("name", ""))
     short = esc(r.get("short") or r.get("name", ""))
     return (
-        f"<div class='pos'>{i + 1}</div><div class='car'></div>"
+        f"<div class='pos'>{r.get('rank') or i + 1}</div><div class='car'></div>"
         f"<div class='who'><div class='name'>"
         f"<span class='n-full'>{full}</span><span class='n-short'>{short}</span></div>"
         f"<div class='team'>{esc(team_name(r.get('team')))}</div></div>"
@@ -797,27 +797,31 @@ def stage_track(current: str) -> str:
     )
 
 
-def quali_board(rows: list[dict], qualified: bool = False) -> str:
-    """The qualifying forecast in the same form as the race board. Once
-    qualifying has run, a last column shows where each driver starts."""
+def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> str:
+    """The qualifying forecast in its expected order, so a row's number is a
+    predicted position. Once qualifying has run, a last column shows where
+    each driver starts.
+
+    The middle column is the top-5 chance. Forecasts logged before
+    2026-09-30 filled their "podium" field with it, so reading top 5 keeps
+    every logged forecast labelled correctly without rewriting any of them.
+    """
+    if rows and all(isinstance(r.get("exp_position"), (int, float)) for r in rows):
+        rows = sorted(rows, key=lambda r: r["exp_position"])
     cls = "gridq fin" if qualified else "gridq"
-    out = [
-        f"<div class='board'><div class='colhead {cls}'><span>#</span><span></span><span>Driver</span>"
-        "<span>Pole</span><span>Top 3</span><span class='c-top5'>Top 10</span>"
-        + ("<span>Starts</span>" if qualified else "")
-        + "</div>"
-    ]
-    for i, r in enumerate(rows):
+
+    def one(i: int, r: dict) -> str:
         p = float(r.get("p_win") or 0)
+        top5 = float(r.get("p_top5") or 0)
         g = r.get("grid")
-        out.append(
+        return (
             f"<div class='row {cls}{' podium' if i < 3 else ''}' "
             f'style="--i:{min(i, 12)}; --tc:{team_colour(r.get("team"))}">'
             + _row_head(i, r)
             + f"<div class='v lead winc'><span data-count>{pct(p)}</span>"
             + f"<span class='pbar'><i style='width:{min(p, 1.0) * 100:.1f}%'></i></span></div>"
-            + f"<div class='v'>{pct(r.get('p_podium') or 0, 0)}"
-            + f"<span class='mbar'><i style='width:{min(float(r.get('p_podium') or 0), 1.0) * 100:.0f}%'></i></span></div>"
+            + f"<div class='v'>{pct(top5, 0)}"
+            + f"<span class='mbar'><i style='width:{min(top5, 1.0) * 100:.0f}%'></i></span></div>"
             + f"<div class='v dim c-top5'>{pct(r.get('p_top10') or 0, 0)}</div>"
             + (
                 (
@@ -829,6 +833,21 @@ def quali_board(rows: list[dict], qualified: bool = False) -> str:
                 else ""
             )
             + "</div>"
+        )
+
+    out = [
+        f"<div class='board'><div class='colhead {cls}'><span>#</span><span></span><span>Driver</span>"
+        "<span>Pole</span><span>Top 5</span><span class='c-top5'>Top 10</span>"
+        + ("<span>Starts</span>" if qualified else "")
+        + "</div>"
+    ]
+    out += [one(i, r) for i, r in enumerate(rows[:shown])]
+    rest = rows[shown:]
+    if rest:
+        out.append(
+            f"<details class='more'><summary>Show the other {len(rest)} drivers</summary>"
+            + "".join(one(i + shown, r) for i, r in enumerate(rest))
+            + "</details>"
         )
     return "".join(out) + "</div>"
 

@@ -37,3 +37,12 @@ def test_practice_feeds_the_qualifying_model_only():
     assert practice <= set(features.QUALI_FEATURES)
     assert not practice & set(features.RACE_FEATURES)
     assert "practice" in evaluation.EXPERIMENTS
+
+
+def test_a_difference_is_only_clear_when_its_interval_excludes_zero():
+    """The verdict behind every kept or rejected experiment, including which
+    way is better for scores where lower wins."""
+    assert evaluation._clear({"ndcg5_ci": [0.01, 0.05]}, "ndcg5") == "better"
+    assert evaluation._clear({"ndcg5_ci": [-0.03, -0.002]}, "ndcg5") == "worse"
+    assert evaluation._clear({"position_error_ci": [-0.3, -0.1]}, "position_error") == "better"
+    assert evaluation._clear({"pole_logloss_ci": [-0.01, 0.19]}, "pole_logloss") == "unclear"

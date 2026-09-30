@@ -251,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{p.race_name}  ({stage})")
         print(f"trained on {p.meta['n_training_races']} races\n")
         print(f"QUALIFYING - top {config.TOP_N}")
-        for i, d in enumerate(p.quali_board, 1):
+        for i, d in enumerate(p.quali_board[: config.TOP_N], 1):
             print(
                 f"  {i:2}. {d['name']:<24} pole {d['p_win'] * 100:5.1f}%   top10 {d['p_top10'] * 100:5.1f}%"
             )
