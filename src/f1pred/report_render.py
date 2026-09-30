@@ -793,9 +793,9 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
             + _row_head(i, r)
             + f"<div class='v lead winc'><span data-count>{pct(p)}</span>"
             + f"<span class='pbar'><i style='width:{min(p, 1.0) * 100:.1f}%'></i></span></div>"
-            + f"<div class='v'>{pct(top5, 0)}"
+            + f"<div class='v c-top5'>{pct(top5, 0)}"
             + f"<span class='mbar'><i style='width:{min(top5, 1.0) * 100:.0f}%'></i></span></div>"
-            + f"<div class='v dim c-top5'>{pct(r.get('p_top10') or 0, 0)}</div>"
+            + f"<div class='v dim'>{pct(r.get('p_top10') or 0, 0)}</div>"
             + (
                 (
                     f"<div class='v fin'>P{int(g)}</div>"
@@ -810,7 +810,7 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
 
     out = [
         f"<div class='board'><div class='colhead {cls}'><span>#</span><span></span><span>Driver</span>"
-        "<span>Pole</span><span>Top 5</span><span class='c-top5'>Top 10</span>"
+        "<span>Pole</span><span class='c-top5'>Top 5</span><span>Top 10</span>"
         + ("<span>Starts</span>" if qualified else "")
         + "</div>"
     ]

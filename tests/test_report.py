@@ -827,7 +827,7 @@ def test_the_qualifying_table_is_in_expected_order_and_labels_top_five():
     ]
     html = rr.quali_board(rows)
     assert html.index(">Fast<") < html.index(">Mid<") < html.index(">Slow<")
-    assert "<span>Top 5</span>" in html and "Top 3" not in html
+    assert ">Top 5</span>" in html and "<span>Top 10</span>" in html and "Top 3" not in html
     assert ">80%<" in html, "the top-5 chance is what the middle column shows"
 
 
