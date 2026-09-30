@@ -158,6 +158,10 @@ steps: `predict.yml` across each race weekend (and deploys the site),
   averaging 96% came true 87%, because the temperature is fitted on winners only.
 - Not modelled: weather, tyre and pit strategy, in-race penalties, team orders,
   upgrades, safety-car timing, failures shared by a team's two cars.
+- The qualifying forecast orders the back of the grid loosely, so
+  backmarkers' chances of reaching the top ten in qualifying are too high. A
+  fix that orders the whole field better cost accuracy at the front, so it
+  is not used.
 - Until the official grid is published, penalties are unknown and the
   qualifying order stands in. The forecast says so.
 - 63 test races separate the model from naive baselines. Against the
@@ -277,6 +281,18 @@ model. After qualifying it adds nothing beyond the official grid (race log loss
 +0.029, -0.051 to +0.117), so the race model never sees it. (An earlier
 version kept practice on a test that overlapped the reported window. A
 simpler two-number design, re-tested properly, was not clearly better.)
+
+**Qualifying: the front of the grid over the back.** The qualifying ranker
+uses NDCG's exponential gains, so training concentrates on the front of the
+grid and orders the back loosely. On 2024 onward it is no better than recent
+qualifying form at ordering the whole field, and it gives backmarkers too good
+a chance of the top ten. Two fixes were tested with the rule fixed in advance
+(`quali_ordering` in `reports/experiments.json`). The median of recent
+qualifying positions made no clear difference in either window. Linear gains
+ordered the whole field clearly better on 2022–23 and again on 2024 onward
+(position error -0.251 (-0.388 to -0.116) places), but on 2024 onward they were
+clearly worse at the front, NDCG@5 -0.018 (-0.034 to -0.002). The race forecast
+depends most on the front of the grid, so neither is used.
 
 **Recent form: median, not mean.** Median finishing position over the last
 races lowered 2022–23 log loss by 0.047 (interval 0.003 to 0.093). On 2024

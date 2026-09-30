@@ -201,6 +201,15 @@ the final configuration, and later runs report without re-deciding.
   The live pipeline fetches the current weekend's sessions. Each weekend logs
   three forecasts: before practice (history only, logged on the Wednesday of
   race week), after practice and after qualifying.
+* **Qualifying order** (`quali_ordering`): the qualifying ranker is trained
+  with NDCG's exponential gains, which concentrate on the front of the grid,
+  so it orders the back loosely and overstates backmarkers' top-ten chances.
+  Two fixes were tested with the rule fixed in advance: kept only if clearly
+  better on 2022-23 on pole log loss, NDCG@5, Spearman or position error, and
+  clearly worse on none of those, NDCG@3 or top-ten overlap in either window.
+  The median of recent qualifying positions made no clear difference. Linear
+  gains ordered the whole field clearly better in both windows but were
+  clearly worse on NDCG@5 on 2024-, so neither is used.
 * **Season projection**: how to score a driver for the rest of the season,
   graded on every title-backtest checkpoint against final driver and team
   points, the final gap between teammates and the champion's probability.
@@ -272,6 +281,8 @@ included.
   (Kendall rank correlation), once qualifying has run.
 * Not modelled: weather, tyre and pit strategy, in-race penalties, team orders,
   upgrades, correlated failures, safety-car timing.
+* The qualifying forecast orders the back of the grid loosely, so
+  backmarkers' top-ten chances in qualifying are too high (section 6).
 * Before the official grid is published, penalties are unknown and the
   qualifying order stands in.
 * The season projection assumes current form holds, widened by a calibrated

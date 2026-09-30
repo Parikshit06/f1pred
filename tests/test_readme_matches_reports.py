@@ -287,3 +287,18 @@ def test_the_calibration_limitation_quotes_the_top_bands():
         phrase = f"averaging {float(top['stated']):.0%} came true {float(top['observed']):.0%}"
         assert phrase in _readme(), f"{key}: README should say {phrase}"
         assert phrase in (ROOT / "METHODOLOGY.md").read_text(), f"{key}: METHODOLOGY should say {phrase}"
+
+
+def test_the_qualifying_order_experiment_is_quoted_and_not_adopted():
+    """The whole-field fix is quoted with its held-out cost, and only while
+    the recorded verdict still says it was not kept."""
+    q = _experiments().get("quali_ordering") or {}
+    later = next((rows for w, rows in q.items() if w.startswith("test")), None)
+    if not later:
+        pytest.skip("no qualifying-order experiment recorded")
+    assert not any(v["kept"] for v in q["verdict"].values()), "a variant passed: the model should change"
+    r = next(x for x in later if x["variant"] == "whole-field")
+    text = _readme()
+    for m in ("position_error", "ndcg5"):
+        lo, hi = r[f"{m}_ci"]
+        assert f"{r[f'{m}_diff']:+.3f} ({lo:+.3f} to {hi:+.3f})" in text, f"qualifying order {m}"
