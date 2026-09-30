@@ -814,6 +814,22 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
         p = float(r.get("p_win") or 0)
         top5 = float(r.get("p_top5") or 0)
         g = r.get("grid")
+        if r.get("unlogged"):
+            blank = "<div class='v dim'>&middot;</div>"
+            return (
+                f"<div class='row {cls}' title='This older forecast logged chances for ten drivers only' "
+                f'style="--i:{min(i, 12)}; --tc:{team_colour(r.get("team"))}">'
+                + _row_head(i, r)
+                + blank
+                + blank
+                + "<div class='v dim c-top5'>&middot;</div>"
+                + (
+                    (f"<div class='v fin'>P{int(g)}</div>" if isinstance(g, (int, float)) else blank)
+                    if qualified
+                    else ""
+                )
+                + "</div>"
+            )
         return (
             f"<div class='row {cls}{' podium' if i < 3 else ''}' "
             f'style="--i:{min(i, 12)}; --tc:{team_colour(r.get("team"))}">'
@@ -848,6 +864,11 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
             f"<details class='more'><summary>Show the other {len(rest)} drivers</summary>"
             + "".join(one(i + shown, r) for i, r in enumerate(rest))
             + "</details>"
+        )
+    if any(r.get("unlogged") for r in rows):
+        out.append(
+            "<p class='fnote'>This forecast logged chances for ten drivers. The rest are listed in "
+            "their expected order.</p>"
         )
     return "".join(out) + "</div>"
 

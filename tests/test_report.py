@@ -832,8 +832,8 @@ def test_the_qualifying_table_is_in_expected_order_and_labels_top_five():
 
 
 def test_a_short_qualifying_board_keeps_each_drivers_true_place():
-    """An older forecast logged only the ten likeliest pole sitters. A driver
-    expected 3rd must not be shown as 2nd because the 2nd was left off."""
+    """An older forecast logged only the ten likeliest pole sitters. The
+    numbering must not skip anyone: a driver left off is listed in place."""
     pred = {
         "quali_board": [
             {"driver_id": "a", "name": "A", "p_win": 0.5, "p_top5": 0.9, "exp_position": 1.5},
@@ -845,5 +845,22 @@ def test_a_short_qualifying_board_keeps_each_drivers_true_place():
             {"driver_id": "c", "q_exp_position": 3.2},
         ],
     }
-    html = rr.quali_board(report._quali_rows(pred))
-    assert "<div class='pos'>3</div>" in html and "<div class='pos'>2</div>" not in html
+    rows = report._quali_rows(pred)
+    assert [r["driver_id"] for r in rows] == ["a", "b", "c"], "the driver left off is listed in place"
+    assert [r["rank"] for r in rows] == [1, 2, 3] and rows[1].get("unlogged")
+    html = rr.quali_board(rows)
+    assert "<div class='pos'>2</div>" in html and "logged chances for ten drivers" in html
+
+
+def test_the_race_table_runs_in_expected_finishing_order():
+    """The table's first ten rows are the likeliest top ten, while the
+    favourite is still the likeliest winner."""
+    rows = [
+        {"driver_id": "a", "name": "A", "p_win": 0.30, "exp_position": 4.0},
+        {"driver_id": "b", "name": "B", "p_win": 0.20, "exp_position": 3.0},
+        {"driver_id": "c", "name": "C", "p_win": 0.004, "exp_position": 16.0},
+        {"driver_id": "d", "name": "D", "p_win": 0.003, "exp_position": 11.0},
+    ]
+    ordered = report._by_expected_finish(rows)
+    assert [r["driver_id"] for r in ordered] == ["b", "a", "d", "c"]
+    assert rows[0]["driver_id"] == "a", "the favourite comes from the win order, which is left alone"

@@ -424,25 +424,31 @@ QUALI_ORDER_GUARD = ("pole_logloss", "ndcg3", "ndcg5", "spearman", "position_err
 def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1) -> dict:
     """Two ways to make the qualifying model order the whole field better.
 
-    The live qualifying forecast gave backmarkers too good a chance of the
-    top ten, and one bad session moved a driver's recent average a lot. Tried:
+    With exponential ranking gains the qualifying forecast gave backmarkers
+    too good a chance of the top ten, and one bad session moved a driver's
+    recent average a lot. Tried against exponential gains:
       median form   the median, not the mean, of recent qualifying positions
       whole-field   ranking gains that grow linearly down the order, not
                     exponentially, so the back of the grid counts in training
-    Rule, fixed before any result was seen: a variant is kept only if, on the
+    Rule, fixed before any result was seen: a variant passes only if, on the
     tuning seasons, it is clearly better on one of QUALI_ORDER_KEEP and
     clearly worse on none of QUALI_ORDER_GUARD, and on the later seasons it
     is clearly worse on none of QUALI_ORDER_GUARD.
+
+    No variant passed: whole-field was clearly worse on NDCG@5 later. A full
+    backtest with it also named no more of the real top ten (7.79 against
+    7.87 of 10 on 2024 onward) and lost the clear pole-probability gain, so
+    exponential gains stay.
     """
     median = df.copy()
     for k in (3, 5):
         median[f"drv_avg_quali_{k}"] = features._prior_rolling(
             median, "driver_id", "quali_position", k, "median"
         )
-    whole_field = {"ndcg_exp_gain": False}
+    exponential, whole_field = {"ndcg_exp_gain": True}, {"ndcg_exp_gain": False}
     variants = {
-        "current": (df, None),
-        "median form": (median, None),
+        "exponential gains": (df, exponential),
+        "median form": (median, exponential),
         "whole-field": (df, whole_field),
         "median form + whole-field": (median, whole_field),
     }
@@ -454,8 +460,9 @@ def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1)
             frame, d0, settings=settings, n_seeds=n_seeds, retrain_every=retrain_every, params=params
         )
         results[name] = r[r["method"] == "model"]
-    decided = _paired_table({k: v[v["season"].between(d0, d1)] for k, v in results.items()}, "current", cols)
-    checked = _paired_table({k: v[v["season"] >= c0] for k, v in results.items()}, "current", cols)
+    base = "exponential gains"
+    decided = _paired_table({k: v[v["season"].between(d0, d1)] for k, v in results.items()}, base, cols)
+    checked = _paired_table({k: v[v["season"] >= c0] for k, v in results.items()}, base, cols)
     verdict = {}
     for d, c in zip(decided[1:], checked[1:]):
         passes = any(_clear(d, m) == "better" for m in QUALI_ORDER_KEEP) and not any(
@@ -465,7 +472,7 @@ def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1)
         verdict[d["variant"]] = {
             "passes_tuning": passes,
             "holds_later": holds,
-            "kept": passes and holds,
+            "passes_rule": passes and holds,
             "worse_later_on": [m for m in QUALI_ORDER_GUARD if _clear(c, m) == "worse"],
         }
     return {
@@ -477,6 +484,7 @@ def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1)
         decide_label: decided,
         check_label: checked,
         "verdict": verdict,
+        "in_use": base,
     }
 
 

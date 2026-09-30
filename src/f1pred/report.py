@@ -283,6 +283,15 @@ def coherent(prediction: dict, tol: float = 0.02) -> bool:
     return all(abs(float(row[0]) - float(win.get(d) or 0)) <= tol for d, row in zip(ids, matrix) if d in win)
 
 
+def _by_expected_finish(rows: list[dict]) -> list[dict]:
+    """The race table in expected finishing order, so its first ten rows are
+    the likeliest top ten. The favourite and the cars above it stay in order
+    of the chance to win."""
+    if rows and all(isinstance(r.get("exp_position"), (int, float)) for r in rows):
+        return sorted(rows, key=lambda r: r["exp_position"])
+    return rows
+
+
 def _quali_rows(prediction: dict) -> list[dict]:
     """The logged qualifying board, each row numbered by its place in the
     whole field's expected qualifying order.
@@ -296,9 +305,24 @@ def _quali_rows(prediction: dict) -> list[dict]:
     field = [f for f in prediction.get("field_probs") or [] if f.get("q_exp_position") is not None]
     if not field:
         return rows
-    order = sorted(field, key=lambda f: f["q_exp_position"])
-    rank = {f.get("driver_id"): i + 1 for i, f in enumerate(order)}
-    return [{**r, "rank": rank.get(r.get("driver_id"))} for r in rows]
+    logged = {r.get("driver_id"): r for r in rows}
+    names = {r.get("driver_id"): r.get("name") for r in prediction.get("race_board") or []}
+    out = []
+    for i, f in enumerate(sorted(field, key=lambda f: f["q_exp_position"])):
+        row = logged.get(f.get("driver_id"))
+        if row is None:
+            # Left off an older board: its place is known, its chances were not logged.
+            row = {
+                "driver_id": f.get("driver_id"),
+                "name": names.get(f.get("driver_id")) or f.get("name"),
+                "short": f.get("name"),
+                "team": f.get("team"),
+                "exp_position": f["q_exp_position"],
+                "grid": f.get("grid") if prediction.get("grid_known") else None,
+                "unlogged": True,
+            }
+        out.append({**row, "rank": i + 1})
+    return out
 
 
 def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
@@ -433,14 +457,14 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
         s.append(
             _section(
                 "Race forecast",
-                "Every driver's chances from 10,000 simulated races."
+                "Every driver's chances from 10,000 simulated races, in their expected finishing order."
                 + (
                     " Win, podium, top 5 and top 10 are all counted from the same simulated finishing "
                     "orders, so they always agree with each other."
                     if coherent(prediction)
                     else ""
                 ),
-                rr.race_board(rows, grid_known=bool(prediction.get("grid_known"))),
+                rr.race_board(_by_expected_finish(rows), grid_known=bool(prediction.get("grid_known"))),
                 band=True,
             )
         )

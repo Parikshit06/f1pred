@@ -296,7 +296,9 @@ def test_the_qualifying_order_experiment_is_quoted_and_not_adopted():
     later = next((rows for w, rows in q.items() if w.startswith("test")), None)
     if not later:
         pytest.skip("no qualifying-order experiment recorded")
-    assert not any(v["kept"] for v in q["verdict"].values()), "a variant passed: the model should change"
+    assert not any(v["passes_rule"] for v in q["verdict"].values()), (
+        "a variant passed: the model should change"
+    )
     r = next(x for x in later if x["variant"] == "whole-field")
     text = _readme()
     for m in ("position_error", "ndcg5"):
