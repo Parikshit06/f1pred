@@ -1142,8 +1142,8 @@
   ]
  },
  "provenance": {
-  "generated_at_utc": "2026-09-30T13:05:44+00:00",
-  "git_commit": "65c5c9feeeb1",
+  "generated_at_utc": "2026-09-30T17:03:58+00:00",
+  "git_commit": "4a4141dc20ab",
   "data": {
    "rows": {
     "raw_drivers": 221,
@@ -2545,7 +2545,7 @@
   "rule": "kept only if clearly better on the tuning seasons on one of pole_logloss, ndcg5, spearman, position_error, and clearly worse on none of pole_logloss, ndcg3, ndcg5, spearman, position_error, top10_overlap in either window",
   "tuning 2022-2023": [
    {
-    "variant": "current",
+    "variant": "exponential gains",
     "n_races": 44,
     "pole_logloss": 1.7408548873663272,
     "pole_hit": 0.4090909090909091,
@@ -2696,7 +2696,7 @@
   ],
   "test 2024-": [
    {
-    "variant": "current",
+    "variant": "exponential gains",
     "n_races": 63,
     "pole_logloss": 1.8492155497744083,
     "pole_hit": 0.30158730158730157,
@@ -2849,13 +2849,13 @@
    "median form": {
     "passes_tuning": false,
     "holds_later": true,
-    "kept": false,
+    "passes_rule": false,
     "worse_later_on": []
    },
    "whole-field": {
     "passes_tuning": true,
     "holds_later": false,
-    "kept": false,
+    "passes_rule": false,
     "worse_later_on": [
      "ndcg5"
     ]
@@ -2863,11 +2863,12 @@
    "median form + whole-field": {
     "passes_tuning": true,
     "holds_later": false,
-    "kept": false,
+    "passes_rule": false,
     "worse_later_on": [
      "ndcg5"
     ]
    }
-  }
+  },
+  "in_use": "exponential gains"
  }
 }
