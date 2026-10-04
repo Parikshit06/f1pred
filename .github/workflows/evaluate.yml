@@ -68,32 +68,46 @@ jobs:
       # second, stalling on jolpica's hourly budget somewhere in 2025 and
       # waiting for the window to reset: about ninety minutes. The seasons
       # before the current one never change, so they do not have to be
-      # re-derived from the API every time the cache expires - a published
+      # re-derived from the API every time the cache expires. A published
       # snapshot of the database is enough, and 2026 is re-fetched regardless.
       #
-      # The snapshot lives on a release rather than in git: it is a 10MB binary
-      # that would sit in every clone forever. Publish a new one with
-      #   gh release upload data-snapshot data/f1.duckdb --clobber
-      # or just attach the file to the release in the web UI. If it is missing
-      # the run still works, it is only slow.
-      - name: Seed the database if the cache was empty
+      # The snapshot is also the only way practice history reaches CI. FastF1
+      # cannot load F1's timing data from GitHub's runners, so those rows are
+      # fetched on a local machine and published here. A snapshot with more
+      # practice rows than the restored database replaces it, so publishing a
+      # new one is enough for every later run to pick it up.
+      #
+      # The snapshot lives on a release rather than in git: it is a binary
+      # that would sit in every clone forever. Publish a new one by zipping
+      # data/f1.duckdb as f1.duckdb.zip and attaching it to the data-snapshot
+      # release in the web UI, replacing the old file. If it is missing the run
+      # still works, it is only slow.
+      - name: Seed the database, or take a newer snapshot
         run: |
-          if [ -f data/f1.duckdb ]; then
-            echo "database restored from cache"; exit 0
-          fi
-          mkdir -p data
+          mkdir -p data /tmp/snap
           base=https://github.com/${{ github.repository }}/releases/download/data-snapshot
           # Zipped first: GitHub's own upload form refuses some extensions, so
           # a .zip is the one shape that is always accepted. Raw second, for
           # whichever of the two actually got published.
           if curl -fsSL "$base/f1.duckdb.zip" -o /tmp/snap.zip; then
-            unzip -o -j /tmp/snap.zip -d data/ >/dev/null
-            echo "seeded from $base/f1.duckdb.zip"
-          elif curl -fsSL "$base/f1.duckdb" -o data/f1.duckdb; then
-            echo "seeded from $base/f1.duckdb"
+            unzip -o -j /tmp/snap.zip -d /tmp/snap/ >/dev/null
           else
-            echo "no snapshot published - falling back to a full ingest"
-            rm -f data/f1.duckdb
+            curl -fsSL "$base/f1.duckdb" -o /tmp/snap/f1.duckdb || rm -f /tmp/snap/f1.duckdb
+          fi
+          practice() {
+            python -c "import sys, duckdb; print(duckdb.connect(sys.argv[1], read_only=True).execute('select count(*) from raw_session_pace').fetchone()[0])" "$1" 2>/dev/null || echo 0
+          }
+          have=0; [ -f data/f1.duckdb ] && have=$(practice data/f1.duckdb)
+          snap=0; [ -f /tmp/snap/f1.duckdb ] && snap=$(practice /tmp/snap/f1.duckdb)
+          echo "practice rows: restored database $have, snapshot $snap"
+          if [ -f /tmp/snap/f1.duckdb ] && { [ ! -f data/f1.duckdb ] || [ "$snap" -gt "$have" ]; }; then
+            rm -f data/f1.duckdb data/f1.duckdb.wal
+            mv /tmp/snap/f1.duckdb data/f1.duckdb
+            echo "seeded from the published snapshot"
+          elif [ -f data/f1.duckdb ]; then
+            echo "keeping the database restored from cache"
+          else
+            echo "no snapshot published, falling back to a full ingest"
           fi
           test -f data/f1.duckdb && ls -la data/f1.duckdb || true
 
@@ -109,12 +123,13 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
-      # The practice history the qualifying model is graded with. Resumable and
-      # rate-limited (FastF1 allows 500 requests an hour), so a run picks up
-      # where the last one, here or in predict.yml, stopped.
+      # The practice history the qualifying model is graded with. Tried in case
+      # the runner can reach F1's timing data. So far it never has, and the
+      # history arrives in the snapshot above instead. A session that comes
+      # back empty is never marked as done, so a failed attempt costs nothing.
       - name: Practice history (FastF1)
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 10
         run: python -m f1pred.cli ingest-fastf1 --history --seasons 2024-2026
 
       # Ingest applies the current finished/retired rule to rows it writes, but

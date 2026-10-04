@@ -162,9 +162,11 @@ steps: `predict.yml` across each race weekend (and deploys the site),
   backmarkers' chances of reaching the top ten in qualifying are too high. A
   fix that orders the whole field better cost accuracy at the front, so it
   is not used.
-- The after-practice forecast needs this weekend's practice times from FastF1.
-  So far in 2026 the scheduled runs have not managed to fetch them, so no
-  after-practice forecast has been logged yet. Each run now logs why.
+- The after-practice forecast needs this weekend's practice times from FastF1,
+  and FastF1 cannot load F1's timing data from GitHub's runners. So no
+  after-practice forecast has been logged in 2026. The practice history the
+  qualifying model learns from is fetched on a local machine and reaches the
+  scheduled runs through the published data snapshot.
 - Until the official grid is published, penalties are unknown and the
   qualifying order stands in. The forecast says so.
 - 63 test races separate the model from naive baselines. Against the
