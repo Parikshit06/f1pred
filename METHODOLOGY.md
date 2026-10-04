@@ -283,6 +283,9 @@ included.
   upgrades, correlated failures, safety-car timing.
 * The qualifying forecast orders the back of the grid loosely, so
   backmarkers' top-ten chances in qualifying are too high (section 6).
+* The after-practice forecast needs this weekend's FastF1 practice times. So
+  far in 2026 the scheduled runs have not fetched them, so no after-practice
+  forecast has been logged yet. Each run now logs every session's outcome.
 * Before the official grid is published, penalties are unknown and the
   qualifying order stands in.
 * The season projection assumes current form holds, widened by a calibrated

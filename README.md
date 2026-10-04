@@ -73,11 +73,11 @@ interval over races. "Inconclusive" means the interval includes zero.
 | | Win log loss | 1.201 | 1.341 (grid) | -0.141 (-0.358 to +0.062) | inconclusive |
 | | Podium Brier | 0.069 | 0.069 (grid) | -0.000 (-0.006 to +0.006) | inconclusive |
 | | Kendall | 0.521 | 0.549 (grid) | -0.028 (-0.054 to -0.002) | **grid better** |
-| Before qualifying | Win log loss | 1.740 | 2.128 (championship order) | -0.387 (-0.635 to -0.124) | **model better** |
-| | Podium Brier | 0.084 | 0.096 (championship order) | -0.011 (-0.018 to -0.004) | **model better** |
-| | Top-5 overlap | 3.71 of 5 | 3.44 of 5 (championship order) | +0.270 (+0.079 to +0.476) | **model better** |
-| Qualifying | Pole log loss | 1.677 | 2.089 (recent qualifying form) | -0.412 (-0.667 to -0.161) | **model better** |
-| | NDCG@5 | 0.859 | 0.814 (recent qualifying form) | +0.046 (+0.024 to +0.069) | **model better** |
+| Before qualifying | Win log loss | 1.723 | 2.128 (championship order) | -0.405 (-0.653 to -0.138) | **model better** |
+| | Podium Brier | 0.084 | 0.096 (championship order) | -0.011 (-0.019 to -0.003) | **model better** |
+| | Top-5 overlap | 3.70 of 5 | 3.44 of 5 (championship order) | +0.254 (+0.064 to +0.460) | **model better** |
+| Qualifying | Pole log loss | 1.707 | 2.108 (recent qualifying form) | -0.402 (-0.678 to -0.133) | **model better** |
+| | NDCG@5 | 0.854 | 0.810 (recent qualifying form) | +0.044 (+0.019 to +0.070) | **model better** |
 
 Once the grid is known, the model's win log loss is 0.141 lower than the
 grid's, but the interval runs from -0.36 to +0.06, and on one metric the grid
@@ -162,6 +162,9 @@ steps: `predict.yml` across each race weekend (and deploys the site),
   backmarkers' chances of reaching the top ten in qualifying are too high. A
   fix that orders the whole field better cost accuracy at the front, so it
   is not used.
+- The after-practice forecast needs this weekend's practice times from FastF1.
+  So far in 2026 the scheduled runs have not managed to fetch them, so no
+  after-practice forecast has been logged yet. Each run now logs why.
 - Until the official grid is published, penalties are unknown and the
   qualifying order stands in. The forecast says so.
 - 63 test races separate the model from naive baselines. Against the
