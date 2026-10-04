@@ -140,3 +140,23 @@ def test_lap_times_parse_in_both_spellings():
     assert jolpica.parse_lap_time_ms("23.4") == 23400
     assert jolpica.parse_lap_time_ms("") is None
     assert jolpica.parse_lap_time_ms("no time") is None
+
+
+def test_only_a_session_that_does_not_exist_is_settled_for_good(tmp_path, monkeypatch):
+    """Where the timing source can't be reached, a finished session loads with
+    no laps. That must stay retryable, or one bad run closes the history."""
+    from f1pred import config
+    from f1pred.ingest import fastf1_pull
+
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "f1.duckdb")
+    store.init_db()
+    with store.connect() as c:
+        store.log_ingest(c, "fastf1", "2024:14:FP1", "empty", "no laps")
+        store.log_ingest(c, "fastf1", "2024:14:FP2", "empty", "unavailable: ValueError('does not exist')")
+        store.log_ingest(c, "fastf1", "2024:14:FP3", "ok", "20 drivers")
+        store.log_ingest(c, "fastf1", "2026:3:FP2", "empty", "unavailable: ValueError('does not exist')")
+
+    assert not fastf1_pull._settled(2024, "2024:14:FP1"), "no laps is not proof of absence"
+    assert fastf1_pull._settled(2024, "2024:14:FP2")
+    assert fastf1_pull._settled(2024, "2024:14:FP3")
+    assert not fastf1_pull._settled(config.CURRENT_SEASON, "2026:3:FP2"), "the live season is always re-asked"

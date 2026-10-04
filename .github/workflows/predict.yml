@@ -22,6 +22,11 @@ on:
     - cron: "17 8,14 * * 1"   # Monday: grade the result, roll to the next
     - cron: "17 9 * * 3"      # Wednesday: log the next race's before-practice forecast
   workflow_dispatch:
+    inputs:
+      practice_history:
+        description: "Also fetch the practice history (2024 onward) from FastF1"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -125,14 +130,15 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-fastf1 --next
 
-      # The practice history the qualifying model is trained and graded on.
-      # Sessions already stored are skipped, so once complete this costs a
-      # schedule lookup. FastF1 allows 500 requests an hour, so a gap in the
-      # history is filled over a few runs rather than all at once.
-      - name: Practice history (FastF1)
+      # The practice history the qualifying model is trained and graded on,
+      # on request only (Run workflow, tick the box). Resumable, and FastF1
+      # allows 500 requests an hour, so a large gap takes a few runs.
+      - name: Practice history (FastF1, on request)
+        if: ${{ inputs.practice_history }}
         continue-on-error: true
         timeout-minutes: 20
         run: python -m f1pred.cli ingest-fastf1 --history --seasons 2024-2026
+
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they

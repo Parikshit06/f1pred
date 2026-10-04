@@ -40,8 +40,10 @@ SESSION_CODES = ["FP1", "FP2", "FP3"]
 # a rate limit, a dropped connection - is worth another try. Recording those as
 # "empty" is how every 2025 session came to be skipped forever: the first
 # backfill hit FastF1's 500 calls/hour limit and each refusal was filed as
-# "this session has no data".
-_ABSENT = ("does not exist", "no laps")
+# "this session has no data". "No laps" is not proof of absence either: where
+# the timing source can't be reached, a long-finished session loads with no
+# laps, and settling on that would close it for good.
+_ABSENT = ("does not exist",)
 
 MIN_STINT_LAPS = 5
 
@@ -50,9 +52,10 @@ def _setup_fastf1() -> Any:
     import fastf1
 
     fastf1.Cache.enable_cache(str(config.FASTF1_CACHE))
-    # FastF1 is chatty about missing data for older/odd sessions; we handle it.
+    # FastF1 is chatty about odd laps, but its warnings are also where it says
+    # why a session came back without data, so they stay visible.
     warnings.filterwarnings("ignore", module="fastf1")
-    logging.getLogger("fastf1").setLevel(logging.ERROR)
+    logging.getLogger("fastf1").setLevel(logging.WARNING)
     return fastf1
 
 
