@@ -65,7 +65,6 @@ jobs:
         with:
           path: |
             data/cache
-            data/fastf1_cache
             data/f1.duckdb*
           key: f1data-${{ github.run_id }}
           restore-keys: f1data-
@@ -115,13 +114,25 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
-      # Practice pace for this weekend only (FP1-FP3 per-driver aggregates).
-      # It feeds the qualifying forecast, where held-out testing showed it
-      # helps; nothing historical is downloaded here. Optional like OpenF1:
-      # without it the weekend simply keeps its before-practice forecast.
+      # Practice pace for this weekend (FP1-FP3 per-driver aggregates). It
+      # feeds the qualifying forecast, where held-out testing showed it helps.
+      # Optional like OpenF1: without it the weekend keeps its before-practice
+      # forecast. FastF1's own web cache is deliberately not restored between
+      # runs: only the per-driver numbers are kept, in the database, so a
+      # response fetched before or during a session can never be served again
+      # in place of the finished one. Every session's outcome is logged.
       - name: Practice pace (FastF1, this weekend)
         continue-on-error: true
         run: python -m f1pred.cli ingest-fastf1 --next
+
+      # The practice history the qualifying model is trained and graded on.
+      # Sessions already stored are skipped, so once complete this costs a
+      # schedule lookup. FastF1 allows 500 requests an hour, so a gap in the
+      # history is filled over a few runs rather than all at once.
+      - name: Practice history (FastF1)
+        continue-on-error: true
+        timeout-minutes: 20
+        run: python -m f1pred.cli ingest-fastf1 --history --seasons 2024-2026
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they

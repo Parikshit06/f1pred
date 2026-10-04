@@ -146,6 +146,13 @@ def _settled(season: int, scope: str) -> bool:
     return absent and season != config.CURRENT_SEASON
 
 
+def _record(scope: str, status: str, detail: str) -> None:
+    """Log an attempt and say so: a run that fetches nothing should show why."""
+    with connect() as con:
+        log_ingest(con, "fastf1", scope, status, detail[:400])
+    (log.warning if status == "failed" else log.info)("fastf1 %s: %s, %s", scope, status, detail[:200])
+
+
 def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = False) -> int:
     scope = f"{season}:{rnd}:{code}"
     if not force and _settled(season, scope):
@@ -154,12 +161,10 @@ def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = 
     try:
         session = fastf1.get_session(season, rnd, code)
     except ValueError as exc:  # "Session type 'FP3' does not exist for this event"
-        with connect() as con:
-            log_ingest(con, "fastf1", scope, "empty", f"unavailable: {exc!r}"[:400])
+        _record(scope, "empty", f"unavailable: {exc!r}")
         return 0
     except Exception as exc:  # noqa: BLE001 - schedule lookup failed; try again next run
-        with connect() as con:
-            log_ingest(con, "fastf1", scope, "failed", repr(exc)[:400])
+        _record(scope, "failed", repr(exc))
         return 0
 
     try:
@@ -167,9 +172,7 @@ def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = 
         # aggregates are kept; the laps themselves stay in FastF1's cache.
         session.load(laps=True, telemetry=False, weather=False, messages=False)
     except Exception as exc:  # noqa: BLE001 - rate limit or network: retryable
-        with connect() as con:
-            log_ingest(con, "fastf1", scope, "failed", repr(exc)[:400])
-        log.warning("fastf1 %s failed (will retry next run): %s", scope, exc)
+        _record(scope, "failed", f"will retry next run: {exc!r}")
         return 0
 
     try:
@@ -177,8 +180,7 @@ def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = 
     except Exception:  # noqa: BLE001 - a session not yet run "loads" but has no laps
         laps = None
     if laps is None or laps.empty:
-        with connect() as con:
-            log_ingest(con, "fastf1", scope, "empty", "no laps")
+        _record(scope, "empty", "no laps")
         return 0
 
     code_map = _code_to_driver_id(season)
@@ -209,8 +211,7 @@ def ingest_session(fastf1: Any, season: int, rnd: int, code: str, force: bool = 
 
     with connect() as con:
         n = upsert(con, "raw_session_pace", df, ["season", "round", "session", "driver_id"])
-        log_ingest(con, "fastf1", scope, "ok" if n else "empty", f"{n} drivers" if n else "no laps mapped")
-
+    _record(scope, "ok" if n else "empty", f"{n} drivers" if n else "no laps mapped")
     return n
 
 
@@ -236,6 +237,28 @@ def ingest(seasons: list[int], force: bool = False, rounds: list[int] | None = N
             for code in SESSION_CODES:
                 got += ingest_session(fastf1, season, rnd, code, force=force)
             log.info("fastf1 %d r%-2d: %d driver-sessions", season, rnd, got)
+
+
+def ingest_history(seasons: list[int]) -> None:
+    """Practice pace for every race already run in these seasons.
+
+    The qualifying model is trained and graded on practice from past weekends,
+    so the database has to hold that history, not only the weekend in progress.
+    Resumable: a session already stored is skipped, so a run cut short by the
+    rate limit picks up where it stopped.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    for season in seasons:
+        with connect(read_only=True) as con:
+            run = [
+                r[0]
+                for r in con.execute(
+                    "SELECT round FROM raw_races WHERE season = ? AND race_start_utc < ?::TIMESTAMP ORDER BY round",
+                    [season, now],
+                ).fetchall()
+            ]
+        if run:
+            ingest([season], rounds=run)
 
 
 def ingest_next_weekend() -> None:

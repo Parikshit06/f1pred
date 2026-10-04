@@ -14,6 +14,7 @@ from __future__ import annotations
 import html
 import json
 from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 
 # Constructor colours as (light surface, dark surface) pairs. Raw liveries fail
 # contrast - Mercedes teal is 1.8:1 on white - so each team gets a lightness-
@@ -97,15 +98,19 @@ def esc(x) -> str:
 
 
 def pct(x: float, dp: int = 1) -> str:
-    """A probability as a percentage. Anything that rounds to zero is shown as
-    below the smallest printable step rather than as 0, which reads as impossible."""
-    floor = 10**-dp
-    if 0 < x * 100 < floor / 2 or (x == 0):
-        return f"&lt;{floor:g}%"
-    # The mirror image: short of certain never prints as 100%.
-    if x < 1 and x * 100 >= 100 - floor / 2:
-        return f"&gt;{100 - floor:g}%"
-    return f"{x * 100:.{dp}f}%"
+    """A probability as a percentage, rounded half up. Anything that rounds to
+    zero is shown as below the smallest printable step rather than as 0, which
+    reads as impossible, and anything short of certain never prints as 100%.
+
+    Rounding is decided first and the bounds checked on the rounded value:
+    Python's own formatting rounds halves to even, so 0.5% printed as 0%."""
+    step = Decimal(1).scaleb(-dp)
+    shown = Decimal(str(round(float(x) * 100, 9))).quantize(step, rounding=ROUND_HALF_UP)
+    if shown <= 0:
+        return f"&lt;{step}%"
+    if x < 1 and shown >= 100:
+        return f"&gt;{100 - step}%"
+    return f"{shown}%"
 
 
 # ---------------------------------------------------------------------------

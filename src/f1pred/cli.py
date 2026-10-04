@@ -61,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("ingest-fastf1", help="practice pace per driver (FP1-FP3 aggregates)")
     p.add_argument("--seasons", default="2024-2026")
     p.add_argument("--next", action="store_true", help="only the race weekend in progress")
+    p.add_argument("--history", action="store_true", help="every race already run in --seasons")
     p.add_argument("--force", action="store_true")
 
     sub.add_parser("init", help="create the database schema")
@@ -163,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.next:
             fastf1_pull.ingest_next_weekend()
+        elif args.history:
+            fastf1_pull.ingest_history(_parse_seasons(args.seasons))
         else:
             seasons = _parse_seasons(args.seasons)
             print(f"FastF1: {seasons[0]}-{seasons[-1]}. Cache goes to {config.FASTF1_CACHE}")
@@ -240,14 +243,13 @@ def main(argv: list[str] | None = None) -> int:
         season = args.season if not args.next else None
         rnd = args.round if not args.next else None
         p = predict.run(season=season, rnd=rnd, n_sims=args.sims)
-        path = p.save(force=getattr(args, "force_log", False))
+        force = getattr(args, "force_log", False)
+        prior = None if force else p.existing()
+        path = p.save(force=force)
         if p.season_outlook:
             config.SEASON_NOW.write_text(json.dumps(p.season_outlook, default=str))
 
         stage = "grid known" if p.grid_known else "before qualifying"
-        if path is None:
-            ahead = p.days_out() or 0.0
-            print(f"\nnot logged: {ahead:.1f} days before the race, outside the logging window")
         print(f"\n{p.race_name}  ({stage})")
         print(f"trained on {p.meta['n_training_races']} races\n")
         print(f"QUALIFYING - top {config.TOP_N}")
@@ -261,7 +263,16 @@ def main(argv: list[str] | None = None) -> int:
                 f"  {i:2}. {d['name']:<24} win {d['p_win'] * 100:5.1f}%"
                 f"   podium {d['p_podium'] * 100:5.1f}%   points {d['p_top10'] * 100:5.1f}%"
             )
-        print(f"\nlogged to {path}" if path else "\nnot logged (see above); the page still renders")
+        if prior is not None:
+            print(f"\nalready logged at this stage, left unchanged: {prior.name}")
+        elif path is not None:
+            print(f"\nlogged to {path}")
+        else:
+            ahead = p.days_out() or 0.0
+            print(
+                f"\nnot logged: {ahead:.1f} days before the race, outside the logging window or "
+                "waiting for the last practice session. The page still renders."
+            )
         return 0
 
     if args.command == "bias":

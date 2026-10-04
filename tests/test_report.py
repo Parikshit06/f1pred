@@ -856,3 +856,24 @@ def test_the_race_table_runs_in_expected_finishing_order():
     ordered = report._by_expected_finish(rows)
     assert [r["driver_id"] for r in ordered] == ["b", "a", "d", "c"]
     assert rows[0]["driver_id"] == "a", "the favourite comes from the win order, which is left alone"
+
+
+@pytest.mark.parametrize(
+    "x,dp,shown",
+    [
+        (0.005, 0, "1%"),
+        (0.0049, 0, "&lt;1%"),
+        (0.0, 1, "&lt;0.1%"),
+        (0.0005, 1, "0.1%"),
+        (0.025, 0, "3%"),
+        (0.015, 0, "2%"),
+        (0.994, 0, "99%"),
+        (0.995, 0, "&gt;99%"),
+        (0.9995, 1, "&gt;99.9%"),
+        (0.328, 1, "32.8%"),
+    ],
+)
+def test_a_chance_is_rounded_half_up_and_never_shown_as_zero(x, dp, shown):
+    """0.5% once printed as 0% because Python rounds halves to even. A chance
+    that exists must never read as impossible, nor short of certain as 100%."""
+    assert rr.pct(x, dp) == shown
