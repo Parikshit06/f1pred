@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from . import config, probability
+from . import config, penalties, probability
 
 PACE_NOISE = 0.55
 SAFETY_CAR_SPREAD = 1.9
@@ -42,6 +42,7 @@ class SimInputs:
     dnf_prob: np.ndarray  # per driver, 0..1
     grid: np.ndarray | None = None  # known grid, or None before qualifying
     grid_scores: np.ndarray | None = None  # quali-model scores, used when grid is None
+    grid_penalty: np.ndarray | None = None  # places dropped on each drawn grid (penalties.py)
     overtaking_score: float = DEFAULT_OVERTAKING
     safety_car_prob: float = DEFAULT_SAFETY_CAR
 
@@ -79,6 +80,8 @@ def simulate_matrix(
         orders = probability.sample_orders(rng, inputs.grid_scores, grid_temperature, n_sims)
         grid = np.empty((n_sims, n))
         grid[np.arange(n_sims)[:, None], orders] = np.arange(1, n + 1)[None, :]
+        if inputs.grid_penalty is not None:
+            grid = penalties.apply(grid, inputs.grid_penalty)
     else:
         grid = np.full((n_sims, n), (n + 1) / 2.0)
 

@@ -52,6 +52,20 @@ no two cars in one slot, every driver entered in this race (otherwise it is a
 stale grid from another session), at least 90% coverage. Pit-lane starters go
 to the back of the grid. They had been read as grid 0, ahead of pole.
 
+**Penalties announced in advance** (`penalties.py`): a team can confirm days
+ahead that a car takes a new power unit and starts from the back, long before
+the official grid exists. `grid_penalties.json` lists such penalties, entered
+by hand, each with the announcement it came from. They move the car down the
+projected grid and every grid drawn before qualifying, and the qualifying
+order after it, as the stewards would: N places back lands the car behind the
+one that qualified there, and back-of-grid starters keep their qualifying
+order. They are never applied to an official grid, which has them already, or
+to the training history, where the real grid is known. The qualifying
+forecast is unchanged, because a penalty moves where a car starts, not where
+it qualifies. A penalty announced after a forecast was logged is new
+information, so the next run logs a new forecast for that stage beside the
+earlier one, which stays as it was.
+
 `make validate` runs 21 checks before anything is modelled: coverage,
 referential integrity, positions, the retirement flag against laps completed,
 grid slots, and time ordering (practice before qualifying and the race).
@@ -289,8 +303,9 @@ included.
   after-practice forecast has been logged in 2026. The practice history used
   for training and evaluation is fetched locally and reaches the scheduled
   runs through the published data snapshot.
-* Before the official grid is published, penalties are unknown and the
-  qualifying order stands in.
+* Before the official grid is published, only penalties announced in advance
+  and entered in `grid_penalties.json` are applied. Any other penalty is
+  missed until the official grid appears.
 * The season projection assumes current form holds, widened by a calibrated
   but simple pace-drift term.
 * Practice data covers 59 weekends (2024-26). Its gain is clear on position

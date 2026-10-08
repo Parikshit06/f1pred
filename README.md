@@ -167,8 +167,11 @@ steps: `predict.yml` across each race weekend (and deploys the site),
   after-practice forecast has been logged in 2026. The practice history the
   qualifying model learns from is fetched on a local machine and reaches the
   scheduled runs through the published data snapshot.
-- Until the official grid is published, penalties are unknown and the
-  qualifying order stands in. The forecast says so.
+- Until the official grid is published, only penalties a team has already
+  announced are known. Those are entered by hand in `grid_penalties.json`,
+  each with its source, and move the car down every grid the forecast has to
+  guess. Any other penalty is missed until the official grid appears. The
+  forecast says which applied.
 - 63 test races separate the model from naive baselines. Against the
   calibrated starting grid it is level on probabilities and behind on ordering
   the field.

@@ -16,7 +16,18 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import backtest, championship, config, features, model, probability, provenance, simulate, weekend
+from . import (
+    backtest,
+    championship,
+    config,
+    features,
+    model,
+    penalties,
+    probability,
+    provenance,
+    simulate,
+    weekend,
+)
 from .store import connect
 
 log = logging.getLogger(__name__)
@@ -66,9 +77,28 @@ class Prediction:
         return config.PREDICTIONS / f"{self.season}-{self.round:02d}-{self.tag()}-{stamp}.json"
 
     def existing(self) -> Path | None:
-        """An earlier forecast for this race at this stage, if there is one."""
+        """An earlier forecast for this race at this stage, if there is one.
+
+        A grid penalty announced after the latest of them is new information,
+        not a retry, so it reopens the stage: the next forecast is logged
+        beside the earlier ones, which stay as they were.
+        """
         matches = sorted(config.PREDICTIONS.glob(f"{self.season}-{self.round:02d}-{self.tag()}-*.json"))
-        return matches[0] if matches else None
+        if not matches or self.new_penalties_since(matches[-1]):
+            return None
+        return matches[0]
+
+    def new_penalties_since(self, earlier: Path) -> set[str]:
+        """Drivers this forecast applies a grid penalty to that `earlier` did not."""
+
+        def drivers(meta: dict) -> set[str]:
+            return {p["driver_id"] for p in meta.get("grid_penalties") or []}
+
+        try:
+            before = drivers(json.loads(earlier.read_text()).get("meta") or {})
+        except (OSError, json.JSONDecodeError):
+            return set()
+        return drivers(self.meta) - before
 
     def days_out(self) -> float | None:
         """How far ahead of the race this forecast is being made."""
@@ -87,7 +117,8 @@ class Prediction:
 
         One file per race per stage keeps the record honest - a second pre-quali
         file from a later run would look like the forecast was retried until it
-        looked good. It also lets the workflow run often without littering.
+        looked good. It also lets the workflow run often without littering. The
+        one exception is a newly announced grid penalty (see existing).
         """
         prior = None if force else self.existing()
         if prior is not None:
@@ -433,15 +464,27 @@ def run(
         race[f"q_{col}"] = q.column(col)
 
     # ---- race ------------------------------------------------------------
+    # Penalties confirmed ahead of the official grid move the penalised car
+    # down whichever grid stands in for it. The official grid has them already.
+    announced = penalties.for_race(season, rnd)
+    grid_source = _dominant(race["grid_source"]) if known_grid else "projected"
+    applied = announced if grid_source in ("projected", "qualifying") else []
+    drops = penalties.places_for(race["driver_id"].tolist(), applied)
     if known_grid:
         scored = race
+        if applied:
+            race["grid"] = penalties.apply(simulate.starting_grid(race["grid"]), drops)
     else:
         scored = backtest.projected_weekend(race, race["quali_score"].to_numpy())
+        if applied:
+            scored["grid"] = penalties.apply(scored["grid"].to_numpy(), drops)
         race["grid"] = scored["grid"].to_numpy()  # shown as the projected start
     race["score"] = race_model.score(scored)
     inputs = simulate.race_inputs(
         scored, race["score"].to_numpy(), grid_known=known_grid, quali_scores=race["quali_score"].to_numpy()
     )
+    if applied and not known_grid:
+        inputs.grid_penalty = drops
     # Grids drawn before qualifying use the tuned qualifying temperature, and
     # the qualifying board its trailing refit: each exactly as it is graded
     # (backtest.walk_forward and backtest.walk_forward_quali).
@@ -539,7 +582,18 @@ def run(
         season_outlook=_season_outlook(race, names, season, rnd),
         meta={
             "stage": stage,
-            "grid_source": _dominant(race["grid_source"]) if known_grid else "projected",
+            "grid_source": grid_source,
+            "grid_penalties": [
+                {
+                    "driver_id": p.driver_id,
+                    "name": names.get(p.driver_id, (p.driver_id, p.driver_id))[1],
+                    "places": p.places,
+                    "reason": p.reason,
+                    "source": p.source,
+                    "announced": p.announced,
+                }
+                for p in applied
+            ],
             "entry_source": _dominant(race["entry_source"]),
             "trained_through": list(race_model.trained_through),
             "n_training_races": int(history["race_seq"].nunique()),
