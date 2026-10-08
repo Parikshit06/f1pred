@@ -1,5 +1,5 @@
 {
- "note": "Walk-forward throughout; one XGBoost seed per model (the headline uses five) and, for the ablation and feature-definition runs, a refit every second race, so that every arm of an experiment is fitted identically. Differences are race-paired with 95% bootstrap intervals.",
+ "note": "Walk-forward throughout. One XGBoost seed per model (the headline uses five) and, for the ablation and feature-definition runs, a refit every second race, so that every arm of an experiment is fitted identically. Differences are race-paired with 95% bootstrap intervals.",
  "settings": {
   "temperature": 0.35,
   "blend_weight": 0.7,
@@ -1142,28 +1142,28 @@
   ]
  },
  "provenance": {
-  "generated_at_utc": "2026-09-30T17:03:58+00:00",
-  "git_commit": "4a4141dc20ab",
+  "generated_at_utc": "2026-10-08T10:17:19+00:00",
+  "git_commit": "ac6c62878ac2",
   "data": {
    "rows": {
     "raw_drivers": 221,
     "raw_forecast": 0,
     "raw_openf1_entries": 0,
     "raw_openf1_grid": 0,
-    "raw_pitstops": 6532,
-    "raw_qualifying": 3780,
+    "raw_pitstops": 6605,
+    "raw_qualifying": 3802,
     "raw_races": 196,
-    "raw_results": 3788,
-    "raw_session_pace": 1246,
+    "raw_results": 3810,
+    "raw_session_pace": 3748,
     "raw_session_weather": 63,
     "raw_sprint": 590,
-    "raw_standings": 3928
+    "raw_standings": 3951
    },
    "results_through": [
     2026,
-    15
+    16
    ],
-   "results_hash": "2aa8f5afb051"
+   "results_hash": "d9ad5b9adbde"
   },
   "software": {
    "python": "3.12.3",
@@ -2870,5 +2870,253 @@
    }
   },
   "in_use": "exponential gains"
+ },
+ "circuit_type": {
+  "tuning 2022-2023": {
+   "post_quali": [
+    {
+     "variant": "full model",
+     "n_races": 44,
+     "ndcg3": 0.8598643873000722,
+     "ndcg5": 0.8860538610667953,
+     "winner_hit": 0.6363636363636364,
+     "spearman": 0.6129528366370471,
+     "win_logloss": 0.8395299448411246,
+     "podium_brier": 0.07067700662803598,
+     "top10_brier": 0.16552107839619115
+    },
+    {
+     "variant": "+ circuit type",
+     "n_races": 44,
+     "ndcg3": 0.8493932489155308,
+     "ndcg5": 0.8852219598547763,
+     "winner_hit": 0.6363636363636364,
+     "spearman": 0.6091934381408065,
+     "win_logloss": 0.8513064316685308,
+     "podium_brier": 0.07292971330962014,
+     "top10_brier": 0.1653756130450368,
+     "ndcg3_diff": -0.010471138384541527,
+     "ndcg3_ci": [
+      -0.023759188163367268,
+      0.002709674480860245
+     ],
+     "ndcg5_diff": -0.0008319012120192769,
+     "ndcg5_ci": [
+      -0.008313045722042051,
+      0.007111084347239526
+     ],
+     "winner_hit_diff": 0.0,
+     "winner_hit_ci": [
+      0.0,
+      0.0
+     ],
+     "spearman_diff": -0.003759398496240604,
+     "spearman_ci": [
+      -0.011380724538619259,
+      0.004033663704716342
+     ],
+     "win_logloss_diff": 0.01177648682740612,
+     "win_logloss_ci": [
+      -0.03945288915054831,
+      0.06508514224848282
+     ],
+     "podium_brier_diff": 0.002252706681584158,
+     "podium_brier_ci": [
+      -0.0006657017359515319,
+      0.005123511794982757
+     ],
+     "top10_brier_diff": -0.0001454653511543224,
+     "top10_brier_ci": [
+      -0.002107858207130788,
+      0.0018344094169806928
+     ]
+    }
+   ],
+   "pre_quali": [
+    {
+     "variant": "full model",
+     "n_races": 44,
+     "ndcg3": 0.8073999517669026,
+     "ndcg5": 0.8561715977954865,
+     "winner_hit": 0.6590909090909091,
+     "spearman": 0.5624401913875597,
+     "win_logloss": 1.0459461893662922,
+     "podium_brier": 0.09627467122777959,
+     "top10_brier": 0.18040927368250723
+    },
+    {
+     "variant": "+ circuit type",
+     "n_races": 44,
+     "ndcg3": 0.7951815492073778,
+     "ndcg5": 0.8538235469950429,
+     "winner_hit": 0.6818181818181818,
+     "spearman": 0.5618933697881064,
+     "win_logloss": 1.0640765656576958,
+     "podium_brier": 0.0957948006459468,
+     "top10_brier": 0.18077902621109956,
+     "ndcg3_diff": -0.012218402559524855,
+     "ndcg3_ci": [
+      -0.028553055215308414,
+      0.0037840376167638653
+     ],
+     "ndcg5_diff": -0.0023480508004437924,
+     "ndcg5_ci": [
+      -0.010717917220073522,
+      0.007238538364822874
+     ],
+     "winner_hit_diff": 0.022727272727272728,
+     "winner_hit_ci": [
+      0.0,
+      0.06818181818181818
+     ],
+     "spearman_diff": -0.0005468215994531917,
+     "spearman_ci": [
+      -0.007621326042378685,
+      0.006938653451811335
+     ],
+     "win_logloss_diff": 0.018130376291403273,
+     "win_logloss_ci": [
+      -0.020804981985840493,
+      0.05430703424958043
+     ],
+     "podium_brier_diff": -0.0004798705818328051,
+     "podium_brier_ci": [
+      -0.0028403623614065027,
+      0.00184119781950147
+     ],
+     "top10_brier_diff": 0.00036975252859239115,
+     "top10_brier_ci": [
+      -0.0014621997536199188,
+      0.0022047132507314934
+     ]
+    }
+   ]
+  },
+  "test 2024-": {
+   "post_quali": [
+    {
+     "variant": "full model",
+     "n_races": 64,
+     "ndcg3": 0.8554002502409855,
+     "ndcg5": 0.8900361590019013,
+     "winner_hit": 0.59375,
+     "spearman": 0.6591938560581295,
+     "win_logloss": 1.21798752925681,
+     "podium_brier": 0.06766306719509012,
+     "top10_brier": 0.14991740843851026
+    },
+    {
+     "variant": "+ circuit type",
+     "n_races": 64,
+     "ndcg3": 0.8445030135639606,
+     "ndcg5": 0.8816160670521832,
+     "winner_hit": 0.53125,
+     "spearman": 0.6509456230744846,
+     "win_logloss": 1.201836036309655,
+     "podium_brier": 0.06911647046003497,
+     "top10_brier": 0.1510243003092454,
+     "ndcg3_diff": -0.010897236677025017,
+     "ndcg3_ci": [
+      -0.028594973474076496,
+      0.006880875094351647
+     ],
+     "ndcg5_diff": -0.008420091949718028,
+     "ndcg5_ci": [
+      -0.0187181388799303,
+      0.0023296446989121266
+     ],
+     "winner_hit_diff": -0.0625,
+     "winner_hit_ci": [
+      -0.15625,
+      0.03125
+     ],
+     "spearman_diff": -0.008248232983644872,
+     "spearman_ci": [
+      -0.015417699077238547,
+      -0.0010626732035127246
+     ],
+     "win_logloss_diff": -0.01615149294715519,
+     "win_logloss_ci": [
+      -0.08912539247929128,
+      0.054357011611942715
+     ],
+     "podium_brier_diff": 0.001453403264944856,
+     "podium_brier_ci": [
+      -0.0008178123101299868,
+      0.0037438832772555075
+     ],
+     "top10_brier_diff": 0.0011068918707351333,
+     "top10_brier_ci": [
+      -0.0006963592122972981,
+      0.002960658659581923
+     ]
+    }
+   ],
+   "pre_quali": [
+    {
+     "variant": "full model",
+     "n_races": 64,
+     "ndcg3": 0.7626857732456371,
+     "ndcg5": 0.8350794958955712,
+     "winner_hit": 0.34375,
+     "spearman": 0.5798120084054008,
+     "win_logloss": 1.7623434920180385,
+     "podium_brier": 0.08480375089857993,
+     "top10_brier": 0.17752913810132814
+    },
+    {
+     "variant": "+ circuit type",
+     "n_races": 64,
+     "ndcg3": 0.7613994214996687,
+     "ndcg5": 0.8324561860703006,
+     "winner_hit": 0.328125,
+     "spearman": 0.5723131011818082,
+     "win_logloss": 1.7012398344399149,
+     "podium_brier": 0.08447466356345745,
+     "top10_brier": 0.1788320478459944,
+     "ndcg3_diff": -0.0012863517459683971,
+     "ndcg3_ci": [
+      -0.025253590756552858,
+      0.021861452073107756
+     ],
+     "ndcg5_diff": -0.0026233098252706442,
+     "ndcg5_ci": [
+      -0.014902023463599617,
+      0.010048384566030771
+     ],
+     "winner_hit_diff": -0.015625,
+     "winner_hit_ci": [
+      -0.078125,
+      0.046875
+     ],
+     "spearman_diff": -0.007498907223592593,
+     "spearman_ci": [
+      -0.01868168947876115,
+      0.0035954073517538796
+     ],
+     "win_logloss_diff": -0.06110365757812357,
+     "win_logloss_ci": [
+      -0.13018806421581097,
+      0.004541408041402856
+     ],
+     "podium_brier_diff": -0.0003290873351224897,
+     "podium_brier_ci": [
+      -0.0024620028513030593,
+      0.0016610230224224896
+     ],
+     "top10_brier_diff": 0.001302909744666274,
+     "top10_brier_ci": [
+      -0.00021198731647803517,
+      0.0027705282272899078
+     ]
+    }
+   ]
+  },
+  "rule": "kept only if clearly better on the tuning seasons on one of win_logloss, ndcg5 at either stage, and clearly worse on none of win_logloss, ndcg3, ndcg5, podium_brier at either stage in either window",
+  "verdict": {
+   "passes_tuning": false,
+   "worse_on": [],
+   "passes_rule": false
+  }
  }
 }
