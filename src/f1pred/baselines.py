@@ -5,9 +5,9 @@ own, so the question a model has to answer is what it adds beyond it.
 
 Each baseline is an ordering of the field. Its probabilities are made the same
 way as the model's: Plackett-Luce over -log(rank), with a temperature fitted by
-log loss on earlier races only. A baseline given a fixed, hand-picked decay -
-as this project once did - loses on log loss because nobody tuned it, and the
-model's lead on probability is then partly an artefact.
+log loss on earlier races only. A baseline given a fixed, hand-picked decay
+loses on log loss because nobody tuned it, and the model's lead on probability
+is then partly an artefact.
 
     grid          the official starting grid, pole first
     championship  championship order going into the race

@@ -16,9 +16,8 @@ The matrix mixes two models of the same race:
 
 The mixing weight is fitted on the tuning seasons. A mixture of two matrices
 whose rows and columns sum to one has the same property, which is what keeps
-every published number consistent. (The version before this blended only
-P(win) and floored the other bands afterwards, so the bands no longer summed
-to 3, 5 and 10.)
+every published number consistent. Blending only P(win) and adjusting the
+other bands afterwards would not: the bands would stop summing to 3, 5 and 10.
 
 A small uniform share (SMOOTHING) is mixed in last, so no driver in the race
 is ever given exactly zero - Monte Carlo counts produce zeros for anyone never

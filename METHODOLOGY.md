@@ -60,11 +60,18 @@ projected grid and every grid drawn before qualifying, and the qualifying
 order after it, as the stewards would: N places back lands the car behind the
 one that qualified there, and back-of-grid starters keep their qualifying
 order. They are never applied to an official grid, which has them already, or
-to the training history, where the real grid is known. The qualifying
-forecast is unchanged, because a penalty moves where a car starts, not where
-it qualifies. A penalty announced after a forecast was logged is new
-information, so the next run logs a new forecast for that stage beside the
-earlier one, which stays as it was.
+to the training history, where the real grid is known. A penalty announced
+after a forecast was logged is new information, so the next run logs a new
+forecast for that stage beside the earlier one, which stays as it was.
+
+A back-of-grid penalty changes qualifying too, because there is little left to
+qualify for. Of 21 front-runners (recent qualifying average in the top six)
+who started from the back since 2018, two in three qualified three or more
+places below their form, against one in six on a normal weekend, and only
+half reached the top ten, against 94%. Their qualifying forecast is therefore
+a mix of the usual lap and a lap held back to about 14th, weighted by that
+excess (0.6). Place penalties are left alone, because the grid still depends
+on the lap.
 
 `make validate` runs 21 checks before anything is modelled: coverage,
 referential integrity, positions, the retirement flag against laps completed,
@@ -152,8 +159,8 @@ anywhere.
 
 **Baselines** get probabilities the same way the model does: Plackett-Luce over
 `-log(rank)` with a temperature fitted on earlier races. The grid baseline is
-the one that matters. An earlier version gave it a fixed, hand-picked decay,
-which made the model's lead on log loss look larger than it was.
+the one that matters. A fixed, hand-picked decay would make the model's lead
+on log loss look larger than it is.
 
 **Metrics.** Ranking: NDCG@3, NDCG@5, winner called, podium and top-5 overlap,
 Spearman, Kendall. Probability: win log loss, win Brier (over the field),
@@ -251,10 +258,10 @@ caused a result.
 The rest of the season is simulated 10,000 times with the race noise model,
 sprints included (3-2-1 in 2021, 8-1 from 2022, from the calendar). Each
 driver's strength is the median of the model's own scores for their last eight
-real weekends, each scored on that race's full field. An earlier version
-scored a synthetic "typical weekend", which copied recent form into the
-circuit columns (counting it twice) and carried each driver's teammate gap.
-Against that old method, on the 2019–22 title-backtest checkpoints the new one
+real weekends, each scored on that race's full field. The alternative was to
+score a synthetic "typical weekend", which copies recent form into the
+circuit columns (counting it twice) and carries each driver's teammate gap.
+Against that alternative, on the 2019–22 title-backtest checkpoints the new one
 was clearly better on final driver points and on the champion's probability,
 and on 2023– it was clearly better on the final gap between teammates and level
 on the rest (`season_projection` in `reports/experiments.json`). Points
@@ -306,6 +313,11 @@ included.
 * Before the official grid is published, only penalties announced in advance
   and entered in `grid_penalties.json` are applied. Any other penalty is
   missed until the official grid appears.
+* A fast car starting from the back is rare in training: 21 front-runners
+  since 2018. The ranker barely holds the start against it and the
+  simulation does, so the blend relies on the two balancing out. Against
+  those 21 races (2 wins, 6 podiums, 15 top tens) they roughly do, but that
+  is too few to say how well calibrated such a forecast is.
 * The season projection assumes current form holds, widened by a calibrated
   but simple pace-drift term.
 * Practice data covers 59 weekends (2024-26). Its gain is clear on position

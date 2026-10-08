@@ -11,8 +11,15 @@ grid_penalties.json lists the penalties confirmed so far, each with where it
 was announced. They move a car down every grid the forecast guesses. They are
 never applied to an official grid, which already includes them, and never to
 the history the models learn from, where the real starting grid is known.
-Qualifying is unaffected: a penalty moves where a car starts, not where it
-qualifies.
+A back-of-grid penalty also changes qualifying, because there is little left
+to qualify for. Front-runners (recent qualifying average in the top six) who
+started from the back, 2018-2026: 21 weekends. Two in three qualified three or
+more places below their form, against one in six on a normal weekend (807),
+and only half reached the top ten, against 94%. So their qualifying forecast is
+a mix: the usual lap, or a lap held back to about 14th of 20, which is where
+those drivers landed. The share held back is the excess over a normal weekend,
+(0.67 - 0.16) / (1 - 0.16). Place penalties are left alone: the grid still
+depends on the lap, so drivers push.
 """
 
 from __future__ import annotations
@@ -28,6 +35,8 @@ from . import config
 PATH = config.ROOT / "grid_penalties.json"
 BACK = "back"
 _BACK_OFFSET = 1000.0  # behind every possible grid slot
+HOLD_BACK_SHARE = 0.6  # see the module docstring
+HOLD_BACK_SLOT = 0.7  # a held-back lap lands about 14th of 20
 
 
 @dataclass(frozen=True)
@@ -86,4 +95,14 @@ def apply(grid: np.ndarray, places: np.ndarray) -> np.ndarray:
     ranks = np.broadcast_to(np.arange(1, g.shape[-1] + 1, dtype=float), g.shape)
     out = np.empty_like(g)
     np.put_along_axis(out, order, ranks, axis=-1)
+    return out
+
+
+def held_back_scores(scores: np.ndarray, held: list[int]) -> np.ndarray:
+    """Qualifying scores with each held-back driver moved to the score of the
+    car that would otherwise qualify at HOLD_BACK_SLOT of the field."""
+    out = np.asarray(scores, dtype=float).copy()
+    others = np.sort(np.delete(out, held))[::-1]
+    slot = min(len(others) - 1, round(HOLD_BACK_SLOT * len(out)) - 1)
+    out[held] = others[slot]
     return out

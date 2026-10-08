@@ -204,20 +204,6 @@ def _when(ts: str | None) -> str:
         return "\u2014"
 
 
-def penalty_note(applied: list[dict]) -> str:
-    """The announced grid penalties this forecast moved cars back for."""
-    parts = []
-    for p in applied:
-        move = "starts from the back" if p.get("places") is None else f"drops {int(p['places'])} places"
-        parts.append(
-            f"{rr.esc(p.get('name') or p.get('driver_id'))} {move} "
-            f"(<a href='{rr.esc(p.get('source') or '')}'>{rr.esc(p.get('reason') or 'announced penalty')}</a>)"
-        )
-    if not parts:
-        return ""
-    return " Announced grid penalty applied: " + ", ".join(parts) + "."
-
-
 def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[str, int]) -> str:
     """One plain sentence of where this forecast stands."""
     meta = prediction.get("meta") or {}
@@ -232,8 +218,8 @@ def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[s
         lead = f"<span class='pill live'>After qualifying</span> Race starts {_when(prediction.get('race_start_utc'))}."
     elif stage == "pre_practice":
         lead = (
-            "<span class='pill'>Before practice</span> Made from past races only. It updates once "
-            f"practice has run. Race starts {_when(prediction.get('race_start_utc'))}."
+            "<span class='pill'>Before practice</span> Made from past races only. It updates as "
+            f"the weekend goes on. Race starts {_when(prediction.get('race_start_utc'))}."
         )
     else:
         lead = (
@@ -246,7 +232,6 @@ def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[s
         if stage in ("post_quali", "result") and grid in (None, "qualifying")
         else ""
     )
-    note += penalty_note(meta.get("grid_penalties") or [])
     return (
         f"<p class='status'>{lead}</p>"
         f"<p class='meta'>Forecast published {_when(prediction.get('generated_at_utc'))}, before the race, "

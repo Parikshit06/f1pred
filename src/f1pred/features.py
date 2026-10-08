@@ -542,8 +542,9 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
 
     # ---- season context --------------------------------------------------
     # Calendar length is known before a season starts. Counting the rounds with
-    # results instead - as this once did - gave the same race a different value
-    # depending on how much of the season had been run when features were built.
+    # results instead would give the same race a different value depending on
+    # how much of the season had been run when features were built (a leak the
+    # truncation test catches).
     calendar = raw.races.groupby("season")["round"].max()
     df["season_progress"] = df["round"] / df["season"].map(calendar).fillna(df["round"])
 

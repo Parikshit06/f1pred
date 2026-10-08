@@ -27,6 +27,10 @@ on:
         description: "Also fetch the practice history (2024 onward) from FastF1"
         type: boolean
         default: false
+      relog:
+        description: "Log a new forecast even if this stage has one (after a fix; earlier files are kept)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -180,14 +184,14 @@ jobs:
       # on its own schedule in evaluate.yml and commits reports/*.json.
 
       - name: Predict
-        run: python -m f1pred.cli predict --next
+        run: python -m f1pred.cli predict --next ${{ inputs.relog && '--force-log' || '' }}
 
       - name: Dashboard
         run: python -m f1pred.cli dashboard
 
-      # Published BEFORE anything is committed. The forecast is the
-      # deliverable; a push that loses a race must not be able to take the site
-      # down with it, which is exactly what the original order allowed.
+      # Published before anything is committed. The forecast is the
+      # deliverable, so a push that loses a race must not take the site down
+      # with it.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: reports

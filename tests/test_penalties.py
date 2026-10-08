@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 
 from f1pred import penalties, simulate
-from f1pred.report import penalty_note
 
 BACK = np.inf
 
@@ -138,18 +137,22 @@ def test_a_newly_announced_penalty_logs_a_new_forecast_and_keeps_the_old_one(tmp
     assert len(list(tmp_path.glob("*.json"))) == 2
 
 
-def test_the_page_says_which_penalty_moved_the_grid():
-    note = penalty_note(
-        [
-            {
-                "driver_id": "russell",
-                "name": "Russell",
-                "places": None,
-                "reason": "Power unit change",
-                "source": "u",
-            }
-        ]
-    )
-    assert "Russell starts from the back" in note
-    assert "Power unit change" in note
-    assert penalty_note([]) == ""
+def test_a_back_of_grid_starter_is_forecast_to_hold_back_in_qualifying_some_of_the_time():
+    """Front-runners starting from the back often don't push in qualifying.
+    The fastest car keeps a real pole chance, but a smaller one, and the
+    distribution stays coherent."""
+    ids = [f"d{i}" for i in range(20)]
+    scores = np.linspace(4.0, 0.0, 20)
+    usual = simulate.ranking_forecast(ids, scores, 0.5)
+    held = simulate.ranking_forecast(ids, scores, 0.5, held_back=[0])
+    assert held.matrix[0, 0] < usual.matrix[0, 0] * 0.6
+    assert held.matrix[0, 0] > 0.05
+    assert held.column("exp_position")[0] > usual.column("exp_position")[0] + 3
+    assert np.allclose(held.matrix.sum(axis=0), 1.0)
+    assert np.allclose(held.matrix.sum(axis=1), 1.0)
+
+
+def test_a_held_back_lap_lands_around_fourteenth_of_twenty():
+    scores = np.linspace(4.0, 0.0, 20)
+    out = penalties.held_back_scores(scores, [0])
+    assert int((out > out[0]).sum()) + 1 == 14

@@ -365,6 +365,7 @@ EXPLANATION_GROUPS = {
     "drv_experience": "experience",
     "season_progress": "experience",
 }
+PENALTY_GAP = 3  # grid this far from the qualifying position: a penalty, not noise
 GROUP_LABELS = {
     "grid": "starting position",
     "race_form": "recent race results",
@@ -385,7 +386,16 @@ def grouped_contributions(ranker: model.Ranker, race: pd.DataFrame) -> pd.DataFr
     """
     phi = pd.DataFrame(ranker.contributions(race), columns=ranker.feature_names)
     groups = [EXPLANATION_GROUPS.get(f, f) for f in ranker.feature_names]
-    return phi.T.groupby(groups, sort=False).sum().T
+    out = phi.T.groupby(groups, sort=False).sum().T
+    # A grid penalty pulls the grid and the qualifying position apart, and then
+    # they say different things: where the car starts, and how fast it was.
+    # Summed, a strong lap would hide a start from the back.
+    if {"grid", "quali_position"} <= set(phi.columns) and "one_lap_pace" in out:
+        split = ((race["grid"] - race["quali_position"]).abs() >= PENALTY_GAP).to_numpy()
+        moved = phi["quali_position"].where(split, 0.0)
+        out["grid"] -= moved
+        out["one_lap_pace"] += moved
+    return out
 
 
 def explain(ranker: model.Ranker, race: pd.DataFrame) -> tuple[list[str], list[dict]]:
@@ -459,14 +469,16 @@ def run(
 
     # ---- qualifying ------------------------------------------------------
     race["quali_score"] = quali_model.score(race)
-    q = simulate.ranking_forecast(race["driver_id"].tolist(), race["quali_score"].to_numpy(), t_quali)
+    announced = penalties.for_race(season, rnd)
+    ids = race["driver_id"].tolist()
+    held_back = [ids.index(p.driver_id) for p in announced if p.places is None and p.driver_id in ids]
+    q = simulate.ranking_forecast(ids, race["quali_score"].to_numpy(), t_quali, held_back=held_back)
     for col in ("p_win", "p_podium", "p_top5", "p_top10", "exp_position"):
         race[f"q_{col}"] = q.column(col)
 
     # ---- race ------------------------------------------------------------
     # Penalties confirmed ahead of the official grid move the penalised car
     # down whichever grid stands in for it. The official grid has them already.
-    announced = penalties.for_race(season, rnd)
     grid_source = _dominant(race["grid_source"]) if known_grid else "projected"
     applied = announced if grid_source in ("projected", "qualifying") else []
     drops = penalties.places_for(race["driver_id"].tolist(), applied)

@@ -332,7 +332,7 @@ def test_the_forecast_page_links_to_the_evidence():
 @pytest.mark.parametrize("theme,block", THEMES)
 def test_tertiary_ink_clears_aa_on_both_surfaces(theme, block):
     """--ink-3 carries every column header, team name and range on the page, so
-    it is body text and must clear 4.5:1 — on the tinted band as well as on the
+    it is body text and must clear 4.5:1, on the tinted band as well as on the
     paper, because alternate sections sit on the band."""
     ink3 = _token("ink-3", block)
     for surface in ("paper", "band"):
@@ -877,3 +877,25 @@ def test_a_chance_is_rounded_half_up_and_never_shown_as_zero(x, dp, shown):
     """0.5% once printed as 0% because Python rounds halves to even. A chance
     that exists must never read as impossible, nor short of certain as 100%."""
     assert rr.pct(x, dp) == shown
+
+
+def test_a_penalised_start_is_not_credited_to_the_lap():
+    """Grid and qualifying position are summed as "starting position" so that
+    near-duplicates don't contradict each other. When a penalty pulls them
+    apart, the lap belongs to one-lap pace and the start stands on its own."""
+    import numpy as np
+    import pandas as pd
+
+    from f1pred import predict
+
+    class Ranker:
+        feature_names = ("grid", "quali_position", "quali_gap_to_pole_pct")
+
+        def contributions(self, race):
+            return np.array([[-0.2, 0.5, 0.1], [0.2, 0.3, 0.1]])
+
+    race = pd.DataFrame({"grid": [22, 2], "quali_position": [1, 2], "quali_gap_to_pole_pct": [0.0, 0.1]})
+    out = predict.grouped_contributions(Ranker(), race)
+    assert out.loc[0, "grid"] == pytest.approx(-0.2)
+    assert out.loc[0, "one_lap_pace"] == pytest.approx(0.6)
+    assert out.loc[1, "grid"] == pytest.approx(0.5)

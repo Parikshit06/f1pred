@@ -206,10 +206,21 @@ def ranking_forecast(
     temperature: float,
     n_samples: int = 20_000,
     seed: int = config.RANDOM_SEED,
+    held_back: list[int] | None = None,
 ) -> RaceForecast:
     """Plackett-Luce alone, for qualifying: one lap has no retirements or safety
-    cars worth simulating, so its distribution is the ranking's own."""
-    matrix = probability.smooth(probability.pl_position_matrix(scores, temperature, n_samples, seed))
+    cars worth simulating, so its distribution is the ranking's own.
+
+    held_back: drivers starting from the back whatever they qualify, forecast
+    as a mix of their usual lap and a held-back one (penalties.py)."""
+    matrix = probability.pl_position_matrix(scores, temperature, n_samples, seed)
+    if held_back:
+        alt = probability.pl_position_matrix(
+            penalties.held_back_scores(scores, held_back), temperature, n_samples, seed
+        )
+        share = penalties.HOLD_BACK_SHARE
+        matrix = share * alt + (1.0 - share) * matrix
+    matrix = probability.smooth(matrix)
     table = probability.summarise(matrix)
     table.insert(0, "driver_id", driver_ids)
     return RaceForecast(driver_ids, matrix, table)

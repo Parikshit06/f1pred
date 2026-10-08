@@ -434,10 +434,9 @@ def season_strength(
     model's scores for their own last `window` real weekends.
 
     The rest of the season isn't at this track or from this grid, so the next
-    race's score is the wrong input. An earlier version built a synthetic
-    "typical weekend" and scored that, which copied recent form into the circuit
-    columns (counting it twice) and set each driver's teammate gap to their
-    average. Scoring the weekends that actually happened avoids inventing inputs
+    race's score is the wrong input. Scoring a synthetic "typical weekend"
+    instead copies recent form into the circuit columns (counting it twice) and
+    sets each driver's teammate gap to their average. Scoring the weekends that actually happened avoids inventing inputs
     the model has never seen, and the median keeps one wrecked weekend from
     setting a driver's season. It projected final points and title odds better
     on 2019-22, across every driver and team (reports/experiments.json,
