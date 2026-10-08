@@ -488,6 +488,46 @@ def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1)
     }
 
 
+TYPE_KEEP = ("win_logloss", "ndcg5")
+TYPE_GUARD = ("win_logloss", "ndcg3", "ndcg5", "podium_brier")
+
+
+def circuit_type_experiment(df, windows, settings, n_seeds=1, retrain_every=2) -> dict:
+    """Does knowing how a driver and a team do at street circuits, against
+    permanent ones, help? A circuit seen once or never borrows from the rest
+    of its type (features.CIRCUIT_TYPE_FEATURES).
+
+    Rule, fixed before any result was seen: added to the race model only if, on
+    the tuning seasons, it is clearly better on one of TYPE_KEEP at either
+    stage, and it is clearly worse on none of TYPE_GUARD at either stage in
+    either window.
+    """
+    full = list(features.RACE_FEATURES)
+    plus = [*full, *features.CIRCUIT_TYPE_FEATURES]
+    out: dict = {}
+    keep, guard_hit = False, []
+    for i, (label, (start, end)) in enumerate(windows.items()):
+        out[label] = {}
+        for stage in ("post_quali", "pre_quali"):
+            log.info("circuit type %s %s", label, stage)
+            results = {
+                "full model": _variant(df, start, end, settings, full, n_seeds, retrain_every, stage),
+                "+ circuit type": _variant(df, start, end, settings, plus, n_seeds, retrain_every, stage),
+            }
+            table = _paired_table(results, "full model", ABLATION_METRICS)
+            out[label][stage] = table
+            row = table[1]
+            if i == 0 and any(_clear(row, m) == "better" for m in TYPE_KEEP):
+                keep = True
+            guard_hit += [f"{label} {stage} {m}" for m in TYPE_GUARD if _clear(row, m) == "worse"]
+    out["rule"] = (
+        f"kept only if clearly better on the tuning seasons on one of {', '.join(TYPE_KEEP)} at either "
+        f"stage, and clearly worse on none of {', '.join(TYPE_GUARD)} at either stage in either window"
+    )
+    out["verdict"] = {"passes_tuning": keep, "worse_on": guard_hit, "passes_rule": keep and not guard_hit}
+    return out
+
+
 def redundancy(df, start, settings, threshold: float = 0.8) -> dict:
     """Feature pairs that carry nearly the same information, and how much each
     group matters when shuffled within the race (permutation importance)."""
@@ -716,6 +756,7 @@ def run_experiments(
         ),
         "practice": lambda: practice_experiment(df, settings),
         "quali_ordering": lambda: quali_ordering_experiment(df, windows, settings),
+        "circuit_type": lambda: circuit_type_experiment(df, windows, settings),
         "redundancy": lambda: redundancy(df, start_season, settings),
         "season_projection": lambda: season_projection_experiment(df),
         "parameter_stability": lambda: parameter_stability(
@@ -750,6 +791,7 @@ EXPERIMENTS = (
     "form_statistic",
     "practice",
     "quali_ordering",
+    "circuit_type",
     "redundancy",
     "season_projection",
     "parameter_stability",

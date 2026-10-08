@@ -38,7 +38,8 @@ def frame(db):
 
 
 def _cols() -> list[str]:
-    return sorted(set(features.RACE_FEATURES + features.QUALI_FEATURES))
+    # Candidates are held to the same standard as the features in use.
+    return sorted(set(features.RACE_FEATURES + features.QUALI_FEATURES + features.CIRCUIT_TYPE_FEATURES))
 
 
 def _same(a: pd.DataFrame, b: pd.DataFrame) -> pd.Series:
@@ -104,6 +105,7 @@ def test_features_do_not_change_when_later_races_are_added(db, cut, monkeypatch)
     """Build from data that stops at a race, and from everything: every feature
     of every race up to the cut must be identical. This caught a season-progress
     feature computed from how many races had been run so far."""
+    monkeypatch.setattr(features, "STREET_CIRCUITS", frozenset({"street", "harbour"}))
     raw = features._load()
 
     def truncated(r):
@@ -129,6 +131,7 @@ def test_features_do_not_change_when_later_races_are_added(db, cut, monkeypatch)
 
 
 def test_rewriting_a_result_moves_only_later_features(db, monkeypatch):
+    monkeypatch.setattr(features, "STREET_CIRCUITS", frozenset({"street", "harbour"}))
     raw = features._load()
     target = (demo.SEASONS[1], 6)
     tampered = raw.results.copy()

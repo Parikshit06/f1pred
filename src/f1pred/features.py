@@ -87,6 +87,26 @@ PRACTICE_FEATURES = [
     "practice_available",
 ]
 PRACTICE_MAX_GAP_PCT = 7.0
+
+# Street and temporary circuits, against permanent ones. A circuit seen once
+# or not at all borrows from the others of its type. Candidates only: they are
+# in the model only if circuit_type in reports/experiments.json says so.
+STREET_CIRCUITS = frozenset(
+    {
+        "albert_park",
+        "baku",
+        "jeddah",
+        "madring",
+        "marina_bay",
+        "miami",
+        "monaco",
+        "sochi",
+        "vegas",
+        "villeneuve",
+    }
+)
+CIRCUIT_TYPE_FEATURES = ["street_circuit", "drv_type_avg_finish", "team_type_avg_finish"]
+CIRCUIT_TYPE_WINDOW = 10  # races at circuits of the same type
 # The detailed current-weekend design, tested against the compact one above.
 PRACTICE_DETAIL_FEATURES = [
     "fp1_gap_pct",
@@ -326,20 +346,23 @@ def _prior_pace_by_race(
     return pd.Series(merged["_v"].to_numpy(), index=df.index)
 
 
-def _prior_pace_at_circuit(df: pd.DataFrame, group: str, col: str) -> pd.Series:
-    """_prior_pace_by_race scoped to previous visits to this circuit."""
+def _prior_pace_at_circuit(
+    df: pd.DataFrame, group: str, col: str, key: str = "circuit_id", window: int | None = None
+) -> pd.Series:
+    """_prior_pace_by_race scoped to previous visits to this circuit (or to
+    circuits sharing `key`, such as their type)."""
     per_race = (
-        df.groupby([group, "circuit_id", "race_seq"], sort=True)[col]
+        df.groupby([group, key, "race_seq"], sort=True)[col]
         .mean()
         .reset_index()
-        .sort_values([group, "circuit_id", "race_seq"])
+        .sort_values([group, key, "race_seq"])
     )
-    per_race["_v"] = per_race.groupby([group, "circuit_id"], sort=False)[col].transform(
-        lambda s: _roll_over_valid(s, None)
+    per_race["_v"] = per_race.groupby([group, key], sort=False)[col].transform(
+        lambda s: _roll_over_valid(s, window)
     )
-    merged = df[[group, "circuit_id", "race_seq"]].merge(
-        per_race[[group, "circuit_id", "race_seq", "_v"]],
-        on=[group, "circuit_id", "race_seq"],
+    merged = df[[group, key, "race_seq"]].merge(
+        per_race[[group, key, "race_seq", "_v"]],
+        on=[group, key, "race_seq"],
         how="left",
     )
     return pd.Series(merged["_v"].to_numpy(), index=df.index)
@@ -528,6 +551,13 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     # ---- circuit history -------------------------------------------------
     df["drv_circuit_avg_finish"] = _prior_pace(df, ["driver_id", "circuit_id"], "finish_when_running", None)
     df["team_circuit_avg_finish"] = _prior_pace_at_circuit(df, "constructor_id", "finish_when_running")
+    df["street_circuit"] = df["circuit_id"].isin(STREET_CIRCUITS).astype(float)
+    df["drv_type_avg_finish"] = _prior_pace(
+        df, ["driver_id", "street_circuit"], "finish_when_running", CIRCUIT_TYPE_WINDOW
+    )
+    df["team_type_avg_finish"] = _prior_pace_at_circuit(
+        df, "constructor_id", "finish_when_running", key="street_circuit", window=CIRCUIT_TYPE_WINDOW
+    )
 
     df = _add_circuit_profile(df)
 
