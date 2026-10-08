@@ -668,7 +668,7 @@ def _start_cell(r: dict) -> str:
     if not isinstance(grid, (int, float)):
         return "<div class='v dim start'>&middot;</div>"
     moved = isinstance(quali, (int, float)) and int(quali) != int(grid)
-    note = f"<small>Q{int(quali)}</small>" if moved else ""
+    note = f"<small title='Qualified {int(quali)}, moved by a penalty'>Q{int(quali)}</small>" if moved else ""
     return f"<div class='v dim start'>P{int(grid)}{note}</div>"
 
 
@@ -714,6 +714,14 @@ def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> st
     out = ["<div class='board'>", head]
     out += [one(i, r) for i, r in enumerate(rows[:shown])]
     out.append("</div>")
+    moved = any(
+        isinstance(r.get("grid"), (int, float))
+        and isinstance(r.get("quali_position"), (int, float))
+        and int(r["grid"]) != int(r["quali_position"])
+        for r in rows[:shown]
+    )
+    if moved:
+        out.append("<p class='fnote'>Q marks where a car qualified when a penalty moved its start.</p>")
     return "".join(out)
 
 
@@ -759,7 +767,8 @@ def win_track(rows: list[dict], finished: bool = False, n: int = 8) -> str:
     ticks = "".join(f"<i style='--q:{q}'>{q:.0%}</i>" for q in (0, 0.25, 0.5, 0.75, 1))
     out.append(
         f"<div class='wrow waxis'><span></span><span class='wtrack'>{ticks}</span></div>"
-        "<p class='fnote'>Each percentage is the share of 10,000 simulated races that driver won. "
+        "<p class='fnote'>Each percentage is that driver's share of wins in 10,000 simulated races, "
+        "blended with the ranking's own odds. "
         "The nearer a car is to the chequered flag, the likelier the win.</p></div>"
     )
     return "".join(out)

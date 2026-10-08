@@ -1,8 +1,9 @@
 """Ranking models for qualifying and race outcomes.
 
 Framed as learning-to-rank rather than classification. Predicting "who wins"
-gives one positive example per race: about 170 since 2018. Ranking the field
-turns each race into ~190 pairwise comparisons, which is the difference
+gives one positive example per race, about 190 since 2018. Ranking the field
+turns each race into many comparisons between drivers (XGBoost pairs each
+driver with the eight it currently ranks highest), which is the difference
 between a model that learns and one that memorises the fastest car.
 
 XGBRanker requires rows grouped by query, sorted by query id. Here a query is

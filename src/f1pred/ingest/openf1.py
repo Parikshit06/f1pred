@@ -367,7 +367,7 @@ def ingest(seasons: list[int], horizon_days: float = 7.0, force: bool = False) -
             live = not upcoming.empty
             all_sessions = sessions(client, season, refresh=live or force)
             lookup = driver_lookup(season)
-        except Exception as exc:  # noqa: BLE001 - a fallback source must never stop the run
+        except Exception as exc:  # noqa: BLE001 (a fallback source must never stop the run)
             log.warning("openf1 %d: sessions unavailable (%s)", season, exc)
             continue
 

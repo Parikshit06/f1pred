@@ -68,20 +68,22 @@ flowchart TD
 
 ## How good is it
 
-Every race from 2024 round 1 to 2026 round 15, **63 races**, was replayed: the
+Every race from 2024 round 1 to 2026 round 16, **64 races**, was replayed: the
 model was trained only on the races before it, made its forecast, and was
-scored against the result. Its settings were chosen beforehand on 2022–23, so
-none were tuned on the races it is graded on. Each stage is compared with a
-simple forecast anyone could make without a model.
+scored against the result. Its settings were fitted on 2022-23. Later seasons
+were used only to rule out a change that made things clearly worse, and to
+pick how practice is used (on 2024). Each stage is compared with a simple
+forecast anyone could make without a model.
 
 | Stage | Compared with | Result |
 |---|---|---|
-| Before qualifying | the championship order | **Better.** More accurate win chances, and it names more of the top five. |
-| Qualifying | each driver's recent qualifying form | **Better.** This weekend's practice times improve it further. |
+| Before practice | the championship order | **Better** on win chances, and it names more of the top five. |
+| After practice | the championship order | **Better** on win and podium chances, and it names more of the top five. |
+| Qualifying | each driver's recent qualifying form | **Better**, helped by this weekend's practice times. |
 | After qualifying | the starting grid | **Level.** Once the grid is known it holds most of what can be predicted. |
 
-- When it says a driver has a 30% chance to win, that happens about 30% of
-  the time. Its most confident podium and top-10 calls are a little too sure.
+- Win chances are reliable on average. Its most confident calls are too sure:
+  podium calls around 94% came true 78% of the time.
 - The title favourite was right 89% of the time, but backing the points
   leader would have been right almost as often.
 
@@ -95,7 +97,7 @@ championship.
 
 ```bash
 git clone https://github.com/Parikshit06/f1pred.git && cd f1pred
-make setup   # exact versions from uv.lock (Python 3.11–3.13)
+make setup   # exact versions from uv.lock (Python 3.11-3.13)
 make demo    # ingest → features → evaluation → forecast → site, offline
 make test    # unit, leakage and end-to-end tests
 ```
@@ -133,7 +135,7 @@ steps: `predict.yml` across each race weekend (and deploys the site),
 - Grid penalties are known before the official grid only when a team has
   announced them. Those are entered by hand in `grid_penalties.json`, with
   their source. Any other penalty is missed until the official grid appears.
-- 63 test races is a small sample.
+- 64 test races is a small sample.
 - The season projection assumes current form holds, widened by a calibrated
   pace-drift term.
 
@@ -166,34 +168,39 @@ After qualifying, against the calibrated grid and championship order
 
 | Approach | NDCG@3 | NDCG@5 | Winner | Podium overlap | Win log loss | Podium Brier |
 |---|---|---|---|---|---|---|
-| **This model** | 0.852 | 0.895 | **67%** | 1.92 of 3 | **1.201** | **0.069** |
-| Grid order, calibrated | **0.857** | **0.897** | 59% | **2.05 of 3** | 1.341 | **0.069** |
-| Championship order | 0.756 | 0.808 | 30% | 1.68 of 3 | 2.128 | 0.096 |
+| **This model** | 0.854 | 0.896 | **67%** | 1.94 of 3 | **1.187** | **0.068** |
+| Grid order, calibrated | **0.859** | **0.898** | 59% | **2.06 of 3** | 1.325 | **0.068** |
+| Championship order | 0.754 | 0.806 | 30% | 1.69 of 3 | 2.149 | 0.095 |
 
 Each comparison is paired race by race, with a 95% bootstrap interval.
 "Inconclusive" means the interval includes zero.
 
 | Stage | Metric | Model | Reference | Difference (95% interval) | Verdict |
 |---|---|---|---|---|---|
-| After qualifying | NDCG@3 | 0.852 | 0.857 (grid) | -0.005 (-0.031 to +0.021) | inconclusive |
-| | NDCG@5 | 0.895 | 0.897 (grid) | -0.002 (-0.019 to +0.015) | inconclusive |
-| | Winner called | 67% | 59% (grid) | +8 pts (-3 to +19) | inconclusive |
-| | Win log loss | 1.201 | 1.341 (grid) | -0.141 (-0.358 to +0.062) | inconclusive |
-| | Podium Brier | 0.069 | 0.069 (grid) | -0.000 (-0.006 to +0.006) | inconclusive |
-| | Kendall | 0.521 | 0.549 (grid) | -0.028 (-0.054 to -0.002) | **grid better** |
-| Before qualifying | Win log loss | 1.723 | 2.128 (championship order) | -0.405 (-0.653 to -0.138) | **model better** |
-| | Podium Brier | 0.084 | 0.096 (championship order) | -0.011 (-0.019 to -0.003) | **model better** |
-| | Top-5 overlap | 3.70 of 5 | 3.44 of 5 (championship order) | +0.254 (+0.064 to +0.460) | **model better** |
+| After qualifying | NDCG@3 | 0.854 | 0.859 (grid) | -0.005 (-0.030 to +0.020) | inconclusive |
+|  | NDCG@5 | 0.896 | 0.898 (grid) | -0.002 (-0.018 to +0.014) | inconclusive |
+|  | Winner called | 67% | 59% (grid) | +8 pts (-3 to +19) | inconclusive |
+|  | Win log loss | 1.187 | 1.325 (grid) | -0.138 (-0.345 to +0.068) | inconclusive |
+|  | Podium Brier | 0.068 | 0.068 (grid) | -0.000 (-0.006 to +0.006) | inconclusive |
+|  | Kendall | 0.521 | 0.548 (grid) | -0.027 (-0.053 to -0.001) | **grid better** |
+| After practice | Win log loss | 1.730 | 2.149 (championship order) | -0.420 (-0.673 to -0.155) | **model better** |
+|  | Podium Brier | 0.084 | 0.095 (championship order) | -0.011 (-0.018 to -0.003) | **model better** |
+|  | Top-5 overlap | 3.69 of 5 | 3.44 of 5 (championship order) | +0.250 (+0.062 to +0.453) | **model better** |
+| Before practice | Win log loss | 1.866 | 2.149 (championship order) | -0.284 (-0.545 to -0.017) | **model better** |
+|  | Podium Brier | 0.088 | 0.095 (championship order) | -0.007 (-0.015 to +0.002) | inconclusive |
+|  | Top-5 overlap | 3.66 of 5 | 3.44 of 5 (championship order) | +0.219 (+0.031 to +0.422) | **model better** |
 | Qualifying | Pole log loss | 1.707 | 2.108 (recent qualifying form) | -0.402 (-0.678 to -0.133) | **model better** |
-| | NDCG@5 | 0.854 | 0.810 (recent qualifying form) | +0.044 (+0.019 to +0.070) | **model better** |
+|  | NDCG@5 | 0.854 | 0.810 (recent qualifying form) | +0.044 (+0.019 to +0.070) | **model better** |
 
-After qualifying the model's win log loss is 0.141 lower than the grid's, but
-the interval runs from -0.36 to +0.06. Over the whole field (Kendall rank
+After qualifying the model's win log loss is 0.138 lower than the grid's, but
+the interval runs from -0.34 to +0.07. Over the whole field (Kendall rank
 correlation), the grid is clearly better.
 
 **Calibration.** When the model says X%, the average gap to what happened
-(expected calibration error, per driver) is 0.5% for wins, 2.8% for podiums
-and 6.1% for the top ten. The method page shows it band by band.
+(expected calibration error, per driver) is 0.5% for wins, 2.5% for podiums
+and 6.0% for the top ten. That average covers every driver in every race, most
+of them with chances near zero, so it reads small. The most confident bands
+are the weak spot (see Limitations), and the method page shows every band.
 
 ## Leakage prevention
 
@@ -212,7 +219,7 @@ and 6.1% for the top ten. The method page shows it band by band.
 ## What each piece is worth
 
 `make experiments` writes `reports/experiments.json`. Every experiment is a
-walk-forward with race-paired intervals. Choices are made on 2022–23 and
+walk-forward with race-paired intervals. Choices are made on 2022-23 and
 checked on 2024 onward (practice, below, has its own held-out split). Each was made
 once, on the final configuration, and is not re-decided when the evaluation is
 refreshed. Experiments fit one seed per model, so their figures sit slightly
@@ -224,9 +231,9 @@ onward, turned into probabilities five ways:
 | Probability step | Win log loss | Podium Brier | Calibration error, win |
 |---|---|---|---|
 | Raw scores (temperature 1, no simulation) | 1.686 | 0.0747 | 3.8% |
-| Temperature fitted on 2022–23, held | **1.226** | 0.0679 | 0.3% |
+| Temperature fitted on 2022-23, held | **1.226** | 0.0679 | 0.3% |
 | Temperature refitted on the last 24 races (in use) | 1.229 | 0.0683 | 0.4% |
-| Refitted, Plackett–Luce only | 1.301 | 0.0716 | 0.3% |
+| Refitted, Plackett-Luce only | 1.301 | 0.0716 | 0.3% |
 | Refitted, simulation only | 1.256 | **0.0651** | 0.5% |
 | Refitted on the first three finishers, not just the winner | 1.261 | 0.0662 | 1.0% |
 
@@ -234,27 +241,27 @@ Calibration is most of the gain. A held and a refitted temperature are level,
 and mixing the two probability models beats either alone on log loss. Fitting
 the temperature on the first three finishers was tested against the
 over-confident podium and top-10 calls: it improves their calibration on both
-2022–23 and 2024 onward, but worsens win log loss on 2022–23 (0.928 against
+2022-23 and 2024 onward, but worsens win log loss on 2022-23 (0.928 against
 0.883), so it is not used.
 
 **Ablation: what adds information once the grid is known.**
 
 - **Everything together vs the grid alone**: log loss 0.840 vs 1.628 on
-  2022–23 (difference +0.788, interval +0.462 to +1.155), but 1.229 vs 1.326 on
+  2022-23 (difference +0.788, interval +0.462 to +1.155), but 1.229 vs 1.326 on
   2024 onward (not clear).
-- **Adding one block at a time to the grid** (log loss on 2022–23): grid only
+- **Adding one block at a time to the grid** (log loss on 2022-23): grid only
   1.628, + driver form 0.957, + team form 1.220, + both 0.914, full model
   0.840. Recent driver form carries most of what the model adds beyond the
   grid. On 2024 onward none of these differences is clear.
 - **Driver form and team form** are the groups whose removal clearly costs
-  log loss on 2022–23: +0.186 (+0.046 to +0.348) and +0.082 (+0.004 to
+  log loss on 2022-23: +0.186 (+0.046 to +0.348) and +0.082 (+0.004 to
   +0.168). Removing **circuit history** clearly hurts ranking (NDCG@5 -0.011,
   -0.021 to -0.001).
 - **Qualifying position and gap to pole** duplicate the grid (correlation
   0.95 with it): removing them changes nothing clearly. They stay because they
   are how a car that took a grid penalty is recognised as fast.
 - **Tested and left out**: the driver's own qualifying record (average grid
-  and qualifying place, pole rate, one-lap gap) made 2022–23 clearly worse
+  and qualifying place, pole rate, one-lap gap) made 2022-23 clearly worse
   after qualifying, +0.078 (+0.027 to +0.138), and before it, +0.043 (+0.009
   to +0.078). It reaches the race through the grid already, so inside the race
   model it counted twice. The teammate qualifying gap also made it worse,
@@ -262,16 +269,16 @@ over-confident podium and top-10 calls: it improves their calibration on both
   qualifying model.
 - On 2024 onward, no single group's removal or addition is clear either way.
 
-**Practice pace (FP1–FP3): qualifying only, earned on held-out data.**
+**Practice pace (FP1-FP3): qualifying only, earned on held-out data.**
 Practice is used as this weekend's evidence, never as a long-term driver
 feature: each driver's gap to the fastest car in each session, their latest
 session's gap and rank, the gap to their teammate, the team's best car, the
 change from FP1 to FP2 to FP3, and how consistent those were. Stored as
-compact numbers for 59 weekends of 2024–26, no telemetry. The design was
-chosen on 2024, then graded on 35 untouched weekends of 2025–26 against the
+compact numbers for the 59 weekends of 2024-26 stored when it was tested, no telemetry. The design was
+chosen on 2024, then graded on 35 untouched weekends of 2025-26 against the
 same model without practice:
 
-| Qualifying forecast, with practice minus without (2025–26) | Difference (95% interval) |
+| Qualifying forecast, with practice minus without (2025-26) | Difference (95% interval) |
 |---|---|
 | Qualifying position error (places) | -0.280 (-0.429 to -0.128) |
 | Pole log loss | -0.203 (-0.404 to -0.009) |
@@ -289,7 +296,7 @@ qualifying form at ordering the whole field, and it gives backmarkers too good
 a chance of the top ten. Two fixes were tested with the rule fixed in advance
 (`quali_ordering` in `reports/experiments.json`). The median of recent
 qualifying positions made no clear difference in either window. Linear gains
-ordered the whole field clearly better on 2022–23 and again on 2024 onward
+ordered the whole field clearly better on 2022-23 and again on 2024 onward
 (position error -0.251 (-0.388 to -0.116) places), but on 2024 onward they were
 clearly worse at the front, NDCG@5 -0.018 (-0.034 to -0.002). The race forecast
 depends most on the front of the grid, so neither is used.
@@ -298,24 +305,33 @@ depends most on the front of the grid, so neither is used.
 finishing at street circuits, or at permanent ones, so that a new or rarely
 visited track borrows from similar ones. Judged on a rule fixed in advance
 (`circuit_type` in `reports/experiments.json`), it made no clear difference on
-2022–23, so the model does not use it.
+2022-23, so the model does not use it.
+
+**Retirements in both halves: tested, not used.** Plackett-Luce has no
+retirements, so with the 0.7 blend only 30% of each car's retirement risk
+reaches the published chances. Applying retirements to both halves lowered the
+podium and top-10 calibration error on 2022-23 (podium 2.9% to
+1.5%, top ten 7.2% to 4.9%), but the rule fixed in advance
+judges Brier scores, and podium Brier was not clearly better
+(-0.0015, -0.0033 to +0.0001). So it is not used (`retirements` in
+`reports/experiments.json`). It is the strongest lead for a later season.
 
 **Recent form: median, not mean.** Median finishing position over the last
-races lowered 2022–23 log loss by 0.047 (interval 0.003 to 0.093). On 2024
-onward the difference is not clear (-0.018 for the mean, -0.068 to +0.035), so
+races lowered 2022-23 log loss by 0.047 (interval 0.003 to 0.093). On 2024
+onward the mean was 0.018 better, with an interval from -0.068 to +0.035, so
 it is a marginal call.
 
-**XGBoost settings** were compared on 2021 and on 2022–23 without intervals,
+**XGBoost settings** were compared on 2021 and on 2022-23 without intervals,
 as a stability check rather than a search. No candidate is best on both:
-depth 3 is best on 2022–23 and among the worst on 2021. The settings in use
+depth 3 is best on 2022-23 and among the worst on 2021. The settings in use
 (depth 4, 400 trees) are kept.
 
 ## Explainability
 
 Every logged forecast stores, for each driver, SHAP contributions from XGBoost's
 own TreeSHAP (`pred_contribs`, identical to `shap.TreeExplainer`). The published
-score averages five seeds standardised within the race, so each seed's values
-are centred and scaled the same way and averaged. The contributions then sum
+score is the mean of five seeds, each standardised within the race, so each
+seed's contributions are centred and scaled the same way before the mean. The contributions then sum
 exactly to the score that was published (tested). They describe what the model
 relied on, not causes.
 
@@ -324,7 +340,7 @@ relied on, not causes.
 The rest of the season is simulated 10,000 times, sprints included, from each
 driver's median score over their last eight real weekends. Every driver with
 points stays in the title race, including one sitting out a race. Graded on
-27 checkpoints across 7 completed seasons (2019–2025), each projected with a
+27 checkpoints across 7 completed seasons (2019-2025), each projected with a
 model trained only on races before it:
 
 - **Who wins**: the favourite was right 89% of the time, Brier 0.077. That
@@ -332,19 +348,19 @@ model trained only on races before it:
   checkpoints, and backing the leader would have been right 85% of the time.
   Above 95% it is 14 for 14, but the 95% interval on that runs down to
   0.79, so a published 99.9% means the arithmetic says it's over, not one
-  chance in a thousand. The misses are all in 2025's Piastri–Norris season
+  chance in a thousand. The misses are all in 2025's Piastri-Norris season
   (after rounds 8, 13 and 18).
-- **How close**: every points total carries a 10th–90th percentile range,
-  sized on 2019–22 and graded on 2023–25 (`make calibrate-spread`):
+- **How close**: every points total carries a 10th-90th percentile range,
+  sized on 2019-22 and graded on 2023-25 (`make calibrate-spread`):
 
 | Projection | Constructors inside the range | Width | Teammate gap inside | Target |
 |---|---|---|---|---|
 | Race luck only | 54% | 39 pts | 72% | 80% |
 | **With the season-long pace term** | **86%** | 108 pts | 74% | 80% |
 
-The pace term was sized on 2019–22, and on 2023–25 constructors land a little
+The pace term was sized on 2019-22, and on 2023-25 constructors land a little
 wide of the target (86% against 80%). The teammate gap is still short of 80%:
-on 2019–22 the ranges needed no extra driver term, but on 2023–25 they were too
+on 2019-22 the ranges needed no extra driver term, but on 2023-25 they were too
 narrow.
 
 ## Project structure
@@ -357,7 +373,7 @@ src/f1pred/
   weekend.py         who is in the race, and where each car starts
   features.py        temporal feature layer
   model.py           XGBoost rankers, ensemble SHAP
-  probability.py     Plackett–Luce, calibration, one coherent distribution
+  probability.py     Plackett-Luce, calibration, one coherent distribution
   simulate.py        Monte Carlo race simulation and forecast()
   predict.py         forecast one race, with provenance
   baselines.py       grid order and other no-model forecasts

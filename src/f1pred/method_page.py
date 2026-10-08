@@ -138,7 +138,7 @@ INPUTS = [
     "One-lap speed",
     "How often the car breaks down",
     "Their record at this track",
-    "This weekend's practice times",
+    "This weekend's practice times (for qualifying)",
 ]
 
 WEEKEND = [
@@ -170,9 +170,9 @@ def _to_chances() -> str:
         "times in two ways: by drawing whole finishing orders from the ranking itself, and in a simple "
         "race simulation that adds retirements, safety cars and the pull of the starting grid. The two "
         "are blended, in a proportion set on past seasons.</p>"
-        "<p>If a driver wins 3,600 of those races, their chance is 36%: about 36 in every 100. "
-        "Every percentage on the site is counted this way, and win, podium, top 5 and top 10 all come "
-        "from the same finishing orders, so they never contradict each other.</p></div>" + _dots() + "</div>"
+        "<p>If a driver comes first in 36% of the blended results, their chance to win is 36%: about "
+        "36 in every 100. Win, podium, top 5 and top 10 are all read from the same blended finishing "
+        "orders, so they never contradict each other.</p></div>" + _dots() + "</div>"
     )
 
 
@@ -226,9 +226,16 @@ def _claims(bt: dict, tb: dict | None = None) -> str:
             )
         )
     pre = {r["metric"]: r for r in (bt.get("pre_quali") or {}).get("comparison_vs_championship") or []}
+    early = {r["metric"]: r for r in (bt.get("pre_practice") or {}).get("comparison_vs_championship") or []}
     if pre.get("win_logloss"):
         if pre["win_logloss"].get("better") == "model":
-            head = "Before qualifying, it beats following the championship table."
+            both = (early.get("win_logloss") or {}).get("better") == "model"
+            head = (
+                "Before qualifying, with or without this weekend's practice, it beats following the "
+                "championship table."
+                if both
+                else "After practice, it beats following the championship table."
+            )
             tail = "Its chances are more accurate" + (
                 ", though it picks the winner no more often."
                 if (pre.get("winner_hit") or {}).get("better") != "model"
@@ -282,7 +289,7 @@ def _good(bt: dict, tb: dict) -> str:
             "<h3 class='sub'>Does 30% mean 30%?</h3><p>Every driver in every race since "
             f"{w.get('start_season', '')}, grouped by the chance the forecast gave. On the dashed line, "
             "the forecast meant exactly what it said. Each whisker is the 95% interval on how often "
-            "it happened.</p>" + chart
+            "it happened. Bands with fewer than 10 cases are left out.</p>" + chart
             if chart
             else ""
         )

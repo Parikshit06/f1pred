@@ -332,7 +332,7 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
                 counts[source] = n
                 log_ingest(con, source, scope, "ok" if n else "empty", f"{n} rows")
                 log.info("  %-11s season %d: %5d rows", source, season, n)
-            except Exception as exc:  # noqa: BLE001 - we want the run to continue
+            except Exception as exc:  # noqa: BLE001 (we want the run to continue)
                 log_ingest(con, source, scope, "failed", repr(exc))
                 log.error("  %-11s season %d FAILED: %s", source, season, exc)
 

@@ -189,7 +189,7 @@ def ingest_session(
         pits = _get(client, "pit", key, refresh=provisional)
         spans = not_clear_periods(_get(client, "race_control", key, refresh=provisional))
         drivers = openf1.fetch_session_drivers(client, session, season, lookup, refresh=provisional)
-    except Exception as exc:  # noqa: BLE001 - network or rate limit: retried next run
+    except Exception as exc:  # noqa: BLE001 (network or rate limit: retried next run)
         _record(scope, "failed", f"will retry next run: {exc!r}")
         return 0
 
@@ -242,7 +242,7 @@ def ingest(seasons: list[int], next_only: bool = False) -> int:
         try:
             all_sessions = openf1.sessions(client, season, refresh=season == config.CURRENT_SEASON)
             lookup = openf1.driver_lookup(season)
-        except Exception as exc:  # noqa: BLE001 - an optional source must never stop the run
+        except Exception as exc:  # noqa: BLE001 (an optional source must never stop the run)
             log.warning("practice %d: sessions unavailable (%s)", season, exc)
             continue
         for race in races.itertuples():
