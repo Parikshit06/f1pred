@@ -7,7 +7,8 @@
   "quali_temperature": 0.5499999999999999,
   "adaptive_temperature": true,
   "n_sims": 3000,
-  "temperature_depth": 1
+  "temperature_depth": 1,
+  "pl_retirements": false
  },
  "ablation": {
   "tuning 2022-2023": [
@@ -1142,8 +1143,8 @@
   ]
  },
  "provenance": {
-  "generated_at_utc": "2026-10-08T10:17:19+00:00",
-  "git_commit": "ac6c62878ac2",
+  "generated_at_utc": "2026-10-08T10:36:51+00:00",
+  "git_commit": "f6ea81bf4bf4",
   "data": {
    "rows": {
     "raw_drivers": 221,
@@ -3113,6 +3114,118 @@
    ]
   },
   "rule": "kept only if clearly better on the tuning seasons on one of win_logloss, ndcg5 at either stage, and clearly worse on none of win_logloss, ndcg3, ndcg5, podium_brier at either stage in either window",
+  "verdict": {
+   "passes_tuning": false,
+   "worse_on": [],
+   "passes_rule": false
+  }
+ },
+ "retirements": {
+  "tuning 2022-2023": {
+   "comparison": [
+    {
+     "variant": "simulation only (in use)",
+     "n_races": 44,
+     "win_logloss": 0.8825059194406811,
+     "win_brier": 0.4304347176291687,
+     "podium_brier": 0.07060213872559988,
+     "top10_brier": 0.16388226976516534
+    },
+    {
+     "variant": "both halves",
+     "n_races": 44,
+     "win_logloss": 0.8870575396803745,
+     "win_brier": 0.4304781348159055,
+     "podium_brier": 0.06909869064733497,
+     "top10_brier": 0.16184881164725168,
+     "win_logloss_diff": 0.004551620239693238,
+     "win_logloss_ci": [
+      -0.017285323301948506,
+      0.02459623291545494
+     ],
+     "win_brier_diff": 4.341718673702178e-05,
+     "win_brier_ci": [
+      -0.012697556425003661,
+      0.012086816400431133
+     ],
+     "podium_brier_diff": -0.0015034480782649192,
+     "podium_brier_ci": [
+      -0.003297904625681852,
+      9.845652928822678e-05
+     ],
+     "top10_brier_diff": -0.002033458117913697,
+     "top10_brier_ci": [
+      -0.007048324390590595,
+      0.002845700647820321
+     ]
+    }
+   ],
+   "calibration_error": {
+    "simulation only (in use)": {
+     "win": 0.006780418090909097,
+     "podium": 0.029044038499999997,
+     "top10": 0.07191056568181817
+    },
+    "both halves": {
+     "win": 0.01023493613636364,
+     "podium": 0.015344951999999988,
+     "top10": 0.04927201136363637
+    }
+   }
+  },
+  "test 2024-": {
+   "comparison": [
+    {
+     "variant": "simulation only (in use)",
+     "n_races": 64,
+     "win_logloss": 1.2154107803261862,
+     "win_brier": 0.5869798537561111,
+     "podium_brier": 0.06732945350469605,
+     "top10_brier": 0.15019015937837132
+    },
+    {
+     "variant": "both halves",
+     "n_races": 64,
+     "win_logloss": 1.2122872252618613,
+     "win_brier": 0.5861391428914418,
+     "podium_brier": 0.0664341693495282,
+     "top10_brier": 0.1486459185669073,
+     "win_logloss_diff": -0.003123555064325077,
+     "win_logloss_ci": [
+      -0.021976976303970382,
+      0.015059492976757113
+     ],
+     "win_brier_diff": -0.0008407108646692845,
+     "win_brier_ci": [
+      -0.011249838091812892,
+      0.009375755115731856
+     ],
+     "podium_brier_diff": -0.0008952841551678485,
+     "podium_brier_ci": [
+      -0.0020855132458085027,
+      0.0002557578388622534
+     ],
+     "top10_brier_diff": -0.001544240811464015,
+     "top10_brier_ci": [
+      -0.005341207500246254,
+      0.002185355191169052
+     ]
+    }
+   ],
+   "calibration_error": {
+    "simulation only (in use)": {
+     "win": 0.004011461590416024,
+     "podium": 0.02536274121143943,
+     "top10": 0.062306680483728394
+    },
+    "both halves": {
+     "win": 0.003142567543153514,
+     "podium": 0.01844716726498413,
+     "top10": 0.04463279426450929
+    }
+   }
+  },
+  "rule": "used only if clearly better on the tuning seasons on one of podium_brier, top10_brier, and clearly worse on none of win_logloss, podium_brier, top10_brier in either window",
   "verdict": {
    "passes_tuning": false,
    "worse_on": [],
