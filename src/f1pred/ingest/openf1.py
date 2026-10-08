@@ -4,7 +4,7 @@ jolpica is the primary source. OpenF1 fills two gaps in it:
 
   grid      jolpica's results carry the starting grid, but results only exist
             after the race, and they have arrived with the grid blank. The
-            official grid - qualifying order with penalties applied - is
+            official grid (qualifying order with penalties applied) is
             published by OpenF1 against the qualifying session.
   entries   nothing in jolpica says who is driving this weekend until
             qualifying is published. OpenF1 lists the drivers in every session,
@@ -93,7 +93,7 @@ def weekend_sessions(all_sessions: pd.DataFrame, race_start_utc: datetime) -> pd
 
     Matched on the race session's start time rather than on names, which the two
     sources spell differently. Six hours of tolerance covers a late schedule
-    change; the next meeting is at least a week away, so it can't be mistaken
+    change. The next meeting is at least a week away, so it can't be mistaken
     for this one.
     """
     if all_sessions.empty or race_start_utc is None or pd.isna(race_start_utc):
@@ -339,7 +339,7 @@ def _races_needing_a_grid(season: int, horizon_days: float) -> pd.DataFrame:
 def ingest(seasons: list[int], horizon_days: float = 7.0, force: bool = False) -> dict[str, int]:
     """Fetch grids for races that lack one and entries for the race about to run.
 
-    Past weekends are served from the response cache; the weekend under way is
+    Past weekends are served from the response cache. The weekend under way is
     always re-fetched, because its grid changes when penalties are applied and
     its entry list grows with every session.
     """

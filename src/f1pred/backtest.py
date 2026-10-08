@@ -80,7 +80,7 @@ def oos_scores(
     """race_seq -> (that race's rows, scores from a model that never saw it).
 
     The training rows are exactly those with race_seq below the target's.
-    Retrains every `retrain_every` targets; a model is only ever reused for a
+    Retrains every `retrain_every` targets. A model is only ever reused for a
     later race, never an earlier one. `score` overrides how a race is scored
     (the pre-qualifying stage scores a projected weekend).
     """
@@ -140,9 +140,9 @@ def projected_weekend(race: pd.DataFrame, quali_scores: np.ndarray) -> pd.DataFr
     """The race's rows as the race model sees them before qualifying.
 
     The qualifying model's order stands in for the grid and the qualifying
-    position; the driver's recent averages stand in for this weekend's gaps.
+    position. The driver's recent averages stand in for this weekend's gaps.
     Every GRID feature is overwritten, so the real result can't reach a
-    pre-qualifying forecast - in the backtest, where it exists, or live.
+    pre-qualifying forecast: in the backtest, where it exists, or live.
     """
     t = race.copy()
     projected = pd.Series(-np.asarray(quali_scores)).rank(method="first").to_numpy()
@@ -221,7 +221,7 @@ def walk_forward(
     """Forecast every completed race from start_season on, exactly as live.
 
     The `warmup` races before the window are scored too, but only to give the
-    rolling temperature its trailing history from the first reported race;
+    rolling temperature its trailing history from the first reported race.
     they are not graded. `scored` reuses post-qualifying scores from
     oos_scores() when only the probability step is being varied.
     """

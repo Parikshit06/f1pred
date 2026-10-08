@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 _TIME_RE = re.compile(r"^(?:(\d+):)?(\d+)\.(\d+)$")
 
-# Statuses that mean the car was running at the flag; anything else is a
+# Statuses that mean the car was running at the flag. Anything else is a
 # retirement. The flag feeds form, reliability and the simulator's retirement
 # hazard. From 2023 a lapped car reads "Lapped" rather than "+1 Lap", so this is
 # an explicit list and validate() cross-checks it against laps covered.
@@ -111,7 +111,7 @@ def parse_races(races: list[dict]) -> pd.DataFrame:
                 "race_time": r.get("time"),
                 "race_start_utc": _race_start_utc(r.get("date"), r.get("time")),
                 # The schedule names every session of the weekend. Qualifying time
-                # dates the grid; a Sprint entry is how future sprint weekends are
+                # dates the grid. A Sprint entry is how future sprint weekends are
                 # known before any sprint result exists.
                 "quali_start_utc": _session_start(r.get("Qualifying")),
                 "sprint_start_utc": _session_start(r.get("Sprint")),
@@ -157,7 +157,7 @@ def parse_results(races: list[dict]) -> pd.DataFrame:
                     "driver_id": res.get("Driver", {}).get("driverId"),
                     "constructor_id": res.get("Constructor", {}).get("constructorId"),
                     "grid": _to_int(res.get("grid")),
-                    # position is the classified order, retirements included - it's the ranking
+                    # position is the classified order, retirements included: it's the ranking
                     # label. The DNF flag is separate, so position is never nulled here.
                     "position": _to_int(res.get("position")),
                     "classified": position_text.isdigit(),
@@ -276,7 +276,7 @@ _SEASON_ENDPOINTS = [
     ("sprint", "sprint", _RACE_TABLE, parse_sprint, "raw_sprint", ["season", "round", "driver_id"]),
 ]
 
-# These require a round in the path - Ergast rejects a season-wide query with
+# These require a round in the path: Ergast rejects a season-wide query with
 # a 400, so they are fetched one round at a time.
 _ROUND_ENDPOINTS = [
     (
@@ -303,7 +303,7 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
     counts: dict[str, int] = {}
 
     with connect() as con:
-        # Drivers first - everything else can be joined once we have the code map.
+        # Drivers first: everything else can be joined once we have the code map.
         if force or not already_ingested(con, "drivers", str(season)) or season == config.CURRENT_SEASON:
             url = f"{config.JOLPICA_BASE}/{season}/drivers.json?limit={{limit}}&offset={{offset}}"
             try:
@@ -337,7 +337,7 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
                 log.error("  %-11s season %d FAILED: %s", source, season, exc)
 
         # Per-round endpoints. Standings give us "championship position going
-        # into this race"; pit stops give us strategy and stop-time features.
+        # into this race". Pit stops give us strategy and stop-time features.
         rounds = [
             r[0]
             for r in con.execute(
@@ -352,7 +352,7 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
                 status = ingest_status(con, source, scope)
 
                 # Future rounds return an empty 200. In the live season that means "not yet",
-                # so it isn't marked done or served from cache next time - otherwise the back
+                # so it isn't marked done or served from cache next time: otherwise the back
                 # half of the standings never arrives and the projection comes back empty.
                 stale = status == "empty" and season == config.CURRENT_SEASON
                 if not force and status in ("ok", "empty") and not stale:

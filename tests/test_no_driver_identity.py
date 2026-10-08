@@ -83,7 +83,7 @@ def test_swapping_two_drivers_features_swaps_their_predictions():
 
     Exchange every feature value between two entries and leave the names where
     they are. If the model were keyed to identity in any way, the predictions
-    would stay put. They must follow the numbers instead - exactly, and without
+    would stay put. They must follow the numbers instead: exactly, and without
     disturbing anybody else.
     """
     df = _synthetic_history()
@@ -114,7 +114,7 @@ def test_swapping_two_drivers_features_swaps_their_predictions():
 
 
 def test_renaming_every_driver_changes_nothing():
-    """Relabel the whole field; identical features must give identical scores."""
+    """Relabel the whole field. Identical features must give identical scores."""
     df = _synthetic_history()
     feats = ["prior_form"]
     df["prior_form"] = features._prior_rolling(df, "driver_id", "finish_or_last", 5)

@@ -108,7 +108,7 @@ def test_every_team_has_a_variant_for_each_surface():
 
 
 def test_team_colours_are_emitted_as_theme_tokens():
-    """team_colour returns a var() so the value follows the viewer's theme; a
+    """team_colour returns a var() so the value follows the viewer's theme. A
     literal hex in the markup would be one theme's colour on both."""
     assert rr.team_colour("ferrari") == "var(--t-ferrari)"
     for mode, block in ((0, ":root{"), (1, ':root[data-theme="dark"]{')):
@@ -118,7 +118,7 @@ def test_team_colours_are_emitted_as_theme_tokens():
 
 
 def test_unknown_constructor_still_gets_a_colour():
-    """A new team appears every couple of seasons; no row may render without an
+    """A new team appears every couple of seasons. No row may render without an
     identifying mark."""
     assert rr.team_colour("brand_new_team") == "var(--t-default)"
     assert rr.team_colour(None) == "var(--t-default)"
@@ -128,7 +128,7 @@ def test_unknown_constructor_still_gets_a_colour():
 @pytest.fixture
 def no_track_record(monkeypatch):
     """Isolate the page from whatever is sitting in predictions/ on this
-    machine - otherwise the test passes or fails depending on local state."""
+    machine: otherwise the test passes or fails depending on local state."""
     monkeypatch.setattr(report, "race_history", list)
 
 
@@ -268,7 +268,7 @@ def test_hidden_elements_are_actually_hidden():
 
 def test_only_the_probability_cells_animate_their_value():
     """The count-up rewrites textContent, so it must not touch a cell that
-    contains a child element - the championship totals carry a range span."""
+    contains a child element: the championship totals carry a range span."""
     board = rr.race_board(
         [
             {
@@ -323,7 +323,7 @@ def test_the_method_page_builds_and_links_back():
 
 
 def test_the_forecast_page_links_to_the_evidence():
-    """The forecast page is deliberately thin; if the link to the working is
+    """The forecast page is deliberately thin. If the link to the working is
     missing, the thinness reads as having nothing to show."""
     out = report.build(prediction=None)
     assert "method.html" in out
@@ -342,7 +342,7 @@ def test_tertiary_ink_clears_aa_on_both_surfaces(theme, block):
 
 @pytest.mark.parametrize("theme,block", THEMES)
 def test_the_band_surface_is_defined(theme, block):
-    """Alternate sections paint --band full-bleed; if it is missing they render
+    """Alternate sections paint --band full-bleed. If it is missing they render
     on the page ground and the rhythm disappears."""
     assert _token("band", block)
 
@@ -363,7 +363,7 @@ def _lstar(hex_colour: str) -> float:
 
 @pytest.mark.parametrize("theme,block", THEMES)
 def test_the_band_is_a_second_ink_pass_not_a_grey_box(theme, block):
-    """Alternate sections sit on a slightly darker band. Under ~1 L* it disappears;
+    """Alternate sections sit on a slightly darker band. Under ~1 L* it disappears.
     over ~3 it reads as a grey box rather than the same sheet.
     """
     paper = _token("paper", block)
@@ -398,7 +398,7 @@ def test_inline_code_still_reads_against_its_own_surface(theme, block):
 
 def test_the_page_script_is_a_raw_string():
     """It contains regex escapes. As a plain string those are invalid escape
-    sequences - a DeprecationWarning today and a SyntaxError in a later Python."""
+    sequences: a DeprecationWarning today and a SyntaxError in a later Python."""
     import importlib
     import warnings
 
@@ -412,7 +412,7 @@ def test_the_page_script_is_a_raw_string():
 # A clean checkout has no database
 # ---------------------------------------------------------------------------
 def test_both_pages_build_with_no_database(tmp_path, monkeypatch):
-    """A fresh clone - and CI - has no database. The two readers that only
+    """A fresh clone (and CI) has no database. The two readers that only
     decorate the page (track record, driver surnames) must fall back to empty.
     """
     from f1pred import config, method_page, store
@@ -467,7 +467,7 @@ def test_the_method_page_sets_the_winner_rate_against_the_grid(tmp_path, monkeyp
 
 
 def test_the_title_claim_names_the_leader_it_mostly_follows(tmp_path, monkeypatch):
-    """A title favourite that is nearly always the points leader is a low bar;
+    """A title favourite that is nearly always the points leader is a low bar.
     the page has to say so, with the leader's own record."""
     import json
 
@@ -585,7 +585,7 @@ def test_after_qualifying_the_board_shows_where_each_driver_qualified():
 
 
 def test_the_championship_panel_uses_the_latest_projection(tmp_path, monkeypatch):
-    """The logged forecast fixes the race boards; the season panel should move
+    """The logged forecast fixes the race boards. The season panel should move
     with results, so the dashboard reads the latest projection when there is one."""
     import json
 
@@ -631,8 +631,8 @@ def test_title_odds_say_what_the_simulation_can_and_cannot_resolve():
 
 
 def test_the_record_reads_race_by_race_and_merges_reruns():
-    """A race card lists its forecasts in order - re-runs of the same step
-    merged - and ignores anything made after the start."""
+    """A race card lists its forecasts in order, re-runs of the same step
+    merged, and ignores anything made after the start."""
 
     def fc(when, stage, pick, p):
         return {

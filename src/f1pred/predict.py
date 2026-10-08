@@ -3,7 +3,7 @@
 Before qualifying the grid is unknown, so each simulated race samples its own
 grid from the qualifying model. After qualifying the real grid is used. Both
 calls are logged to predictions/ with the time they were made and are never
-overwritten - that folder is the track record.
+overwritten: that folder is the track record.
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ class Prediction:
     def save(self, force: bool = False) -> Path | None:
         """Write the forecast unless this race already has one at this stage.
 
-        One file per race per stage keeps the record honest - a second pre-quali
+        One file per race per stage keeps the record honest: a second pre-quali
         file from a later run would look like the forecast was retried until it
         looked good. It also lets the workflow run often without littering. The
         one exception is a newly announced grid penalty (see existing).
@@ -130,7 +130,7 @@ class Prediction:
             )
             return prior
 
-        # Too far out to be a race-week call. The page still renders; the file isn't
+        # Too far out to be a race-week call. The page still renders. The file isn't
         # written, so it can't block the later forecast for this stage.
         ahead = self.days_out()
         if not force and not self.grid_known and ahead is not None and ahead > config.LOG_WINDOW_DAYS:
@@ -217,7 +217,7 @@ def _dominant(series: pd.Series) -> str | None:
 def feature_labels() -> dict[str, str]:
     """Plain-English phrase for every feature, used in the published rationale.
 
-    Kept as its own function so a test can assert no feature is missing - an
+    Kept as its own function so a test can assert no feature is missing: an
     unlabelled one would appear on the page as a raw column name.
     """
     return {
@@ -294,7 +294,7 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
         anchor = points.get(last)
         low = {int(r): float(v) for r, v in out["projection_low"][did].items()}
         high = {int(r): float(v) for r, v in out["projection_high"][did].items()}
-        # The band starts pinched at the last race actually run - there is no
+        # The band starts pinched at the last race actually run: there is no
         # uncertainty about points already scored.
         if anchor is not None:
             low[last] = high[last] = anchor
@@ -307,7 +307,7 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
                 "high": high,
             }
         )
-    # Teammates share a constructor colour; the chart tints the second car in
+    # Teammates share a constructor colour. The chart tints the second car in
     # a garage lighter. Dash is reserved for "projected".
     seen: set[str] = set()
     for entry in series:
@@ -381,7 +381,7 @@ GROUP_LABELS = {
 def grouped_contributions(ranker: model.Ranker, race: pd.DataFrame) -> pd.DataFrame:
     """SHAP contributions to each driver's score, summed within feature groups.
 
-    Rows are drivers (race order), columns are groups; each row sums to the
+    Rows are drivers (race order), columns are groups. Each row sums to the
     driver's score relative to the field. See model.Ranker.contributions.
     """
     phi = pd.DataFrame(ranker.contributions(race), columns=ranker.feature_names)
@@ -403,7 +403,7 @@ def explain(ranker: model.Ranker, race: pd.DataFrame) -> tuple[list[str], list[d
 
     "Helped by" the largest group pushing the driver up the order, "held back
     by" the largest pulling them down. SHAP says what the model leaned on for
-    this forecast; it is not a claim about what causes a result.
+    this forecast. It is not a claim about what causes a result.
     """
     labels = {**feature_labels(), **GROUP_LABELS}
     unlabelled = [f for f in ranker.feature_names if EXPLANATION_GROUPS.get(f, f) not in labels]
@@ -420,7 +420,7 @@ def explain(ranker: model.Ranker, race: pd.DataFrame) -> tuple[list[str], list[d
             parts.append(f"helped by {labels.get(up.index[0], up.index[0])}")
         if not down.empty:
             parts.append(f"held back by {labels.get(down.index[0], down.index[0])}")
-        line = "; ".join(parts)
+        line = ", ".join(parts)
         # Not .capitalize(): that lowercases the rest of the sentence.
         lines.append(line[:1].upper() + line[1:] if line else "")
         # Every group, largest first: the page shows the strongest on each side.
@@ -441,8 +441,8 @@ def run(
     Before qualifying: the qualifying model forecasts the grid, the race model
     scores the projected weekend, and every simulated race draws its own grid.
     After qualifying: the official grid (or, until it is published, the
-    qualifying order - recorded as such) and the real qualifying result go to
-    the race model. The qualifying forecast is then shown for comparison only;
+    qualifying order, recorded as such) and the real qualifying result go to
+    the race model. The qualifying forecast is then shown for comparison only.
     it never stands in for the result.
     """
     s = settings or backtest.load_settings()
@@ -507,7 +507,7 @@ def run(
     for col in ("p_win", "p_podium", "p_top5", "p_top10", "exp_position"):
         race[col] = fc.column(col)
 
-    # This race is scored on this race - its grid, its track. The rest of the
+    # This race is scored on this race: its grid, its track. The rest of the
     # season isn't, so each driver's season strength comes from their own
     # recent weekends instead. See championship.season_strength.
     race["season_score"] = championship.season_strength(race_model, race, history)
@@ -618,7 +618,7 @@ def run(
             "practice_complete": bool(practice and last_session),
             "circuit_seen_before": bool(pd.notna(meta_race["circuit_overtaking_score"])),
             # position_matrix rows follow this order, which is the order the
-            # simulation ran in - not the sorted output order.
+            # simulation ran in: not the sorted output order.
             "matrix_driver_ids": race["driver_id"].tolist(),
             "provenance": provenance.record(
                 model_version=provenance.model_version(

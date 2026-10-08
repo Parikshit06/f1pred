@@ -83,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("experiments", help="ablation, calibration, practice, form and stability experiments")
     p.add_argument("--start-season", type=int, default=2024)
     p.add_argument("--tune-season", type=int, default=2022)
-    p.add_argument("--only", help="comma-separated subset; others keep their saved results")
+    p.add_argument("--only", help="comma-separated subset. Others keep their saved results")
 
     p = sub.add_parser("predict", help="forecast a race and log it")
     p.add_argument(

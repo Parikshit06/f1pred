@@ -42,8 +42,8 @@ MIN_TRAIN_RACES = 30
 def final_points(season: int) -> tuple[dict[str, float], dict[str, float]]:
     """Final points by driver and by constructor.
 
-    Constructors' points are summed from the results as awarded - a driver who
-    changed team mid-season scored for both - not from the drivers' totals.
+    Constructors' points are summed from the results as awarded, not from the
+    drivers' totals, because a driver who changed team mid-season scored for both.
     """
     with connect(read_only=True) as con:
         rows = con.execute(
@@ -159,7 +159,7 @@ def _closest(sweep: pd.DataFrame) -> float:
 
 def run(df: pd.DataFrame, n_sims: int = 6000) -> dict:
     """Sweep the team term, then the driver term with the team term fixed, on
-    the fit window; grade both on the held-out one."""
+    the fit window. Grade both on the held-out one."""
     fit_points = checkpoints(df, FIT_SEASONS)
     grade_points = checkpoints(df, GRADE_SEASONS)
     if not fit_points or not grade_points:

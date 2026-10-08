@@ -2,7 +2,7 @@
 
 For each season from 2019, stop at a few checkpoints, project the title from
 a model trained only on earlier races, and record what it said against who
-won. A small sample by nature - a handful of checkpoints a season - and 2018
+won. A small sample by nature (a handful of checkpoints a season) and 2018
 can't be graded because its checkpoints have too little history behind them.
 """
 

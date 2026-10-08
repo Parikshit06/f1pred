@@ -43,7 +43,7 @@ NO_QUALI = pd.DataFrame(columns=["season", "round", "driver_id", "constructor_id
 # Entry list
 # ---------------------------------------------------------------------------
 def test_qualifying_sets_the_field_not_the_previous_race():
-    """The Baku failure, generalised: last race a stand-in drove red_b's car;
+    """The Baku failure, generalised: last race a stand-in drove red_b's car.
     this weekend red_b is back. The field must follow this weekend."""
     last_race = _field()
     last_race.loc[last_race.driver_id == "red_b", "driver_id"] = "stand_in"
@@ -70,7 +70,7 @@ def test_a_team_change_takes_the_team_from_this_weekend():
 
 
 def test_before_qualifying_a_later_practice_session_sets_the_field():
-    """FP2 shows the real line-up from Friday; the previous race is stale."""
+    """FP2 shows the real line-up from Friday. The previous race is stale."""
     last_race = _field()
     this_weekend = _field()
     this_weekend.loc[this_weekend.driver_id == "teal_b", "driver_id"] = "rookie"
@@ -237,12 +237,12 @@ LOOKUP = pd.DataFrame(
 
 
 def test_drivers_map_by_code_in_the_current_season_first():
-    # NOR exists twice across seasons; the current season decides.
+    # NOR exists twice across seasons. The current season decides.
     assert openf1.map_driver({"name_acronym": "NOR", "driver_number": 1}, LOOKUP, 2026) == "norris"
 
 
 def test_a_champions_number_does_not_steal_the_mapping():
-    """Norris runs #1 as champion; number 1 belongs to someone else in jolpica."""
+    """Norris runs #1 as champion. Number 1 belongs to someone else in jolpica."""
     got = openf1.map_driver({"name_acronym": "NOR", "driver_number": 1, "last_name": "Norris"}, LOOKUP, 2026)
     assert got == "norris"
 

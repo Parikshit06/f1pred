@@ -182,7 +182,7 @@ def test_dnf_probability_is_bounded():
 
 
 def test_a_temperature_can_be_fitted_on_the_first_few_finishers():
-    """Depth 1 is the winner-only fit; an order of indices fits the same
+    """Depth 1 is the winner-only fit. An order of indices fits the same
     Plackett-Luce likelihood one place at a time."""
     from f1pred import probability
 

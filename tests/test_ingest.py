@@ -1,6 +1,6 @@
 """Ingest bookkeeping: what counts as done, and what has to be asked again.
 
-The parsers are pure and easy; the part that has actually gone wrong is the
+The parsers are pure and easy. The part that has actually gone wrong is the
 part that decides not to fetch something.
 """
 
@@ -116,7 +116,7 @@ def test_rate_window_survives_a_restart(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Status parsing - the rule that misfiled 398 finishes
+# Status parsing: the rule that misfiled 398 finishes
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "status",

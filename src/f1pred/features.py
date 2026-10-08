@@ -67,13 +67,13 @@ BASE_FEATURES = [
 # Numbers are from when each was tried. None cleared the noise, so none stay.
 #
 #   teammate race edge, beat-teammate rate     podium 2.016 -> 1.968
-#   races at current team, first season there  winner 0.500 -> 0.484; switcher bias wider
+#   races at current team, first season there  winner 0.500 -> 0.484. Switcher bias wider
 #   form shrunk toward the car by experience   neutral
 #   form at circuits of the same character     worse on both models, pole 0.258 -> 0.226
 #   quali score blended with the team's best   fitted at 0.45 on 2022-23, then off-window
 #     recent grid slot                           pole 0.274 -> 0.226
-#   retirements split by cause, correlated     identical to 4 d.p. - the split keeps each
-#     inside a garage                            car's marginal DNF rate; band coverage
+#   retirements split by cause, correlated     identical to 4 d.p.: the split keeps each
+#     inside a garage                            car's marginal DNF rate. Band coverage
 #                                                50.0% either way
 #   team pit-stop gap, 5-race                  better on two metrics, worse on three
 #                                                including log loss
@@ -129,14 +129,14 @@ GRID_FEATURES = [
 
 # Measured and left out of the race model: the teammate qualifying gap, this
 # weekend's and its five-race average. Adding them back made 2022-23 win log
-# loss worse by 0.049 (interval 0.010 to 0.089); no clear difference on 2024-
+# loss worse by 0.049 (interval 0.010 to 0.089). No clear difference on 2024-
 # (reports/experiments.json, ablation). drv_teammate_quali_edge still feeds the
 # qualifying model, where head-to-head record is direct one-lap evidence.
 TEAMMATE_FEATURES = ["quali_gap_to_teammate_pct", "drv_teammate_quali_edge"]
 
 # Also measured and left out of the race model: the driver's own qualifying
 # record. It is the qualifying model's core input, and reaches the race through
-# the grid - projected before qualifying, official after. Inside the race model
+# the grid: projected before qualifying, official after. Inside the race model
 # it counted twice: adding it back made 2022-23 win log loss worse by 0.078
 # (interval 0.027 to 0.138) after qualifying and by 0.043 (0.009 to 0.078)
 # before (reports/experiments.json, ablation and pre_quali_ablation).
@@ -187,10 +187,9 @@ FEATURE_VERSION = "2026.09.7"
 
 # How recent finishing form (drv_/team_avg_finish_*) is summarised: "mean" or
 # "median". The median resists one freak result. On 2022-23 it lowered win log
-# loss by 0.047 (interval 0.003 to 0.093), which meets the bar for a change;
-# on 2024- it made no clear difference. An earlier configuration measured the
-# same gain (0.049) with an interval just touching zero, so this is a marginal
-# call, taken once and not revisited (reports/experiments.json, form_statistic).
+# loss by 0.047 (interval 0.003 to 0.093), which meets the bar for a change.
+# On 2024- it made no clear difference, so it is a marginal call, taken once
+# and not revisited (reports/experiments.json, form_statistic).
 FORM_STAT = "median"
 
 # Rolling windows never see the current race, so early-career rows are sparse.
@@ -281,11 +280,11 @@ def _load() -> Raw:
 def _prior_rolling(df: pd.DataFrame, by: str | list[str], col: str, window: int, how: str = "mean"):
     """Rolling stat over the previous `window` races, current race excluded.
 
-    ONLY valid when the grouping key has exactly one row per race - i.e. keys
+    ONLY valid when the grouping key has exactly one row per race: i.e. keys
     built on driver_id. .shift(1) steps back one ROW, so with two rows per race
     (a constructor has two cars) it steps back to the teammate in the SAME
     race and leaks that result. Team-level features must use
-    _prior_rolling_by_race instead; tests/test_leakage.py enforces this.
+    _prior_rolling_by_race instead, which tests/test_leakage.py enforces.
     """
     grouped = df.groupby(by, sort=False)[col]
     return grouped.transform(lambda s: getattr(s.shift(1).rolling(window, min_periods=1), how)())
@@ -316,12 +315,12 @@ def _roll_over_valid(s: pd.Series, window: int | None, stat: str = "mean") -> pd
 def _prior_pace(df: pd.DataFrame, by: str | list[str], col: str, window: int | None, stat: str = "mean"):
     """Recent finishing form over races the car actually finished.
 
-    A retirement is classified near last; averaged in, it reads as slowness when
+    A retirement is classified near last. Averaged in, it reads as slowness when
     the car broke. Reliability already has its own features and the simulator's
     retirement hazard, so counting it here too would charge the same event twice
     - hardest on cars that stopped while running near the front.
 
-    One-row-per-race keys only; see _prior_rolling.
+    One-row-per-race keys only. See _prior_rolling.
     """
     return df.groupby(by, sort=False)[col].transform(lambda s: _roll_over_valid(s, window, stat))
 
@@ -381,7 +380,7 @@ def _prior_rolling_by_race(
     Collapse to one value per (group, race) first, step back a whole race, then
     broadcast the answer to every driver in that group. Without the collapse,
     the second car in a garage reads its teammate's finishing position from the
-    race being predicted - which is the future.
+    race being predicted: which is the future.
 
     Pass window=None for an expanding window.
     """
@@ -454,7 +453,7 @@ def _upcoming_entries(raw: Raw) -> pd.DataFrame:
     out["classified"] = pd.Series([None] * len(out), dtype=object)
     out["dnf"] = pd.Series([None] * len(out), dtype=object)
     log.info(
-        "Added %d placeholder entries for %d upcoming race(s); next race's field from %s",
+        "Added %d placeholder entries for %d upcoming race(s). Next race's field from %s",
         len(out),
         out.groupby(["season", "round"]).ngroups,
         out["entry_source"].iloc[0],
@@ -494,7 +493,7 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     df = df.merge(raw.pace, on=["season", "round", "driver_id"], how="left")
 
     # Where each car started: the results grid, else the official grid, else
-    # the qualifying order - see weekend.resolve_grid.
+    # the qualifying order: see weekend.resolve_grid.
     resolved = weekend.resolve_grid(df[["season", "round", "driver_id", "grid"]], raw.quali, raw.openf1_grid)
     df["grid"] = resolved["grid"].to_numpy()
     df["grid_source"] = resolved["grid_source"].to_numpy()
@@ -527,7 +526,7 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     df["scored"] = (df["points"] > 0).astype(float).where(ran)
     df["dnf_flag"] = df["dnf"].astype(float)
 
-    # Finishing position when the car finished; null on a retirement, so a
+    # Finishing position when the car finished. Null on a retirement, so a
     # failure doesn't read as slowness. Outcome features and the label still
     # use finish_or_last, because not finishing is a real result.
     retired = df["dnf"].astype("boolean").fillna(True).astype(bool)  # unknown counts as not running
@@ -597,7 +596,7 @@ def _add_circuit_profile(df: pd.DataFrame) -> pd.DataFrame:
     """How much a circuit reshuffles the grid, and how punishing it is.
 
     Computed from prior visits only. A circuit nobody has raced at gets NaN,
-    which is the honest answer - see cold_start() for how a new track is
+    which is the honest answer: see cold_start() for how a new track is
     handled at prediction time.
     """
     df["abs_pos_change"] = (df["grid"] - df["finish_or_last"]).abs().where(df["position"].notna())
@@ -649,7 +648,7 @@ def _add_quali_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Rolling head-to-head against the other side of the garage. Strong signal:
     # it isolates the driver from the car, which almost nothing else here does.
-    # Over the last five weekends with a comparison; one without isn't a tie.
+    # Over the last five weekends with a comparison. One without isn't a tie.
     # Clipped at 3%: beyond that the gap is a crash or a failure in Q1, not the
     # drivers, and one such lap would otherwise dominate a five-race average.
     df = df.sort_values(["season", "round"]).reset_index(drop=True)
@@ -681,7 +680,7 @@ def _add_pace_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["season", "round"]).reset_index(drop=True)
 
     # Best of the two cars each weekend is a better read on the machine than
-    # either driver alone - it strips out one driver having a scruffy lap.
+    # either driver alone: it strips out one driver having a scruffy lap.
     df["team_round_pace"] = df.groupby(["season", "round", "constructor_id"])[
         "quali_gap_to_pole_pct"
     ].transform("min")
@@ -696,7 +695,7 @@ def _add_pace_features(df: pd.DataFrame) -> pd.DataFrame:
     longer = _prior_rolling_by_race(df, "constructor_id", "team_round_pace", 8, race_agg="min")
     df["team_pace_trend"] = recent - longer
 
-    # Places gained from the grid. Null on a retirement - stopping from third
+    # Places gained from the grid. Null on a retirement: stopping from third
     # isn't a racecraft result.
     df["positions_gained"] = (df["grid"] - df["finish_when_running"]).where(~df["dnf"].astype(bool))
     df["drv_positions_gained_5"] = _prior_pace(df, "driver_id", "positions_gained", 5)

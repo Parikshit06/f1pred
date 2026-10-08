@@ -4,7 +4,7 @@ Not a physics model. Each simulated race perturbs the ranker's scores:
 
     pace noise   normal, sd = PACE_NOISE x the spread of scores in the field
     safety car   with the circuit's probability, the noise widens by
-                 SAFETY_CAR_SPREAD - a stand-in for a neutralised race
+                 SAFETY_CAR_SPREAD: a stand-in for a neutralised race
                  handing out luck, not a model of when one happens
     grid         a pull toward the starting order, stronger where the
                  circuit's history says overtaking is hard
@@ -59,7 +59,7 @@ def simulate_matrix(
     grid_temperature: float = 1.0,
     seed: int = config.RANDOM_SEED,
 ) -> np.ndarray:
-    """Run the race n_sims times; return shares as a matrix [driver, position]."""
+    """Run the race n_sims times. Return shares as a matrix [driver, position]."""
     rng = np.random.default_rng(seed)
     scores = np.asarray(inputs.scores, dtype=float)
     n = len(scores)
@@ -67,7 +67,7 @@ def simulate_matrix(
 
     if inputs.grid is not None:
         grid_given = np.asarray(inputs.grid, dtype=float)
-        # A grid with gaps doesn't raise on its own - pace goes NaN and the
+        # A grid with gaps doesn't raise on its own: pace goes NaN and the
         # simulation averages into a near-uniform field. Fail instead.
         if not np.isfinite(grid_given).all():
             missing = int((~np.isfinite(grid_given)).sum())
@@ -92,7 +92,7 @@ def simulate_matrix(
         - grid_pull(inputs.overtaking_score) * (grid - 1) * (score_sd / 6.0)
     )
     # Retirements are classified behind every finisher, ordered by how far they
-    # got - which a random draw stands in for.
+    # got: which a random draw stands in for.
     retired = rng.random((n_sims, n)) < np.asarray(inputs.dnf_prob, dtype=float)[None, :]
     pace = np.where(retired, -1e6 + rng.random((n_sims, n)), pace)
 
@@ -123,7 +123,7 @@ def simulate(
 def dnf_probability(df: pd.DataFrame, floor: float = 0.02, cap: float = 0.35) -> np.ndarray:
     """Blend the driver's and the team's recent retirement rates.
 
-    Team reliability dominates - an engine does not care who is steering - but
+    Team reliability dominates (an engine does not care who is steering) but
     driver rate carries crash risk, so both go in.
     """
     drv = df["drv_dnf_rate_10"].fillna(0.12).to_numpy()
@@ -170,7 +170,7 @@ def race_inputs(
 @dataclass
 class RaceForecast:
     driver_ids: list[str]
-    matrix: np.ndarray  # [driver, position]; rows and columns sum to 1
+    matrix: np.ndarray  # [driver, position]. Rows and columns sum to 1
     table: pd.DataFrame  # driver_id, p_win, p_podium, p_top5, p_top10, exp_position
 
     def column(self, name: str) -> np.ndarray:
@@ -188,7 +188,7 @@ def forecast(
     """One coherent finishing-position distribution for a race.
 
     Plackett-Luce at the calibrated temperature, mixed with the Monte Carlo at
-    the fitted weight; see probability.py for why the mixture stays coherent.
+    the fitted weight. See probability.py for why the mixture stays coherent.
     """
     pl = probability.pl_position_matrix(inputs.scores, temperature, n_samples=max(n_sims, 10_000), seed=seed)
     sim = simulate_matrix(

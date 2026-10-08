@@ -260,7 +260,7 @@ def test_after_qualifying_the_official_grid_is_used(postquali):
 def test_a_driver_sitting_out_stays_in_the_title_race(frame):
     """dune_two misses rounds 4-6 of the last season to a stand-in. Projected
     from after round 5, dune_two isn't in the next race's field but keeps their
-    points - leaving such a driver out once handed a clinched title to a teammate."""
+    points: leaving such a driver out once handed a clinched title to a teammate."""
     import numpy as np
 
     from f1pred import championship

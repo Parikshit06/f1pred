@@ -10,7 +10,7 @@ came from, so a forecast records what it was built on.
     3. latest FP2/FP3/sprint      OpenF1     3. qualifying order        provisional:
     4. previous race's field      provisional                           penalties missing
 
-A rung is used only if it passes its checks; otherwise the next one is tried.
+A rung is used only if it passes its checks. Otherwise the next one is tried.
 The previous race's field is a last resort and is labelled as such: it is how
 a driver who had been replaced came to be forecast for a race they weren't in.
 
@@ -44,11 +44,11 @@ GRID_SOURCES = ("results", "openf1", "qualifying")
 # Checks
 # ---------------------------------------------------------------------------
 def check_grid(grid: pd.DataFrame, entrants: set[str] | None = None) -> list[str]:
-    """Problems with a candidate grid of (driver_id, position); empty if usable.
+    """Problems with a candidate grid of (driver_id, position). Empty if usable.
 
     Position 0 is a pit-lane start and may repeat. Anything else must be a
     distinct slot. A driver who isn't entered in the race means the grid
-    belongs to some other session - a stale grid - and it is refused rather
+    belongs to some other session (a stale grid) and it is refused rather
     than partly used.
     """
     if grid is None or grid.empty:
@@ -127,7 +127,7 @@ def resolve_grid(frame: pd.DataFrame, quali: pd.DataFrame, openf1_grid: pd.DataF
     results and therefore empty for a race not yet run. Returns frame's keys
     with `grid` (1 = pole) and `grid_source`.
 
-    Pit-lane starters are placed at the back of the grid - the field size -
+    Pit-lane starters are placed at the back of the grid (the field size)
     rather than left at 0, which every grid-based feature would read as ahead
     of pole.
     """
@@ -147,7 +147,7 @@ def resolve_grid(frame: pd.DataFrame, quali: pd.DataFrame, openf1_grid: pd.DataF
                 chosen, source = cand, name
                 break
             if not cand.empty:
-                log.debug("%s grid for %s rejected: %s", name, key, "; ".join(problems))
+                log.debug("%s grid for %s rejected: %s", name, key, ". ".join(problems))
 
         grid = pd.Series(np.nan, index=race.index)
         if chosen is not None:
@@ -184,7 +184,7 @@ def race_entries(
 ) -> tuple[pd.DataFrame, str | None]:
     """(driver_id, constructor_id) for a race without results, and the source.
 
-    results/quali/openf1_entries are the full raw tables; only rows for this
+    results/quali/openf1_entries are the full raw tables. Only rows for this
     season are consulted, and only rounds before this one for the fallback.
     """
     cols = ["driver_id", "constructor_id"]
@@ -205,7 +205,7 @@ def race_entries(
         problems = check_entries(s[cols])
         if not problems:
             return s[cols].reset_index(drop=True), f"openf1:{session}"
-        log.warning("openf1 %s entries for %d r%d rejected: %s", session, season, rnd, "; ".join(problems))
+        log.warning("openf1 %s entries for %d r%d rejected: %s", session, season, rnd, ". ".join(problems))
 
     before = results[(results["season"] == season) & (results["round"] < rnd)]
     if before.empty:

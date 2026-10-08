@@ -30,7 +30,7 @@ _CONTACT = os.environ.get("F1PRED_CONTACT", REPO_URL)
 USER_AGENT = f"f1pred/0.1.0 (+{_CONTACT})" if _CONTACT else "f1pred/0.1.0"
 
 # Documented limits are 4/s and 500/hour, but the burst limiter trips well
-# below 4/s in practice. ~0.8/s runs clean; each 429 slows the client further
+# below 4/s in practice. ~0.8/s runs clean. Each 429 slows the client further
 # for the rest of the run.
 JOLPICA_MIN_INTERVAL = 1.2
 JOLPICA_HOURLY_LIMIT = 450
@@ -39,7 +39,7 @@ JOLPICA_MAX_INTERVAL = 6.0
 JOLPICA_PAGE_SIZE = 100
 
 # OpenF1: official starting grids and per-session driver lists, 2023 onward.
-# The free tier allows about 30 requests a minute; one every 2.1s stays under.
+# The free tier allows about 30 requests a minute. One every 2.1s stays under.
 OPENF1_BASE = "https://api.openf1.org/v1"
 OPENF1_FIRST_SEASON = 2023
 OPENF1_MIN_INTERVAL = 2.1
@@ -54,7 +54,7 @@ CURRENT_SEASON = 2026
 # Fallbacks only: `make backtest` fits these on 2022-23 and writes them to
 # reports/backtest.json, which the live forecast reads (backtest.load_settings).
 DEFAULT_CURRENT_SEASON_WEIGHT = 2.0  # training weight on current-season races
-DEFAULT_TEMPERATURE = 0.35  # Plackett-Luce sharpness; <1 is more decisive
+DEFAULT_TEMPERATURE = 0.35  # Plackett-Luce sharpness. Below 1 is more decisive
 DEFAULT_BLEND_WEIGHT = 0.7  # Plackett-Luce vs simulation in the mixture
 DEFAULT_QUALI_TEMPERATURE = 0.55  # the qualifying model's own Plackett-Luce temperature
 
@@ -73,7 +73,7 @@ SEASON_DRIVER_UNCERTAINTY = 0.0
 POSITIONS_PER_SCORE_SD = 5.62
 
 N_SIMULATIONS = 10_000
-TOP_N = 10  # rows shown in each table on the site; the full field is still modelled
+TOP_N = 10  # rows shown in each table on the site. The full field is still modelled
 
 # A pre-qualifying forecast is only logged within this many days of the race,
 # so the record holds race-week calls rather than whatever the scheduler ran

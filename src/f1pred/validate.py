@@ -326,7 +326,7 @@ def points_awarded_to_finishers(con) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
-# Temporal integrity - the checks that protect against leakage
+# Temporal integrity: the checks that protect against leakage
 # ---------------------------------------------------------------------------
 @check
 def races_chronological(con) -> list[Finding]:
@@ -387,7 +387,7 @@ def practice_predates_qualifying(con) -> list[Finding]:
 # ---------------------------------------------------------------------------
 @check
 def grid_slots_unique(con) -> list[Finding]:
-    """Two cars in one grid slot is a data error; 0 (pit lane) may repeat."""
+    """Two cars in one grid slot is a data error. 0 (pit lane) may repeat."""
     df = _q(
         con,
         """
@@ -403,7 +403,7 @@ def grid_slots_unique(con) -> list[Finding]:
 @check
 def grid_present_for_completed_races(con) -> list[Finding]:
     """jolpica has published results without the grid. The official grid from
-    OpenF1 covers it (weekend.resolve_grid); this says which races needed it."""
+    OpenF1 covers it (weekend.resolve_grid). This says which races needed it."""
     df = _q(
         con,
         """
@@ -518,7 +518,7 @@ def retirement_flag_matches_laps(con) -> list[Finding]:
     if df.empty:
         return []
 
-    # A car stopping on the last lap looks like a finisher and is a few rows; a
+    # A car stopping on the last lap looks like a finisher and is a few rows. A
     # changed status wording hits one string hundreds of times. Only that's an error.
     by_status = df.groupby("status", as_index=False)["rows"].sum().sort_values("rows", ascending=False)
     systematic = by_status[by_status["rows"] >= 20]

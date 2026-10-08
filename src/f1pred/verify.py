@@ -72,10 +72,10 @@ class Verification:
 # 1. Leakage
 # ---------------------------------------------------------------------------
 def audit_leakage(df: pd.DataFrame) -> Audit:
-    """Change a race's result; no feature for that race or any earlier one may move.
+    """Change a race's result. No feature for that race or any earlier one may move.
 
     This is stronger than inspecting the code. If a feature accidentally peeks
-    at the current race - or at any future race - rewriting an outcome will
+    at the current race (or at any future race) rewriting an outcome will
     shift it, and the comparison below catches it whatever the mechanism.
     """
     from .store import connect
@@ -91,7 +91,7 @@ def audit_leakage(df: pd.DataFrame) -> Audit:
 
     baseline = features.build(include_upcoming=False)
 
-    # Reverse the finishing order of that one race - a maximal perturbation.
+    # Reverse the finishing order of that one race: a maximal perturbation.
     tampered = results.copy()
     mask = (tampered["season"] == season) & (tampered["round"] == rnd)
     n = int(mask.sum())
@@ -260,7 +260,7 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
     rows = []
     for label, cols in INPUT_CLASSES.items():
         present = [c for c in cols if c in recent.columns]
-        # practice_available is a flag that is always 0 or 1; coverage of the
+        # practice_available is a flag that is always 0 or 1. Coverage of the
         # real signals is what matters.
         signal = [c for c in present if c != "practice_available"]
         cov = recent[signal].notna().mean().mean() * 100 if signal else 0.0
@@ -268,7 +268,7 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
     table = pd.DataFrame(rows).set_index("input")
 
     dead = table[table["coverage_pct"] < 1.0]
-    # Practice is an optional enhancement to the QUALIFYING model only; the
+    # Practice is an optional enhancement to the QUALIFYING model only. The
     # race forecast is designed to stand up without it. Everything else is
     # load-bearing, so an empty table there is a hard failure.
     required_dead = [d for d in dead.index if d != "Practice"]
@@ -284,7 +284,7 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
         return Audit(
             "2. Input coverage",
             WARN,
-            "Qualifying and past results are live; practice pace is absent (optional)",
+            "Qualifying and past results are live. Practice pace is absent (optional)",
             "Practice feeds only the qualifying model, where it clearly improved the\n"
             "forecast on held-out weekends (practice in reports/experiments.json). It is\n"
             "not in the race model: once the grid is known it adds nothing measurable.\n"
@@ -328,8 +328,8 @@ def audit_contributions(df: pd.DataFrame, n_races: int = 12) -> Audit:
     dead = [k for k in ("Past results", "Qualifying") if table["share_pct"].get(k, 0.0) < 0.5]
     detail = (
         f"Mean |SHAP| share over the last {len(held)} races, from a model trained before them.\n"
-        "Which input matters is established by the ablation in reports/experiments.json;\n"
-        "this checks that the learned contributions are live and not concentrated by accident."
+        "Which input matters is established by the ablation in reports/experiments.json.\n"
+        "This checks that the learned contributions are live and not concentrated by accident."
     )
     if dead:
         return Audit("3. Contributions", WARN, f"{', '.join(dead)} contribute nothing", detail, table)
@@ -400,7 +400,7 @@ def audit_accuracy(df: pd.DataFrame, start_season: int, retrain_every: int) -> t
     table = comp[["model", "grid", "difference", "ci_low", "ci_high", "better"]].round(3)
     detail = (
         f"{int(comp['n_races'].iloc[0])} races, walk-forward, trained only on earlier races.\n"
-        "Both sides calibrated the same way; 'better' needs a 95% interval clear of zero."
+        "Both sides calibrated the same way. 'better' needs a 95% interval clear of zero."
     )
     if "win_logloss" in worse:
         return Audit("5. Accuracy", FAIL, "The grid alone gives better win probabilities", detail, table), res

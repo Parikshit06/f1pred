@@ -1,6 +1,6 @@
 """The tests that matter most.
 
-Temporal leakage does not raise an exception; it just makes the backtest look
+Temporal leakage does not raise an exception. It just makes the backtest look
 good and the live predictions bad. These tests construct cases where a leak
 would be visible and assert it is not there.
 """
@@ -117,7 +117,7 @@ def test_row_shift_helper_leaks_across_teammates():
 
     last_b = df[(df.driver_id == "b") & (df["round"] == 4)]["leaky"].iloc[0]
     # Car A's win is in the same race, yet it has moved car B's team average.
-    assert last_b < 10.0, "expected the row-shift helper to leak; it no longer does"
+    assert last_b < 10.0, "expected the row-shift helper to leak. It no longer does"
 
 
 def test_race_level_helper_does_not_leak_across_teammates():
@@ -195,7 +195,7 @@ def test_pace_skips_retirements_without_consuming_the_window():
     df = _with_dnfs([4, 5, 22, 6], [False, False, True, False])
     df["pace"] = features._prior_pace(df, "driver_id", "finish_when_running", 3)
 
-    # At the last race the prior CLEAN results are 4 and 5; the retirement is
+    # At the last race the prior CLEAN results are 4 and 5. The retirement is
     # skipped rather than averaged in and rather than eating a slot.
     assert df["pace"].iloc[3] == pytest.approx(4.5)
     # The plain helper is the thing being corrected: it reads the 22nd.
@@ -248,5 +248,5 @@ def test_a_retired_car_does_not_drag_its_teams_pace():
     df["finish_when_running"] = df["finish_or_last"].where(~df["dnf"])
     df["pace"] = features._prior_pace_by_race(df, "constructor_id", "finish_when_running", 3)
     last = df[df["round"] == 4]["pace"].iloc[0]
-    # Races 1 and 2 average 3.5; in race 3 only the running car counts, so 3.
+    # Races 1 and 2 average 3.5. In race 3 only the running car counts, so 3.
     assert last == pytest.approx((3.5 + 3.5 + 3.0) / 3)

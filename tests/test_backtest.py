@@ -71,7 +71,7 @@ def test_a_reused_model_is_only_ever_older_than_the_race():
         return model.train(history, ["drv_avg_finish_3"], "race_relevance", n_seeds=1)
 
     backtest.oos_scores(df, list(range(32, 40)), spy, retrain_every=3)
-    # Retrained before 32, 35 and 38 - each time on everything before that race.
+    # Retrained before 32, 35 and 38: each time on everything before that race.
     assert trained_through == [31, 34, 37]
 
 

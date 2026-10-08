@@ -38,8 +38,8 @@ class RateLimitedSession:
         self.min_interval = min_interval
         self.hourly_limit = hourly_limit
         self._last_call = 0.0
-        # Timestamps of real network calls in the last hour; cache hits don't count.
-        # Persisted because jolpica's budget is per IP and outlives the process - an
+        # Timestamps of real network calls in the last hour. Cache hits don't count.
+        # Persisted because jolpica's budget is per IP and outlives the process: an
         # empty window after a restart would overrun it immediately.
         self._window_path = cache_dir / "_rate_window.json"
         self._window: deque[float] = deque(self._load_window())
@@ -80,10 +80,10 @@ class RateLimitedSession:
         sliding window: if we have already made `hourly_limit` calls in the
         last 3600s, wait until the oldest of them ages out. Reacting to a 429
         after the fact is not enough, because a short exponential backoff
-        cannot clear an hour-long window - it just burns retries.
+        cannot clear an hour-long window: it just burns retries.
         """
 
-        # Window uses wall clock so it can be persisted across runs; the
+        # Window uses wall clock so it can be persisted across runs. The
         # interval uses monotonic so a clock change cannot stall the client.
         def _prune() -> float:
             cutoff = time.time() - 3600
@@ -97,7 +97,7 @@ class RateLimitedSession:
             self.throttle_waits += 1
             log.warning(
                 "Hourly budget reached (%d/hr). Pausing %.1f min - normal on a full "
-                "backfill; everything already fetched is cached, so ctrl-C is safe.",
+                "backfill. Everything already fetched is cached, so ctrl-C is safe.",
                 self.hourly_limit,
                 wait / 60,
             )
@@ -158,7 +158,7 @@ class RateLimitedSession:
             try:
                 resp = self._session.get(url, timeout=30)
             except (requests.ConnectionError, requests.Timeout) as exc:
-                # A dropped connection or a slow response is transient; before this
+                # A dropped connection or a slow response is transient. Before this
                 # it ended the whole ingest on the first blip.
                 log.warning("Network error on %s (%s) - retrying in %.0fs", url, type(exc).__name__, backoff)
                 time.sleep(backoff)
@@ -196,7 +196,7 @@ class RateLimitedSession:
                     )
 
                 log.warning(
-                    "Rate limited (attempt %d/%d) - sleeping %.0fs. Safe to ctrl-C; progress is cached.",
+                    "Rate limited (attempt %d/%d), sleeping %.0fs. Safe to ctrl-C. Progress is cached.",
                     attempt + 1,
                     max_retries,
                     wait,

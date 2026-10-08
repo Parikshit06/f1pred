@@ -1,7 +1,7 @@
 """The README's figures must match the reports/*.json they come from.
 
 The README is written by hand, so nothing updates it when an evaluation
-refreshes the evidence. This catches the drift; a failure means the README
+refreshes the evidence. This catches the drift. A failure means the README
 needs updating, and the message says to what.
 """
 
@@ -108,7 +108,7 @@ def test_the_readme_claims_no_lead_over_the_grid_the_evidence_lacks():
     if not clear_wins and not clear_losses:
         assert "nothing is statistically clear" in text, "the README no longer admits the grid is level"
     else:
-        assert "nothing is statistically clear" not in text, "some intervals exclude zero; say which"
+        assert "nothing is statistically clear" not in text, "some intervals exclude zero. Say which"
 
 
 def test_every_clear_loss_to_the_grid_is_admitted():
@@ -165,7 +165,7 @@ def test_title_brier_and_hit_rate_are_current():
 
 
 def test_the_leader_baseline_is_quoted():
-    """The title favourite is nearly always the points leader; the README has
+    """The title favourite is nearly always the points leader. The README has
     to say so, with the leader's own record."""
     checkpoints = _load("title_backtest.json").get("checkpoints") or []
     if not checkpoints or "leader" not in checkpoints[0]:
@@ -201,7 +201,7 @@ def test_band_coverage_is_current(arm):
 
 def test_the_shortfall_is_still_admitted():
     """Coverage is below target. If a future run reaches 80% this test should be
-    deleted along with the sentence - but while it is short, the README has to
+    deleted along with the sentence, but while it is short, the README has to
     keep saying so rather than quietly dropping the admission."""
     held = _load("spread_calibration.json").get("held_out", {})
     if "after" not in held:
@@ -277,7 +277,7 @@ def test_the_key_results_table_quotes_the_measured_interval(metric):
 
 def test_the_calibration_limitation_quotes_the_top_bands():
     """The README, METHODOLOGY and the method page all name the most confident
-    podium and top-10 bands; the figures come from the same buckets."""
+    podium and top-10 bands. The figures come from the same buckets."""
     rel = _load("backtest.json").get("reliability") or {}
     for key in ("podium", "top10"):
         rows = [r for r in rel.get(key) or [] if int(r["n"]) >= 20]
@@ -313,7 +313,7 @@ def test_the_circuit_type_experiment_is_reported_as_not_used():
     from f1pred import features
 
     assert not exp["verdict"]["passes_rule"], (
-        "circuit type passed its rule; the README and model should change"
+        "circuit type passed its rule. The README and model should change"
     )
     assert "Circuit type: tested, not used" in _readme()
     assert not set(features.CIRCUIT_TYPE_FEATURES) & set(features.RACE_FEATURES)

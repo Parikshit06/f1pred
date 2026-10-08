@@ -1,12 +1,12 @@
 """Season projection: run the rest of the calendar many times from current form.
 
-Each simulated race uses the same noise model as simulate.simulate - pace
-variance, safety cars, per-driver retirement hazard - so title odds stay
+Each simulated race uses the same noise model as simulate.simulate (pace
+variance, safety cars, per-driver retirement hazard), so title odds stay
 consistent with the published race probabilities. Sprint weekends run a
 shorter race on the Saturday with its own points, taken from the calendar, so
 remaining sprint points are in the projection.
 
-Assumes current form holds; it can't see an upgrade coming. The fastest-lap
+Assumes current form holds. It can't see an upgrade coming. The fastest-lap
 point (2019-24) is counted in what a driver could still score, but not
 simulated: at most a point a race, and not in the 2026 rules.
 """
@@ -208,7 +208,7 @@ def allocate_odds(
     """Round title odds to 0.1% so the column still sums to 100.
 
     Largest-remainder rounding, and a leader who hasn't clinched is never shown
-    at 100% - the simulation can't resolve past 1 in n_sims, and the real
+    at 100%: the simulation can't resolve past 1 in n_sims, and the real
     uncertainty is whether form holds.
     """
     probs = np.asarray(probs, dtype=float)
@@ -303,8 +303,8 @@ def project(
 
     # Everyone with points stays in the title race, entered this weekend or
     # not: a driver sitting out (illness, a stand-in in their car) keeps what
-    # they have. Dropping them once handed a title already clinched - Hamilton,
-    # 2020, out with COVID - to their teammate at 90%. They score nothing more in
+    # they have. Dropping them once handed a title already clinched (Hamilton,
+    # 2020, out with COVID) to their teammate at 90%. They score nothing more in
     # the simulation, which for a driver who returns is conservative.
     n_field = len(driver_ids)
     absent = standings[~standings["driver_id"].isin(driver_ids)]
@@ -320,13 +320,13 @@ def project(
         teams = [*teams, *absent["constructor_id"].fillna("unknown").tolist()]
 
     # Ties for the title are vanishingly rare and are broken on countback in
-    # reality; argmax picks one, which is close enough at this precision.
+    # reality. Argmax picks one, which is close enough at this precision.
     champion = np.argmax(totals, axis=1)
     raw_title = np.bincount(champion, minlength=len(driver_ids)) / n_sims
     rank = (-totals).argsort(axis=1).argsort(axis=1) + 1
 
     # Mathematically alive: could still reach the leader by taking everything
-    # left - sprints and bonus points included - while the leader scores nothing.
+    # left (sprints and bonus points included) while the leader scores nothing.
     # Anyone in the standings counts as a leader, raced this weekend or not.
     leader_points = max(base.max(), float(standings["points"].max()))
     alive = base + driver_max.sum() >= leader_points
@@ -376,7 +376,7 @@ def project(
     ).sort_values("projected", ascending=False)
 
     # Points gap between teammates, first-listed minus second. Graded by
-    # calibrate-spread; the team offset cancels here, so only the per-driver
+    # calibrate-spread. The team offset cancels here, so only the per-driver
     # term can widen it.
     pairs = []
     for t in team_names:
@@ -440,7 +440,7 @@ def season_strength(
     the model has never seen, and the median keeps one wrecked weekend from
     setting a driver's season. It projected final points and title odds better
     on 2019-22, across every driver and team (reports/experiments.json,
-    season_projection); on 2023- the three approaches were level.
+    season_projection). On 2023- the three approaches were level.
 
     Scores are standardised within each race, so a median across races compares
     like with like. A driver with fewer than MIN_OWN_RACES recent weekends (a
@@ -467,7 +467,7 @@ def season_strength(
 
 # Ten of the race model's features describe the weekend rather than the driver:
 # where they start, and the track they start at. Together they carry about half
-# the model - qualifying position alone is a third of it.
+# the model: qualifying position alone is a third of it.
 WEEKEND_GRID = ("grid", "quali_position", "quali_gap_to_pole_pct", "quali_gap_to_teammate_pct")
 WEEKEND_CIRCUIT = (
     "drv_circuit_avg_finish",
@@ -511,7 +511,7 @@ def typical_weekend(race: pd.DataFrame, history: pd.DataFrame, method: str = "me
             return pd.Series(np.nan, index=t.index)
         return t["driver_id"].map(recent.groupby("driver_id")[c].agg(stat))
 
-    # .fillna with a Series aligns on index; every Series here is built from
+    # .fillna with a Series aligns on index. Every Series here is built from
     # t's own index, so they line up by construction.
     if method == "median8":
         t["quali_position"] = per_driver("quali_position").fillna(med.get("quali_position"))

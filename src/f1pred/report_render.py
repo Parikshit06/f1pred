@@ -5,7 +5,7 @@ only (constructor colour identifies a car, the accent marks the model, green
 and red mean better or worse than a baseline), and numbers are monospaced
 and right-aligned so columns scan.
 
-Self-contained - inline CSS, hand-built SVG, no CDN - so it renders the same
+Self-contained (inline CSS, hand-built SVG, no CDN), so it renders the same
 from Pages, a local file, or offline.
 """
 
@@ -17,9 +17,9 @@ from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 # Constructor colours as (light surface, dark surface) pairs. Raw liveries fail
-# contrast - Mercedes teal is 1.8:1 on white - so each team gets a lightness-
+# contrast (Mercedes teal is 1.8:1 on white), so each team gets a lightness-
 # shifted variant per surface on its own hue. The main four were checked for
-# colour-vision deficiency; Ferrari and McLaren stay close for deuteranopes,
+# colour-vision deficiency. Ferrari and McLaren stay close for deuteranopes,
 # which is why chart lines are also labelled at their ends.
 TEAM_COLOURS = {
     "mercedes": ("#00917C", "#00A188"),
@@ -666,7 +666,7 @@ def _start_cell(r: dict) -> str:
     """Where the car starts, and where it qualified when a penalty moved it."""
     grid, quali = r.get("grid"), r.get("quali_position")
     if not isinstance(grid, (int, float)):
-        return "<div class='v dim start'>&mdash;</div>"
+        return "<div class='v dim start'>&middot;</div>"
     moved = isinstance(quali, (int, float)) and int(quali) != int(grid)
     note = f"<small>Q{int(quali)}</small>" if moved else ""
     return f"<div class='v dim start'>P{int(grid)}{note}</div>"
@@ -703,7 +703,7 @@ def race_board(rows: list[dict], grid_known: bool = True, shown: int = 10) -> st
                 (
                     f"<div class='v fin'>P{int(fin)}</div>"
                     if isinstance(fin, (int, float))
-                    else "<div class='v dim'>&mdash;</div>"
+                    else "<div class='v dim'>&middot;</div>"
                 )
                 if finished
                 else ""
@@ -749,7 +749,7 @@ def win_track(rows: list[dict], finished: bool = False, n: int = 8) -> str:
                 (
                     f"<span class='fr ffin'>P{int(fin)}</span>"
                     if isinstance(fin, (int, float))
-                    else "<span class='fr ffin'>&mdash;</span>"
+                    else "<span class='fr ffin'>&middot;</span>"
                 )
                 if finished
                 else ""
@@ -817,7 +817,7 @@ def quali_board(rows: list[dict], qualified: bool = False, shown: int = 10) -> s
                 (
                     f"<div class='v fin'>P{int(g)}</div>"
                     if isinstance(g, (int, float))
-                    else "<div class='v dim'>&mdash;</div>"
+                    else "<div class='v dim'>&middot;</div>"
                 )
                 if qualified
                 else ""
@@ -955,7 +955,7 @@ def progression_chart(
     # minimum gap, then if the stack overruns the plot, shift it up and re-space
     # upward. Labels moved more than a few pixels get a leader line.
     ends = sorted(((s["points"][max(s["points"])], s) for s in series), key=lambda t: -t[0])
-    # Each end label is two lines - name over value - so 26 left them touching.
+    # Each end label is two lines (name over value) so 26 left them touching.
     gap = 31.0
     wanted = [Y(value) for value, _ in ends]
     placed = list(wanted)
@@ -977,7 +977,7 @@ def progression_chart(
             return "M" + " L".join(f"{X(r):.1f} {Y(v):.1f}" for r, v in pts)
 
         # The projected range, drawn behind its line. Without it the mean reads
-        # as a promise; with it a leader who retires twice is visibly inside
+        # as a promise. With it a leader who retires twice is visibly inside
         # the ordinary spread rather than an upset.
         lo, hi = s.get("low") or {}, s.get("high") or {}
         band = [r for r, _ in future if r in lo and r in hi]
@@ -1013,7 +1013,7 @@ def progression_chart(
         f"<line class='axis' x1='{pad_l}' y1='{pad_t + plot_h}' x2='{pad_l + plot_w}' y2='{pad_t + plot_h}'/>"
     )
 
-    # Hover furniture. Hidden until the pointer is over the plot; the script
+    # Hover furniture. Hidden until the pointer is over the plot. The script
     # moves it rather than re-rendering, so there is nothing to lay out twice.
     out.append(f"<rect class='hit' x='{pad_l}' y='{pad_t}' width='{plot_w}' height='{plot_h}'/>")
     out.append(
@@ -1114,7 +1114,7 @@ def top_bar(
         state = [f"<b>{STAGE_LABELS.get(stage, stage)}</b>"]
         start = prediction.get("race_start_utc")
         if start and stage != "result":
-            state.append(f"<span data-countdown='{esc(start)}'>&mdash;</span>")
+            state.append(f"<span data-countdown='{esc(start)}'></span>")
         bits.append(f"<span class='state'>{''.join(state)}</span>")
     bits.append("<span class='sep'></span>")
     nav = [

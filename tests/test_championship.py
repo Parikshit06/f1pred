@@ -1,7 +1,7 @@
 """Checks on the title projection.
 
 The projection compounds nine races of noise, so an error here does not look
-like an error - it looks like a plausible table. These pin the properties that
+like an error: it looks like a plausible table. These pin the properties that
 must hold whatever the numbers come out as.
 """
 
@@ -179,7 +179,7 @@ def _spread(scores, fraction_left, team_index=None, races=10, sims=4000):
 
 def test_a_longer_run_in_carries_more_uncertainty():
     """Twelve races out, the model has more room to be wrong about a car than it
-    does with two to go - and the published range has to say so."""
+    does with two to go, and the published range has to say so."""
     scores = np.linspace(2.0, -2.0, 10)
     early = _spread(scores, 0.9).std(axis=0).mean()
     late = _spread(scores, 0.1).std(axis=0).mean()
@@ -210,7 +210,7 @@ def test_the_uncertainty_is_shared_between_teammates():
 def test_the_uncertainty_hands_out_no_extra_points():
     """It must move points around, never create them. Every simulated race
     awards the same total whatever the spread, so the field total is a hard
-    invariant - and a term that quietly inflated it would flatter everyone."""
+    invariant, and a term that quietly inflated it would flatter everyone."""
     scores = np.linspace(2.0, -2.0, 10)
     without = _spread(scores, 0.0, sims=4000).mean(axis=0).sum()
     with_ = _spread(scores, 0.9, sims=4000).mean(axis=0).sum()
@@ -220,7 +220,7 @@ def test_the_uncertainty_hands_out_no_extra_points():
 def test_the_uncertainty_pulls_toward_the_middle_rather_than_picking_a_side():
     """Being less sure has to cost the favourite and help the backmarker, in
     that order and no other. Points are capped at 25 a race, so a car already
-    projected to win has far more to lose from a pace swing than to gain - if
+    projected to win has far more to lose from a pace swing than to gain: if
     the leader's projection did NOT fall when uncertainty rose, the term would
     be adding optimism rather than doubt.
 
@@ -384,7 +384,7 @@ def test_sprints_are_left_out_only_when_the_season_had_none():
 
 def test_clinching_counts_the_sprint_points_still_on_offer():
     """A 30-point lead with three plain rounds left can be sealed in the next
-    one; with a sprint on each, the rival has 33 a round to answer with."""
+    one. With a sprint on each, the rival has 33 a round to answer with."""
     plain = champ.round_maximum(2026, np.array([False, False, False]))
     sprints = champ.round_maximum(2026, np.array([True, True, True]))
     assert champ.clinch_round(130, 100, plain) == 1

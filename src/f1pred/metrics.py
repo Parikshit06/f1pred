@@ -9,8 +9,8 @@ field well and still be over-confident, or the reverse.
                  Brier (per driver), and reliability: when it says 30%, does
                  it happen 30% of the time
 
-Comparisons between two approaches are paired by race - both are graded on the
-same races - and the uncertainty in the difference comes from resampling
+Comparisons between two approaches are paired by race (both are graded on the
+same races) and the uncertainty in the difference comes from resampling
 races (bootstrap), since races, not drivers, are the independent unit.
 """
 
@@ -22,7 +22,7 @@ from scipy import stats
 
 EPS = 1e-12
 
-# Lower is better for these; higher for everything else.
+# Lower is better for these. Higher for everything else.
 LOWER_IS_BETTER = {
     "win_logloss",
     "win_brier",
@@ -77,10 +77,10 @@ def ranking(pred_rank: pd.Series, actual: pd.Series) -> dict:
 # Probability
 # ---------------------------------------------------------------------------
 def probability(table: pd.DataFrame, actual: pd.Series) -> dict:
-    """table: p_win, p_podium, p_top10 indexed by driver_id; actual: positions.
+    """table: p_win, p_podium, p_top10 indexed by driver_id. Actual: positions.
 
     Win log loss is -log P(actual winner). Win Brier is summed over the field
-    (the multi-class Brier score); podium and top-10 Brier are per driver, as
+    (the multi-class Brier score). Podium and top-10 Brier are per driver, as
     those are yes/no questions asked of each driver.
     """
     d = table.join(actual.rename("actual"), how="inner").dropna(subset=["actual"])

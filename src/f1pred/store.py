@@ -1,6 +1,6 @@
 """DuckDB schema and load helpers.
 
-raw_* tables hold what the sources returned; derived tables never overwrite
+raw_* tables hold what the sources returned. Derived tables never overwrite
 them. Everything rebuilds from the HTTP cache, so the database is gitignored.
 """
 
@@ -179,7 +179,7 @@ def database_exists() -> bool:
     """Whether there's a database to read yet.
 
     A fresh clone has none. The page-rendering readers use this to fall back to
-    an empty answer instead of raising; the pipeline still fails loudly.
+    an empty answer instead of raising. The pipeline still fails loudly.
     """
     return config.DB_PATH.exists()
 
@@ -280,7 +280,7 @@ def table_counts() -> pd.DataFrame:
 def repair_status_flags() -> pd.DataFrame:
     """Recompute finished/dnf from the stored status text.
 
-    Needed after any change to the finished/retired rule - rows already stored
+    Needed after any change to the finished/retired rule: rows already stored
     keep the old flag. Idempotent, and no re-download needed.
     """
     from .ingest.jolpica import is_finished

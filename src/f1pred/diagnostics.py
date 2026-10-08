@@ -5,7 +5,7 @@ over-rated. That's an artefact: a fast driver who retires is classified near
 last, dragging their mean result down, while slow drivers inherit places.
 The gradient that creates runs the length of the grid.
 
-So the trend against predicted rank is fitted and removed; the residual is
+So the trend against predicted rank is fitted and removed. The residual is
 the part that's actually about the driver. `f1pred.cli bias` prints it.
 """
 

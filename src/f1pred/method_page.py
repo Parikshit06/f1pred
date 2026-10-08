@@ -1,7 +1,7 @@
 """The method page: how the forecast is made and how well it has done.
 
 One short article in plain words. Every figure is read from reports/*.json so
-the page cannot drift from the evaluation; the full comparison table closes
+the page cannot drift from the evaluation. The full comparison table closes
 the page and METHODOLOGY.md has the rest.
 """
 
@@ -182,7 +182,7 @@ def _example() -> str:
         from . import report
 
         history = report.race_history()
-    except Exception:  # the example is optional; the page is not
+    except Exception:  # the example is optional. The page is not
         log.warning("could not read the live record", exc_info=True)
         return ""
     if not history:

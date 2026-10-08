@@ -1,7 +1,7 @@
 """Invariants on a published forecast.
 
 The backtest measures whether forecasts are good. These check that they're
-possible at all - the backtest only reads the winner column, so an
+possible at all: the backtest only reads the winner column, so an
 internally contradictory board would pass it.
 """
 
@@ -17,7 +17,7 @@ from f1pred.store import database_exists
 def test_a_simulator_column_assigned_as_a_series_lands_as_nan():
     """Pins a silent pandas trap: a features slice keeps its original index while
     simulator frames are 0..n-1, so assigning a Series fills the column with NaN.
-    predict.run resets the index and assigns arrays; this keeps it honest.
+    predict.run resets the index and assigns arrays. This keeps it honest.
     """
     race = pd.DataFrame({"driver_id": ["a", "b", "c"]}, index=[3766, 3767, 3768])
     sim = pd.DataFrame({"exp_position": [2.0, 1.0, 3.0]})
@@ -33,7 +33,7 @@ def test_a_simulator_column_assigned_as_a_series_lands_as_nan():
 @pytest.fixture(scope="module")
 def forecast():
     if not database_exists():
-        pytest.skip("no database; run the pipeline first")
+        pytest.skip("no database. Run the pipeline first")
     return predict.run(n_sims=800)
 
 
@@ -49,7 +49,7 @@ def test_the_projected_grid_reaches_the_race_model(forecast):
 
 def test_published_probabilities_cannot_contradict_each_other(forecast):
     """Winning is a podium, a podium is a top five, a top five scores. Any row
-    that breaks that chain is impossible however good the model is - and it is
+    that breaks that chain is impossible however good the model is, and it is
     the first thing a reader notices, because they can check it by eye."""
     for r in forecast.race_board + forecast.quali_board:
         chain = [r["p_win"], r["p_podium"], r["p_top5"], r["p_top10"]]
@@ -58,7 +58,7 @@ def test_published_probabilities_cannot_contradict_each_other(forecast):
 
 def test_the_field_is_not_forecast_to_finish_in_a_heap(forecast):
     """A model with no usable features gives everyone roughly the same chance.
-    The favourite should be clearly ahead of the tenth-placed driver; when the
+    The favourite should be clearly ahead of the tenth-placed driver. When the
     projected grid went missing this gap collapsed and midfielders came out
     with a quarter chance of a podium."""
     board = forecast.race_board
@@ -97,7 +97,7 @@ def test_a_grid_with_holes_is_refused_rather_than_averaged_into_noise():
 
 
 def test_the_starting_grid_is_taken_from_qualifying_before_the_race_is_run(forecast):
-    """Once qualifying is in, every driver has a start position - it is the
+    """Once qualifying is in, every driver has a start position: it is the
     qualifying classification. An empty Start column on the page means the
     simulator was handed nothing."""
     if not forecast.grid_known:

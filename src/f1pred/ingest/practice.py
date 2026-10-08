@@ -57,7 +57,7 @@ def _when(values: pd.Series) -> pd.Series:
 def not_clear_periods(race_control: pd.DataFrame) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
     """Spans when any part of the track was not clear, from race control.
 
-    A yellow in a sector lasts until that sector is cleared; a red flag or a
+    A yellow in a sector lasts until that sector is cleared. A red flag or a
     safety car until the track goes green again. A span still open when the
     messages end runs to the end of the session.
     """

@@ -102,7 +102,7 @@ def test_a_race_week_forecast_is_committed(tmp_path, monkeypatch):
 def test_a_forecast_a_fortnight_out_is_not_committed(tmp_path, monkeypatch):
     """The Monday run that grades a result rolls on to the next race, and on a
     weekend off that race can be two weeks away. Logging then would put the
-    least informed call of the season into the record - and because the first
+    least informed call of the season into the record, and because the first
     file for a stage wins, it would keep the race-week call out."""
     p = _forecast(tmp_path, monkeypatch, start=datetime.now(UTC) + timedelta(days=14))
     assert p.save() is None

@@ -2,7 +2,7 @@
         backtest experiments title-backtest calibrate-spread bias verify test coverage lint all clean
 
 SEASONS ?= 2018-2026
-# START is the first season reported on; TUNE is the first season the settings
+# START is the first season reported on. TUNE is the first season the settings
 # are fitted on (TUNE..START-1), and must come before it.
 START   ?= 2024
 TUNE    ?= 2022

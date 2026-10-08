@@ -20,7 +20,7 @@ every published number consistent. Blending only P(win) and adjusting the
 other bands afterwards would not: the bands would stop summing to 3, 5 and 10.
 
 A small uniform share (SMOOTHING) is mixed in last, so no driver in the race
-is ever given exactly zero - Monte Carlo counts produce zeros for anyone never
+is ever given exactly zero: Monte Carlo counts produce zeros for anyone never
 seen winning, and a zero is infinitely wrong the one time it happens.
 
 Ranking scores carry no probabilistic meaning of their own, so none of this is
@@ -62,8 +62,8 @@ def sample_orders(
     """Full finishing orders drawn from Plackett-Luce, one row per sample.
 
     Adding independent Gumbel noise to score / T and sorting draws an exact
-    Plackett-Luce ranking - the same distribution as picking the winner, then
-    second from the rest, and so on - in one vectorised step.
+    Plackett-Luce ranking (the same distribution as picking the winner, then
+    second from the rest, and so on) in one vectorised step.
     """
     z = np.asarray(scores, dtype=float) / max(temperature, 1e-6)
     noisy = z[None, :] + rng.gumbel(size=(n_samples, len(z)))
@@ -125,8 +125,8 @@ def rolling_temperature(
     """Temperature fitted on a trailing window of finished races.
 
     One fixed value doesn't hold across eras: a season with one dominant car
-    wants a sharper forecast than a close one. Refitting on the last races -
-    all of them before the one being forecast - lets confidence follow the
+    wants a sharper forecast than a close one. Refitting on the last races,
+    all of them before the one being forecast, lets confidence follow the
     field. Until there are enough of them, the tuned fallback is used.
     """
     if len(score_groups) < MIN_CALIBRATION_RACES:
@@ -140,7 +140,7 @@ def rolling_temperature(
 def mix(p_model: np.ndarray, p_sim: np.ndarray, weight: float, smoothing: float = SMOOTHING) -> np.ndarray:
     """weight = trust in the closed-form model over the simulation.
 
-    Works on win vectors or on full position matrices; either way the result
+    Works on win vectors or on full position matrices. Either way the result
     keeps the sums of its inputs.
     """
     p_model, p_sim = np.asarray(p_model, dtype=float), np.asarray(p_sim, dtype=float)
@@ -174,7 +174,7 @@ def summarise(matrix: np.ndarray) -> pd.DataFrame:
 
 
 def check_distribution(matrix: np.ndarray, atol: float = 1e-6) -> list[str]:
-    """Problems with a position matrix; empty if it is a coherent distribution."""
+    """Problems with a position matrix. Empty if it is a coherent distribution."""
     m = np.asarray(matrix, dtype=float)
     problems = []
     if not np.isfinite(m).all():

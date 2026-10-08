@@ -8,8 +8,8 @@ on races before it. Comparisons are paired by race with bootstrap intervals
 (metrics.paired_comparison), because a few points on 60 races is often noise
 and the report should say when it is.
 
-Where an experiment decides something - a setting, whether a feature group
-stays - the decision is read off the tuning seasons (2022-23), and the test
+Where an experiment decides something (a setting, whether a feature group
+stays) the decision is read off the tuning seasons (2022-23), and the test
 seasons (2024-) are reported alongside so the choice can be checked, not made,
 on them.
 """
@@ -156,7 +156,7 @@ GROUPS = {
     "team form": TEAM_FORM,
     "circuit": CIRCUIT,
 }
-# Tested and not in the model; re-tested by adding them to the full model.
+# Tested and not in the model. Re-tested by adding them to the full model.
 CANDIDATES = {"qualifying form": QUALI_FORM, "teammate": TEAMMATE}
 
 
@@ -334,7 +334,7 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
     Rule, fixed before looking at the check period:
       1. two current-weekend designs (compact, detailed) are compared on the
          first season with practice data, and the one with the better NDCG@5
-         gain over history alone is picked;
+         gain over history alone is picked.
       2. the picked design is graded against history alone on the later,
          untouched seasons. It is kept only if it is clearly better (interval
          clear of zero) on NDCG@5 or qualifying position error, and clearly
@@ -409,7 +409,7 @@ def practice_experiment(df, settings, n_seeds=1, retrain_every=1) -> dict:
     return {
         "weekends_with_practice": len(with_practice),
         "seasons": seasons,
-        "rule": "design picked on the first season by NDCG@5; kept only if clearly better on the later seasons",
+        "rule": "design picked on the first season by NDCG@5. Kept only if clearly better on the later seasons",
         "picked_design": picked,
         "kept": keep,
         "qualifying_held_out": {f"decide {decide[0]}": decided, f"check {later}": checked},
@@ -642,7 +642,7 @@ def season_projection_experiment(
 ) -> dict:
     """How should a driver be scored for 'an ordinary weekend' in the season projection?
 
-    At each title-backtest checkpoint one model is trained on races before it;
+    At each title-backtest checkpoint one model is trained on races before it.
     every method scores the field with that same model and the rest of the
     season is simulated. Graded against every driver's and team's final points,
     the final gap between teammates (the case where a driver beside a strong
@@ -728,7 +728,7 @@ def run_experiments(
     only: list[str] | None = None,
     save=None,
 ) -> dict:
-    """Run each experiment in turn; `save(result)` is called after every one, so
+    """Run each experiment in turn. `save(result)` is called after every one, so
     an hour of work isn't lost to a failure in the last. `only` re-runs a subset."""
     tune_window = (tune_season, start_season - 1)
     windows = {
@@ -768,7 +768,7 @@ def run_experiments(
     }
     result: dict = {
         "note": (
-            "Walk-forward throughout; one XGBoost seed per model (the headline uses five) and, "
+            "Walk-forward throughout. One XGBoost seed per model (the headline uses five) and, "
             "for the ablation and feature-definition runs, a refit every second race, so that "
             "every arm of an experiment is fitted identically. Differences are race-paired "
             "with 95% bootstrap intervals."

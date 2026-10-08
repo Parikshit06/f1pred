@@ -3,11 +3,11 @@
     make demo
 
 Builds data/demo/demo.duckdb from a seeded generator, then runs what the live
-system runs - validate, features, the walk-forward against the grid baseline,
-a forecast of the next race and the forecast page - without touching an API.
+system runs (validate, features, the walk-forward against the grid baseline,
+a forecast of the next race and the forecast page) without touching an API.
 
 The drivers and teams are invented. The numbers show that the machinery
-works end to end, not how good the model is; reports/ holds the real ones.
+works end to end, not how good the model is. The real ones are in reports/.
 
 The generator includes the awkward cases the real pipeline has to handle: a
 mid-season driver replacement, a pit-lane start, a grid penalty, a driver
@@ -101,7 +101,7 @@ def generate(seed: int = SEED, now: datetime | None = None) -> dict[str, pd.Data
             lap = BASE_LAP_MS * (1 + 0.01 * (q_noise.max() - q_noise))
             no_time = (season, rnd) == (SEASONS[1], 5)
             for i, d in enumerate(field):
-                # Top ten reach Q3, the next five Q2; each later session a little faster.
+                # Top ten reach Q3, the next five Q2. Each later session a little faster.
                 t = int(lap[i])
                 if q_pos[i] <= 10:
                     q1, q2, q3 = t + 300, t + 150, t

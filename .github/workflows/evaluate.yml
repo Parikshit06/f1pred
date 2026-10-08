@@ -47,7 +47,7 @@ jobs:
 
       # The DATABASE is cached, not just the HTTP responses. jolpica's ingest
       # skips any season already in the ingest_log except the current one, and
-      # that log lives in the database - so with only data/cache restored the
+      # that log lives in the database. So with only data/cache restored the
       # log was empty on every run and all nine seasons were walked again at
       # ~0.8 requests a second. That is the difference between a run taking
       # ninety minutes and taking a few.
@@ -129,8 +129,8 @@ jobs:
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they
-      # were written - and a seeded snapshot is exactly that. repair recomputes
-      # the flag from the stored status text, which is the fact; the flag is
+      # were written, and a seeded snapshot is exactly that. Repair recomputes
+      # the flag from the stored status text, which is the fact. The flag is
       # only a label. Idempotent, and it logs what it changed, so drift shows up
       # here rather than silently in the forecast.
       #

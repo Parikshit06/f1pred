@@ -1,7 +1,7 @@
 """Ranking models for qualifying and race outcomes.
 
 Framed as learning-to-rank rather than classification. Predicting "who wins"
-gives one positive example per race - about 170 since 2018. Ranking the field
+gives one positive example per race: about 170 since 2018. Ranking the field
 turns each race into ~190 pairwise comparisons, which is the difference
 between a model that learns and one that memorises the fastest car.
 
@@ -72,7 +72,7 @@ class Ranker:
     def score(self, df: pd.DataFrame) -> np.ndarray:
         """One race's scores: each seed standardised within the race, then averaged.
 
-        Only meaningful within a race - the input must be one race's field.
+        Only meaningful within a race: the input must be one race's field.
         """
         X = self._matrix(df)
         stacked = []
@@ -133,7 +133,7 @@ def recency_weights(df: pd.DataFrame, current_season_weight: float) -> np.ndarra
 
     2026 is a regulation reset, so a 2019 result says less about 2026 pace than
     a 2026 result does. The weight decays one step per season back and is
-    floored so old races still contribute; the exact value is chosen by
+    floored so old races still contribute. The exact value is chosen by
     backtest.tune_recency() rather than picked by hand.
     """
     latest = int(df["season"].max())
@@ -182,8 +182,8 @@ def train_race(df: pd.DataFrame, **kw) -> Ranker:
 
 def feature_importance(ranker: Ranker, top: int = 15) -> pd.DataFrame:
     """Total gain per feature, averaged over the seeds. In-sample and biased
-    toward features with many split points - evaluation.py measures importance
-    out of sample instead; this is for a quick look."""
+    toward features with many split points: evaluation.py measures importance
+    out of sample instead. This is for a quick look."""
     frames = [
         pd.Series(b.get_booster().get_score(importance_type="total_gain"), name=i)
         for i, b in enumerate(ranker.boosters)

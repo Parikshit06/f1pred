@@ -31,7 +31,7 @@ def test_practice_never_reaches_the_race_model_by_default():
 
 def test_practice_feeds_the_qualifying_model_only():
     """Held out (design picked on 2024, graded on 2025-26), current-weekend
-    practice improved the qualifying forecast; it added nothing to the race
+    practice improved the qualifying forecast. It added nothing to the race
     beyond the official grid, so the race model never sees it."""
     practice = set(features.PRACTICE_FEATURES) | set(features.PRACTICE_DETAIL_FEATURES)
     assert practice <= set(features.QUALI_FEATURES)

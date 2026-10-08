@@ -1,7 +1,7 @@
 """Dashboard assembly.
 
 Two halves. This module grades the logged predictions and decides what belongs
-on the page; report_render holds the design system that draws it. They are
+on the page. report_render holds the design system that draws it. They are
 split because the first half is about F1 and the second is about typography,
 and mixing them is how a report file becomes unreadable.
 """
@@ -201,7 +201,7 @@ def _when(ts: str | None) -> str:
     try:
         return f"{datetime.fromisoformat(str(ts).replace(' ', 'T')):%a %d %b, %H:%M} UTC"
     except (TypeError, ValueError):
-        return "\u2014"
+        return "time to be confirmed"
 
 
 def status_line(prediction: dict, stage: str, rows: list[dict], finished: dict[str, int]) -> str:
@@ -273,7 +273,7 @@ def primary(rows: list[dict], prediction: dict, finished: dict[str, int]) -> str
 
 def coherent(prediction: dict, tol: float = 0.02) -> bool:
     """Whether the published win chances are the ones in the logged
-    distribution. Forecasts from the current pipeline always are (tested);
+    distribution. Forecasts from the current pipeline always are (tested).
     some logged by an earlier version are not, and are never rewritten."""
     ids = (prediction.get("meta") or {}).get("matrix_driver_ids") or []
     matrix = prediction.get("position_matrix") or []
@@ -296,7 +296,7 @@ def _board_rows(prediction: dict, finished: dict[str, int]) -> list[dict]:
     """Every driver, most likely winner first.
 
     field_probs has the whole field (with explanations in newer forecasts) but
-    only surnames; race_board has full names for the top ten. Older forecasts
+    only surnames. race_board has full names for the top ten. Older forecasts
     may have only the board, which is then all there is to show.
     """
     listed = prediction.get("race_board") or []
@@ -352,7 +352,7 @@ SECTIONS = [
 
 
 def _section(label: str, caption: str, body: str, note: str = "", band: bool = False) -> str:
-    """A ruled heading, then the content. No cards; alternate sections sit on a
+    """A ruled heading, then the content. No cards. Alternate sections sit on a
     tinted full-bleed band so the page has rhythm without panels."""
     cls = " class='band'" if band else ""
     anchor = next((k for k, name in SECTIONS if name == label), "")
