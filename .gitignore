@@ -1,8 +1,7 @@
-# Rebuildable data: the database, HTTP and FastF1 caches, the demo
+# Rebuildable data: the database, the HTTP cache, the demo
 data/*.duckdb
 data/*.duckdb.wal
 data/cache/
-data/fastf1_cache/
 data/season.json
 data/demo/
 *.parquet

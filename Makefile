@@ -37,7 +37,7 @@ data-openf1:
 
 # Practice pace for the race weekend in progress (FP1-FP3 aggregates only).
 data-practice:
-	$(PY) -m f1pred.cli ingest-fastf1 --next
+	$(PY) -m f1pred.cli ingest-practice --next
 
 validate:
 	$(PY) -m f1pred.cli validate

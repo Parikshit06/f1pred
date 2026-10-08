@@ -2,8 +2,8 @@
 
 Why not lap-by-lap from here: a single race has ~1,200 lap records, which at
 their 100-row page size is ~240 requests per race. Nine seasons of that would
-take days under a 500/hour limit. FastF1 gives us the same laps in one file
-per session, so laps come from there instead.
+take days under a 500/hour limit. Lap times are only needed for practice,
+which comes from OpenF1 (ingest/practice.py).
 """
 
 from __future__ import annotations

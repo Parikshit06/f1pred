@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS raw_races (
     PRIMARY KEY (season, round)
 );
 
--- Needed to join FastF1 (which speaks 3-letter codes and car numbers) to
+-- Needed to join OpenF1 (which speaks 3-letter codes and car numbers) to
 -- jolpica (which speaks driverId). Without this the two sources cannot meet.
 CREATE TABLE IF NOT EXISTS raw_drivers (
     season          INTEGER NOT NULL,
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS raw_standings (
     PRIMARY KEY (season, round, driver_id)
 );
 
--- One row per driver per practice/qualifying session, from FastF1.
+-- One row per driver per practice session, from OpenF1 (FastF1 before October 2026).
 CREATE TABLE IF NOT EXISTS raw_session_pace (
     season          INTEGER NOT NULL,
     round           INTEGER NOT NULL,

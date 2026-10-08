@@ -21,7 +21,7 @@ last, and then a graded result:
 | When | What it knows | What is published |
 |---|---|---|
 | Wednesday of race week | past races only | race, qualifying and championship forecasts |
-| After practice | this weekend's practice times too, when they can be fetched (see Limitations) | qualifying forecast, and a race forecast on the projected grid |
+| After practice | this weekend's practice times too | qualifying forecast, and a race forecast on the projected grid |
 | After qualifying | the official starting grid | race forecast on the real grid |
 | After the race | the result | the forecast graded, and kept on a page of its own |
 
@@ -34,7 +34,7 @@ covered by the evaluation below.
 
 ```mermaid
 flowchart TD
-    A["jolpica-f1: results, qualifying, standings<br/>OpenF1: official grid, entry lists<br/>FastF1: this weekend's practice"] --> B[("DuckDB<br/>21 data checks")]
+    A["jolpica-f1: results, qualifying, standings<br/>OpenF1: official grid, entry lists, practice laps"] --> B[("DuckDB<br/>21 data checks")]
     B --> C["Features<br/>(earlier races only)"]
     C --> Q["Qualifying model<br/>+ this weekend's practice"]
     C --> R["Race model"]
@@ -49,8 +49,8 @@ flowchart TD
 ```
 
 1. **Collect.** Every race since 2018: results, qualifying and standings from
-   jolpica-f1, the official starting grid from OpenF1, and practice lap times
-   from FastF1. 21 data checks run before anything is modelled.
+   jolpica-f1, and the official starting grid, entry lists and practice lap
+   times from OpenF1. 21 data checks run before anything is modelled.
 2. **Describe each driver, using only the past.** Recent results, the team's
    form, one-lap pace, record at this circuit, championship position. Each is
    built only from races before the one being forecast, so the model can never
@@ -125,11 +125,11 @@ steps: `predict.yml` across each race weekend (and deploys the site),
   upgrades, safety-car timing, failures shared by a team's two cars.
 - The qualifying forecast orders the back of the grid loosely, so
   backmarkers' chances of reaching the top ten in qualifying are too high.
-- The after-practice forecast needs this weekend's practice times from FastF1,
-  and FastF1 cannot load F1's timing data from GitHub's runners, so no
-  after-practice forecast has been logged in 2026. The practice history the
-  qualifying model learns from is fetched on a local machine and reaches the
-  scheduled runs through the published data snapshot.
+- Practice before October 2026 was fetched with FastF1, which cannot reach
+  F1's timing data from GitHub's servers, so no after-practice forecast was
+  logged before then. Practice now comes from OpenF1. Recomputed from OpenF1
+  on 13 past sessions, every best lap matched FastF1's to the millisecond and
+  95% of long-run times were within a tenth of a second.
 - Grid penalties are known before the official grid only when a team has
   announced them. Those are entered by hand in `grid_penalties.json`, with
   their source. Any other penalty is missed until the official grid appears.
@@ -345,7 +345,7 @@ narrow.
 
 ```
 src/f1pred/
-  ingest/            jolpica, OpenF1 (grid, entries), FastF1 (practice aggregates)
+  ingest/            jolpica, OpenF1 (grid, entries), practice (OpenF1 lap aggregates)
   store.py           DuckDB schema (raw tables are never overwritten)
   validate.py        21 data checks
   weekend.py         who is in the race, and where each car starts
@@ -372,5 +372,5 @@ tests/               unit, leakage, pipeline (end-to-end on the demo data)
 
 Code: MIT. Data belongs to its sources: [jolpica-f1](https://github.com/jolpica/jolpica-f1)
 (CC BY-NC-SA 4.0, see its [terms](https://github.com/jolpica/jolpica-f1/blob/main/TERMS.md)),
-[OpenF1](https://openf1.org), [FastF1](https://github.com/theOehrly/Fast-F1).
-This is an unofficial project, not associated with Formula 1.
+[OpenF1](https://openf1.org). Practice history before October 2026 was
+fetched with [FastF1](https://github.com/theOehrly/Fast-F1). This is an unofficial project, not associated with Formula 1.

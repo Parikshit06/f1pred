@@ -9,7 +9,7 @@ Features are grouped by when they become knowable, because the two models see
 different slices:
 
     BASE      known before the weekend starts (form, reliability, circuit history)
-    PRACTICE  known after Friday running (FastF1 pace; optional, may be null)
+    PRACTICE  known after Friday running (practice pace, optional, may be null)
     GRID      known only after qualifying (grid slot, quali gaps)
 
     quali model : BASE + PRACTICE          -> predicts the grid
@@ -702,7 +702,7 @@ def _add_pace_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def _add_practice_features(df: pd.DataFrame) -> pd.DataFrame:
     if "fp_long_run_ms" not in df or df["fp_long_run_ms"].notna().sum() == 0:
-        # No FastF1 data ingested. Emit the columns as null so the model
+        # No practice data ingested. Emit the columns as null so the model
         # schema is identical either way, and flag their absence.
         for col in ["fp_long_run_gap_pct", "fp_best_gap_pct", *PRACTICE_DETAIL_FEATURES]:
             df[col] = np.nan

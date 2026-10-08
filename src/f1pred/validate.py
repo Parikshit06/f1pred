@@ -179,7 +179,7 @@ def results_reference_a_race(con) -> list[Finding]:
 @check
 def drivers_are_known(con) -> list[Finding]:
     """Every driver in results must exist in raw_drivers for that season.
-    Unmapped drivers silently vanish from the FastF1 join."""
+    Unmapped drivers silently vanish from every join on driver_id."""
     df = _q(
         con,
         """

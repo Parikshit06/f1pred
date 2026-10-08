@@ -288,7 +288,7 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
             "Practice feeds only the qualifying model, where it clearly improved the\n"
             "forecast on held-out weekends (practice in reports/experiments.json). It is\n"
             "not in the race model: once the grid is known it adds nothing measurable.\n"
-            "To enable: python -m f1pred.cli ingest-fastf1 --seasons 2024-2026",
+            "To enable: python -m f1pred.cli ingest-practice --seasons 2024-2026",
             table,
         )
     return Audit("2. Input coverage", PASS, "All input classes carry data", "", table)

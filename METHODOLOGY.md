@@ -30,7 +30,7 @@ It never stands in for the result.
 |---|---|
 | [jolpica-f1](https://github.com/jolpica/jolpica-f1) | results, qualifying, sprints, standings, calendar |
 | [OpenF1](https://openf1.org) | the official starting grid (penalties applied) and per-session entry lists, 2023+ |
-| [FastF1](https://github.com/theOehrly/Fast-F1) | practice pace: per-driver aggregates of FP1-FP3 laps, this weekend only |
+| [OpenF1](https://openf1.org) | practice pace: per-driver aggregates of FP1-FP3 laps (fetched with [FastF1](https://github.com/theOehrly/Fast-F1) before October 2026) |
 
 Everything lands in DuckDB. `raw_*` tables hold what the sources returned, and
 derived data (features) never overwrites them. HTTP responses are cached, jolpica
@@ -304,12 +304,13 @@ included.
   upgrades, correlated failures, safety-car timing.
 * The qualifying forecast orders the back of the grid loosely, so
   backmarkers' top-ten chances in qualifying are too high (section 6).
-* The after-practice forecast needs this weekend's FastF1 practice times, and
-  FastF1 cannot load F1's timing data from GitHub's runners (every session
-  comes back without laps there, while the same sessions load locally). So no
-  after-practice forecast has been logged in 2026. The practice history used
-  for training and evaluation is fetched locally and reaches the scheduled
-  runs through the published data snapshot.
+* Practice before October 2026 was fetched with FastF1, which cannot reach
+  F1's timing data from GitHub's runners (every session came back without
+  laps there), so no after-practice forecast was logged before then. Practice
+  now comes from OpenF1 with the same lap definitions (`ingest/practice.py`).
+  Recomputed from OpenF1 on 13 past sessions, every best lap matched to the
+  millisecond and 95% of long-run medians were within 0.1 s (largest gap
+  0.32 s). The stored history is kept as fetched.
 * Before the official grid is published, only penalties announced in advance
   and entered in `grid_penalties.json` are applied. Any other penalty is
   missed until the official grid appears.

@@ -2,7 +2,7 @@
 
 python -m f1pred.cli ingest-jolpica --seasons 2018-2026
 python -m f1pred.cli ingest-openf1  --seasons 2026
-python -m f1pred.cli ingest-fastf1  --next
+python -m f1pred.cli ingest-practice --next
 python -m f1pred.cli validate
 python -m f1pred.cli build-features
 python -m f1pred.cli backtest --start-season 2024 --tune --tune-season 2022
@@ -58,11 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seasons", default=str(config.CURRENT_SEASON))
     p.add_argument("--force", action="store_true")
 
-    p = sub.add_parser("ingest-fastf1", help="practice pace per driver (FP1-FP3 aggregates)")
+    p = sub.add_parser("ingest-practice", help="practice pace per driver, FP1-FP3 aggregates from OpenF1")
     p.add_argument("--seasons", default="2024-2026")
     p.add_argument("--next", action="store_true", help="only the race weekend in progress")
-    p.add_argument("--history", action="store_true", help="every race already run in --seasons")
-    p.add_argument("--force", action="store_true")
 
     sub.add_parser("init", help="create the database schema")
     sub.add_parser("status", help="row counts per table")
@@ -159,18 +157,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"openf1: {counts['grid']} grid rows, {counts['entries']} entry rows")
         return 0
 
-    if args.command == "ingest-fastf1":
-        from .ingest import fastf1_pull
+    if args.command == "ingest-practice":
+        from .ingest import practice
 
-        if args.next:
-            fastf1_pull.ingest_next_weekend()
-        elif args.history:
-            fastf1_pull.ingest_history(_parse_seasons(args.seasons))
-        else:
-            seasons = _parse_seasons(args.seasons)
-            print(f"FastF1: {seasons[0]}-{seasons[-1]}. Cache goes to {config.FASTF1_CACHE}")
-            fastf1_pull.ingest(seasons, force=args.force)
-        print(store.table_counts().to_string(index=False))
+        seasons = [config.CURRENT_SEASON] if args.next else _parse_seasons(args.seasons)
+        n = practice.ingest(seasons, next_only=args.next)
+        print(f"practice: {n} driver-sessions stored")
         return 0
 
     if args.command == "validate":

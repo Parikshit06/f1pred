@@ -1265,9 +1265,8 @@ def footer(repo_url: str) -> str:
     """Where the data comes from and where the code lives, and nothing else."""
     return (
         "<footer><span>Unofficial, not associated with Formula 1. Data from "
-        "<a href='https://github.com/jolpica/jolpica-f1'>jolpica-f1</a>, "
-        "<a href='https://openf1.org'>OpenF1</a> and "
-        "<a href='https://github.com/theOehrly/Fast-F1'>FastF1</a>.</span>"
+        "<a href='https://github.com/jolpica/jolpica-f1'>jolpica-f1</a> and "
+        "<a href='https://openf1.org'>OpenF1</a>.</span>"
         f"<span><a href='{esc(repo_url)}'>Source code on GitHub</a></span></footer>"
     )
 

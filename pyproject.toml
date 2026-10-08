@@ -10,7 +10,6 @@ dependencies = [
     "numpy>=1.26",
     "duckdb>=1.1",
     "requests>=2.32",
-    "fastf1>=3.4",
     "xgboost>=2.1",
     "scikit-learn>=1.5",  # XGBRanker is xgboost's sklearn interface
     "scipy>=1.11",  # rank correlations in evaluation

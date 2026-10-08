@@ -71,11 +71,8 @@ jobs:
       # re-derived from the API every time the cache expires. A published
       # snapshot of the database is enough, and 2026 is re-fetched regardless.
       #
-      # The snapshot is also the only way practice history reaches CI. FastF1
-      # cannot load F1's timing data from GitHub's runners, so those rows are
-      # fetched on a local machine and published here. A snapshot with more
-      # practice rows than the restored database replaces it, so publishing a
-      # new one is enough for every later run to pick it up.
+      # A snapshot with more practice rows than the restored database replaces
+      # it, so publishing a new one is enough for every later run to pick it up.
       #
       # The snapshot lives on a release rather than in git: it is a binary
       # that would sit in every clone forever. Publish a new one by zipping
@@ -123,14 +120,12 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
-      # The practice history the qualifying model is graded with. Tried in case
-      # the runner can reach F1's timing data. So far it never has, and the
-      # history arrives in the snapshot above instead. A session that comes
-      # back empty is never marked as done, so a failed attempt costs nothing.
-      - name: Practice history (FastF1)
+      # The practice history the qualifying model is graded with. Weekends
+      # already stored are skipped, so this only fetches what is new.
+      - name: Practice history (OpenF1)
         continue-on-error: true
-        timeout-minutes: 10
-        run: python -m f1pred.cli ingest-fastf1 --history --seasons 2024-2026
+        timeout-minutes: 30
+        run: python -m f1pred.cli ingest-practice --seasons 2024-2026
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they

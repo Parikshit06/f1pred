@@ -23,10 +23,6 @@ on:
     - cron: "17 9 * * 3"      # Wednesday: log the next race's before-practice forecast
   workflow_dispatch:
     inputs:
-      practice_history:
-        description: "Also fetch the practice history (2024 onward) from FastF1"
-        type: boolean
-        default: false
       relog:
         description: "Log a new forecast even if this stage has one (after a fix; earlier files are kept)"
         type: boolean
@@ -85,11 +81,8 @@ jobs:
       # re-derived from the API every time the cache expires. A published
       # snapshot of the database is enough, and 2026 is re-fetched regardless.
       #
-      # The snapshot is also the only way practice history reaches CI. FastF1
-      # cannot load F1's timing data from GitHub's runners, so those rows are
-      # fetched on a local machine and published here. A snapshot with more
-      # practice rows than the restored database replaces it, so publishing a
-      # new one is enough for every later run to pick it up.
+      # A snapshot with more practice rows than the restored database replaces
+      # it, so publishing a new one is enough for every later run to pick it up.
       #
       # The snapshot lives on a release rather than in git: it is a binary
       # that would sit in every clone forever. Publish a new one by zipping
@@ -137,26 +130,14 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
-      # Practice pace for this weekend (FP1-FP3 per-driver aggregates). It
-      # feeds the qualifying forecast, where held-out testing showed it helps.
-      # Optional like OpenF1: without it the weekend keeps its before-practice
-      # forecast. FastF1's own web cache is deliberately not restored between
-      # runs: only the per-driver numbers are kept, in the database, so a
-      # response fetched before or during a session can never be served again
-      # in place of the finished one. Every session's outcome is logged.
-      - name: Practice pace (FastF1, this weekend)
+      # Practice pace for this weekend (FP1-FP3 per-driver aggregates) from
+      # OpenF1. It feeds the qualifying forecast, where held-out testing showed
+      # it helps. A session is read only once it has finished, and read again
+      # if it was read within an hour of the flag. Optional like the step
+      # above: without it the weekend keeps its before-practice forecast.
+      - name: Practice pace (OpenF1, this weekend)
         continue-on-error: true
-        run: python -m f1pred.cli ingest-fastf1 --next
-
-      # The practice history the qualifying model is trained and graded on,
-      # on request only (Run workflow, tick the box). Resumable, and FastF1
-      # allows 500 requests an hour, so a large gap takes a few runs.
-      - name: Practice history (FastF1, on request)
-        if: ${{ inputs.practice_history }}
-        continue-on-error: true
-        timeout-minutes: 20
-        run: python -m f1pred.cli ingest-fastf1 --history --seasons 2024-2026
-
+        run: python -m f1pred.cli ingest-practice --next
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they

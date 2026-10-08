@@ -9,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
 HTTP_CACHE = DATA / "cache"
-FASTF1_CACHE = DATA / "fastf1_cache"
 DB_PATH = DATA / "f1.duckdb"
 PREDICTIONS = ROOT / "predictions"
 REPORTS = ROOT / "reports"
@@ -17,7 +16,7 @@ REPORTS = ROOT / "reports"
 # forecast, so the championship panel moves as results come in.
 SEASON_NOW = DATA / "season.json"
 
-for _p in (DATA, HTTP_CACHE, FASTF1_CACHE, PREDICTIONS, REPORTS):
+for _p in (DATA, HTTP_CACHE, PREDICTIONS, REPORTS):
     _p.mkdir(parents=True, exist_ok=True)
 
 # ---- sources ---------------------------------------------------------------
@@ -48,7 +47,7 @@ OPENF1_HOURLY_LIMIT = 1500
 
 
 # ---- modelling -------------------------------------------------------------
-# FastF1 timing starts in 2018; earlier seasons have results but no pace data.
+# The history every model learns from starts here.
 FIRST_SEASON = 2018
 CURRENT_SEASON = 2026
 

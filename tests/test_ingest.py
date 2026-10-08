@@ -142,21 +142,140 @@ def test_lap_times_parse_in_both_spellings():
     assert jolpica.parse_lap_time_ms("no time") is None
 
 
-def test_only_a_session_that_does_not_exist_is_settled_for_good(tmp_path, monkeypatch):
-    """Where the timing source can't be reached, a finished session loads with
-    no laps. That must stay retryable, or one bad run closes the history."""
+def test_a_practice_session_read_too_soon_after_the_flag_is_read_again(tmp_path, monkeypatch):
+    """OpenF1 fills a session in as it runs. A copy taken just after the
+    chequered flag is stored but marked provisional, and fetched again."""
     from f1pred import config
-    from f1pred.ingest import fastf1_pull
+    from f1pred.ingest import practice
 
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "f1.duckdb")
     store.init_db()
     with store.connect() as c:
-        store.log_ingest(c, "fastf1", "2024:14:FP1", "empty", "no laps")
-        store.log_ingest(c, "fastf1", "2024:14:FP2", "empty", "unavailable: ValueError('does not exist')")
-        store.log_ingest(c, "fastf1", "2024:14:FP3", "ok", "20 drivers")
-        store.log_ingest(c, "fastf1", "2026:3:FP2", "empty", "unavailable: ValueError('does not exist')")
+        store.log_ingest(c, "practice", "2026:17:FP1", "ok", "provisional, 22 drivers")
+        store.log_ingest(c, "practice", "2026:16:FP1", "ok", "22 drivers")
+        store.log_ingest(c, "practice", "2026:16:FP2", "failed", "will retry next run")
+        store.log_ingest(c, "practice", "2026:16:FP3", "empty", "not finished yet")
 
-    assert not fastf1_pull._settled(2024, "2024:14:FP1"), "no laps is not proof of absence"
-    assert fastf1_pull._settled(2024, "2024:14:FP2")
-    assert fastf1_pull._settled(2024, "2024:14:FP3")
-    assert not fastf1_pull._settled(config.CURRENT_SEASON, "2026:3:FP2"), "the live season is always re-asked"
+    assert not practice._settled("2026:17:FP1")
+    assert practice._settled("2026:16:FP1")
+    assert not practice._settled("2026:16:FP2")
+    assert not practice._settled("2026:16:FP3")
+
+    with store.connect() as c:
+        c.execute(
+            "INSERT INTO raw_session_pace (season, round, session, driver_id, best_lap_ms) "
+            "VALUES (2025, 3, 'FP1', 'norris', 90000)"
+        )
+    assert practice._settled("2025:3:FP1"), "history already stored is not fetched again"
+    assert not practice._settled("2025:3:FP2")
+
+
+def _laps(rows):
+    import pandas as pd
+
+    return pd.DataFrame(
+        rows, columns=["driver_number", "lap_number", "date_start", "lap_duration", "is_pit_out_lap"]
+    )
+
+
+def test_practice_pace_drops_out_laps_in_laps_and_laps_under_a_yellow():
+    import pandas as pd
+
+    from f1pred.ingest import practice
+
+    t = "2026-10-09T08:{:02d}:00+00:00"
+    laps = _laps(
+        [
+            (1, 1, t.format(0), 100.0, True),  # out-lap
+            (1, 2, t.format(2), 90.0, False),
+            (1, 3, t.format(4), 90.4, False),
+            (1, 4, t.format(6), 89.0, False),  # under the yellow below
+            (1, 5, t.format(8), 90.2, False),
+            (1, 6, t.format(10), 90.6, False),
+            (1, 7, t.format(12), 90.8, False),
+            (1, 8, t.format(14), 120.0, False),  # in-lap
+        ]
+    )
+    stints = pd.DataFrame(
+        [{"driver_number": 1, "stint_number": 1, "lap_start": 1, "lap_end": 8, "compound": "SOFT"}]
+    )
+    pits = pd.DataFrame([{"driver_number": 1, "lap_number": 8}])
+    race_control = pd.DataFrame(
+        [
+            {
+                "date": t.format(6),
+                "category": "Flag",
+                "flag": "YELLOW",
+                "scope": "Sector",
+                "sector": 4,
+                "message": "",
+            },
+            {
+                "date": "2026-10-09T08:07:00+00:00",
+                "category": "Flag",
+                "flag": "CLEAR",
+                "scope": "Sector",
+                "sector": 4,
+                "message": "",
+            },
+        ]
+    )
+    spans = practice.not_clear_periods(race_control)
+    row = practice.driver_pace(laps, stints, pits, spans).iloc[0]
+    assert row["best_lap_ms"] == 89000, "the best lap is any timed lap"
+    assert row["n_clean_laps"] == 5
+    assert row["long_run_ms"] == 90400, "median of the five clean laps"
+    assert row["compound_mode"] == "SOFT"
+
+
+def test_a_short_stint_is_not_a_long_run():
+    import pandas as pd
+
+    from f1pred.ingest import practice
+
+    t = "2026-10-09T08:{:02d}:00+00:00"
+    laps = _laps([(4, n, t.format(2 * n), 91.0 + n / 10, False) for n in range(1, 5)])
+    stints = pd.DataFrame(
+        [{"driver_number": 4, "stint_number": 1, "lap_start": 1, "lap_end": 4, "compound": "MEDIUM"}]
+    )
+    row = practice.driver_pace(laps, stints, pd.DataFrame(), []).iloc[0]
+    assert row["long_run_ms"] is None or pd.isna(row["long_run_ms"])
+    assert row["best_lap_ms"] == 91100
+
+
+def test_a_safety_car_or_red_flag_holds_until_the_track_is_green():
+    import pandas as pd
+
+    from f1pred.ingest import practice
+
+    rc = pd.DataFrame(
+        [
+            {
+                "date": "2026-10-09T08:10:00+00:00",
+                "category": "Flag",
+                "flag": "RED",
+                "scope": "Track",
+                "sector": None,
+                "message": "RED FLAG",
+            },
+            {
+                "date": "2026-10-09T08:11:00+00:00",
+                "category": "Flag",
+                "flag": "CLEAR",
+                "scope": "Sector",
+                "sector": 3,
+                "message": "",
+            },
+            {
+                "date": "2026-10-09T08:20:00+00:00",
+                "category": "Flag",
+                "flag": "GREEN",
+                "scope": "Track",
+                "sector": None,
+                "message": "GREEN LIGHT",
+            },
+        ]
+    )
+    spans = practice.not_clear_periods(rc)
+    assert len(spans) == 1
+    assert spans[0][1] == pd.Timestamp("2026-10-09T08:20:00+00:00")
