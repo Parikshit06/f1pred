@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "repair":
         changed = store.repair_status_flags()
         if changed.empty:
-            print("status flags already consistent - nothing to repair")
+            print("status flags already consistent, nothing to repair")
         else:
             print(changed.to_string(index=False))
             print("\nRebuild features next: make features")
@@ -244,12 +244,12 @@ def main(argv: list[str] | None = None) -> int:
         stage = "grid known" if p.grid_known else "before qualifying"
         print(f"\n{p.race_name}  ({stage})")
         print(f"trained on {p.meta['n_training_races']} races\n")
-        print(f"QUALIFYING - top {config.TOP_N}")
+        print(f"QUALIFYING: top {config.TOP_N}")
         for i, d in enumerate(p.quali_board, 1):
             print(
                 f"  {i:2}. {d['name']:<24} pole {d['p_win'] * 100:5.1f}%   top10 {d['p_top10'] * 100:5.1f}%"
             )
-        print(f"\nRACE - top {config.TOP_N}")
+        print(f"\nRACE: top {config.TOP_N}")
         for i, d in enumerate(p.race_board, 1):
             print(
                 f"  {i:2}. {d['name']:<24} win {d['p_win'] * 100:5.1f}%"

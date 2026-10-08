@@ -22,11 +22,6 @@ on:
     - cron: "17 8,14 * * 1"   # Monday: grade the result, roll to the next
     - cron: "17 9 * * 3"      # Wednesday: log the next race's before-practice forecast
   workflow_dispatch:
-    inputs:
-      relog:
-        description: "Log a new forecast even if this stage has one (after a fix; earlier files are kept)"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -165,7 +160,7 @@ jobs:
       # on its own schedule in evaluate.yml and commits reports/*.json.
 
       - name: Predict
-        run: python -m f1pred.cli predict --next ${{ inputs.relog && '--force-log' || '' }}
+        run: python -m f1pred.cli predict --next
 
       - name: Dashboard
         run: python -m f1pred.cli dashboard

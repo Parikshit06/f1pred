@@ -123,9 +123,9 @@ def test_features_do_not_change_when_later_races_are_added(db, cut, monkeypatch)
         )
 
     monkeypatch.setattr(features, "_load", lambda: truncated(raw))
-    early = features.build(include_upcoming=False)
+    early = features.add_circuit_type(features.build(include_upcoming=False))
     monkeypatch.setattr(features, "_load", lambda: raw)
-    full = features.build(include_upcoming=False)
+    full = features.add_circuit_type(features.build(include_upcoming=False))
     moved = _same(early, full)
     assert moved.sum() == 0, f"features saw the future: {moved[moved > 0].to_dict()}"
 
@@ -141,9 +141,9 @@ def test_rewriting_a_result_moves_only_later_features(db, monkeypatch):
     tampered.loc[mask, "dnf"] = tampered.loc[mask, "dnf"].to_numpy()[::-1]
 
     monkeypatch.setattr(features, "_load", lambda: raw)
-    before = features.build(include_upcoming=False)
+    before = features.add_circuit_type(features.build(include_upcoming=False))
     monkeypatch.setattr(features, "_load", lambda: replace(raw, results=tampered))
-    after = features.build(include_upcoming=False)
+    after = features.add_circuit_type(features.build(include_upcoming=False))
 
     key = before["season"] * 100 + before["round"]
     upto = before[key <= target[0] * 100 + target[1]]

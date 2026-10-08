@@ -79,10 +79,22 @@ def position_counts(orders: np.ndarray) -> np.ndarray:
 
 
 def pl_position_matrix(
-    scores: np.ndarray, temperature: float, n_samples: int = 20_000, seed: int = config.RANDOM_SEED
+    scores: np.ndarray,
+    temperature: float,
+    n_samples: int = 20_000,
+    seed: int = config.RANDOM_SEED,
+    dnf_prob: np.ndarray | None = None,
 ) -> np.ndarray:
+    """Shares of each finishing position. With dnf_prob, each sampled order
+    also loses its retirements to the back, as in the race simulation."""
     rng = np.random.default_rng(seed)
-    return position_counts(sample_orders(rng, scores, temperature, n_samples))
+    orders = sample_orders(rng, scores, temperature, n_samples)
+    if dnf_prob is not None:
+        n = orders.shape[1]
+        retired = rng.random(orders.shape) < np.asarray(dnf_prob, dtype=float)[orders]
+        key = np.where(retired, n + rng.random(orders.shape), np.arange(n)[None, :])
+        orders = np.take_along_axis(orders, np.argsort(key, axis=1), axis=1)
+    return position_counts(orders)
 
 
 # ---------------------------------------------------------------------------

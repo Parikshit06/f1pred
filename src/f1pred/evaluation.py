@@ -63,6 +63,10 @@ def run_backtest(
     pre = backtest.walk_forward(
         df, start_season, retrain_every=retrain_every, settings=settings, stage="pre_quali"
     )
+    log.info("before-practice walk-forward from %d", start_season)
+    pre_practice = backtest.walk_forward(
+        df, start_season, retrain_every=retrain_every, settings=settings, stage="pre_practice"
+    )
     log.info("qualifying walk-forward from %d", start_season)
     quali = backtest.walk_forward_quali(df, start_season, retrain_every=retrain_every, settings=settings)
 
@@ -93,6 +97,11 @@ def run_backtest(
             "summary": _summary(pre),
             "comparison_vs_championship": _records(pre.compare("model", "championship")),
             "calibration_error": {k: round(v, 4) for k, v in pre.calibration_error().items()},
+        },
+        "pre_practice": {
+            "summary": _summary(pre_practice),
+            "comparison_vs_championship": _records(pre_practice.compare("model", "championship")),
+            "calibration_error": {k: round(v, 4) for k, v in pre_practice.calibration_error().items()},
         },
         "qualifying": {
             "summary": _records(quali_summary.rename_axis("method").reset_index()),
@@ -488,6 +497,54 @@ def quali_ordering_experiment(df, windows, settings, n_seeds=1, retrain_every=1)
     }
 
 
+RETIRE_KEEP = ("podium_brier", "top10_brier")
+RETIRE_GUARD = ("win_logloss", "podium_brier", "top10_brier")
+
+
+def retirement_experiment(df, windows, settings, n_seeds=1) -> dict:
+    """Retirements in both halves of the probability blend, not only in the
+    simulation. Plackett-Luce has no retirements, so with a 0.7 blend only 30%
+    of each car's retirement risk reaches the published chances, a likely
+    cause of the over-confident podium and top-10 calls.
+
+    Rule, fixed before any result was seen: used only if, on the tuning
+    seasons, it is clearly better on one of RETIRE_KEEP, and it is clearly worse
+    on none of RETIRE_GUARD in either window. Both arms share one set of
+    out-of-sample scores, so only the probability step differs.
+    """
+    base, both = "simulation only (in use)", "both halves"
+    out: dict = {}
+    keep, guard_hit = False, []
+    for i, (label, (start, end)) in enumerate(windows.items()):
+        done = backtest.completed_races(df, 0)
+        window = backtest.completed_races(df, start, end)
+        first, last = window["race_seq"].min(), window["race_seq"].max()
+        targets = done[(done["race_seq"] >= first - backtest.CALIBRATION_WARMUP) & (done["race_seq"] <= last)]
+        scored = backtest.oos_scores(
+            df, targets["race_seq"].tolist(), backtest.race_trainer(settings, n_seeds=n_seeds)
+        )
+        results, ece = {}, {}
+        for name, flag in ((base, False), (both, True)):
+            s = backtest.Settings(**{**asdict(settings), "pl_retirements": flag})
+            res = backtest.walk_forward(
+                df, start, end_season=end, settings=s, include_baselines=False, scored=scored
+            )
+            results[name] = res.races
+            ece[name] = res.calibration_error()
+        table = _paired_table(results, base, PROBABILITY)
+        out[label] = {"comparison": table, "calibration_error": ece}
+        row = table[1]
+        if i == 0 and any(_clear(row, m) == "better" for m in RETIRE_KEEP):
+            keep = True
+        guard_hit += [f"{label} {m}" for m in RETIRE_GUARD if _clear(row, m) == "worse"]
+    out["rule"] = (
+        f"used only if clearly better on the tuning seasons on one of {', '.join(RETIRE_KEEP)}, "
+        f"and clearly worse on none of {', '.join(RETIRE_GUARD)} in either window"
+    )
+    out["verdict"] = {"passes_tuning": keep, "worse_on": guard_hit, "passes_rule": keep and not guard_hit}
+    return out
+
+
 TYPE_KEEP = ("win_logloss", "ndcg5")
 TYPE_GUARD = ("win_logloss", "ndcg3", "ndcg5", "podium_brier")
 
@@ -505,6 +562,7 @@ def circuit_type_experiment(df, windows, settings, n_seeds=1, retrain_every=2) -
     It did not pass: no clear difference on the tuning seasons at either
     stage, so the race model does not use it.
     """
+    df = features.add_circuit_type(df)
     full = list(features.RACE_FEATURES)
     plus = [*full, *features.CIRCUIT_TYPE_FEATURES]
     out: dict = {}
@@ -760,6 +818,7 @@ def run_experiments(
         "practice": lambda: practice_experiment(df, settings),
         "quali_ordering": lambda: quali_ordering_experiment(df, windows, settings),
         "circuit_type": lambda: circuit_type_experiment(df, windows, settings),
+        "retirements": lambda: retirement_experiment(df, windows, settings),
         "redundancy": lambda: redundancy(df, start_season, settings),
         "season_projection": lambda: season_projection_experiment(df),
         "parameter_stability": lambda: parameter_stability(
@@ -795,6 +854,7 @@ EXPERIMENTS = (
     "practice",
     "quali_ordering",
     "circuit_type",
+    "retirements",
     "redundancy",
     "season_projection",
     "parameter_stability",

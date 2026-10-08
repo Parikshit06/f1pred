@@ -55,7 +55,7 @@ def collect(df: pd.DataFrame, start_season: int, retrain_every: int = 3) -> pd.D
         )
 
     if not frames:
-        raise RuntimeError("no races scored - is start_season inside the data?")
+        raise RuntimeError("no races scored. Is start_season inside the data?")
     return pd.concat(frames, ignore_index=True)
 
 

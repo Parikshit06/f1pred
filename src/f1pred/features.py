@@ -290,12 +290,6 @@ def _prior_rolling(df: pd.DataFrame, by: str | list[str], col: str, window: int,
     return grouped.transform(lambda s: getattr(s.shift(1).rolling(window, min_periods=1), how)())
 
 
-def _prior_expanding(df: pd.DataFrame, by: str | list[str], col: str, how: str = "mean"):
-    """Expanding stat over all previous races. Same one-row-per-race caveat."""
-    grouped = df.groupby(by, sort=False)[col]
-    return grouped.transform(lambda s: getattr(s.shift(1).expanding(min_periods=1), how)())
-
-
 def _roll_over_valid(s: pd.Series, window: int | None, stat: str = "mean") -> pd.Series:
     """Mean (or median) of the last `window` non-null values strictly before each row.
 
@@ -317,8 +311,8 @@ def _prior_pace(df: pd.DataFrame, by: str | list[str], col: str, window: int | N
 
     A retirement is classified near last. Averaged in, it reads as slowness when
     the car broke. Reliability already has its own features and the simulator's
-    retirement hazard, so counting it here too would charge the same event twice
-    - hardest on cars that stopped while running near the front.
+    retirement hazard, so counting it here too would charge the same event twice,
+    hardest on cars that stopped while running near the front.
 
     One-row-per-race keys only. See _prior_rolling.
     """
@@ -384,9 +378,12 @@ def _prior_rolling_by_race(
 
     Pass window=None for an expanding window.
     """
+    # A race without results yet (an upcoming placeholder, or one just run that
+    # the source has not posted) has no value. A plain sum would call it 0.
+    agg = (lambda s: s.sum(min_count=1)) if race_agg == "sum" else race_agg
     per_race = (
         df.groupby([group, "race_seq"], sort=True)[col]
-        .agg(race_agg)
+        .agg(agg)
         .reset_index()
         .sort_values([group, "race_seq"])
     )
@@ -476,7 +473,7 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     stat = form_stat or FORM_STAT
     results = raw.results.copy()
     if results.empty:
-        raise RuntimeError("raw_results is empty - run the ingest first")
+        raise RuntimeError("raw_results is empty. Run the ingest first")
     results["entry_source"] = "results"
 
     if include_upcoming:
@@ -540,8 +537,8 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     df["drv_experience"] = df.groupby("driver_id", sort=False).cumcount()
 
     # ---- team form -------------------------------------------------------
-    # One number per car per race, collapsed before the window shifts -
-    # otherwise one driver's row sees the teammate's result from the same race.
+    # One number per car per race, collapsed before the window shifts.
+    # Otherwise one driver's row sees the teammate's result from the same race.
     df["team_avg_finish_3"] = _prior_pace_by_race(df, "constructor_id", "finish_when_running", 3, stat)
     df["team_avg_finish_5"] = _prior_pace_by_race(df, "constructor_id", "finish_when_running", 5, stat)
     df["team_points_rate_5"] = _prior_rolling_by_race(df, "constructor_id", "points", 5, race_agg="sum")
@@ -550,13 +547,6 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     # ---- circuit history -------------------------------------------------
     df["drv_circuit_avg_finish"] = _prior_pace(df, ["driver_id", "circuit_id"], "finish_when_running", None)
     df["team_circuit_avg_finish"] = _prior_pace_at_circuit(df, "constructor_id", "finish_when_running")
-    df["street_circuit"] = df["circuit_id"].isin(STREET_CIRCUITS).astype(float)
-    df["drv_type_avg_finish"] = _prior_pace(
-        df, ["driver_id", "street_circuit"], "finish_when_running", CIRCUIT_TYPE_WINDOW
-    )
-    df["team_type_avg_finish"] = _prior_pace_at_circuit(
-        df, "constructor_id", "finish_when_running", key="street_circuit", window=CIRCUIT_TYPE_WINDOW
-    )
 
     df = _add_circuit_profile(df)
 
@@ -592,12 +582,25 @@ def build(include_upcoming: bool = True, form_stat: str | None = None) -> pd.Dat
     return df
 
 
+def add_circuit_type(df: pd.DataFrame) -> pd.DataFrame:
+    """The circuit-type candidates (CIRCUIT_TYPE_FEATURES), for the experiment
+    that tested them. Not part of build(), since no model uses them."""
+    out = df.sort_values(["race_seq", "driver_id"]).copy()
+    out["street_circuit"] = out["circuit_id"].isin(STREET_CIRCUITS).astype(float)
+    out["drv_type_avg_finish"] = _prior_pace(
+        out, ["driver_id", "street_circuit"], "finish_when_running", CIRCUIT_TYPE_WINDOW
+    )
+    out["team_type_avg_finish"] = _prior_pace_at_circuit(
+        out, "constructor_id", "finish_when_running", key="street_circuit", window=CIRCUIT_TYPE_WINDOW
+    )
+    return out.loc[df.index]
+
+
 def _add_circuit_profile(df: pd.DataFrame) -> pd.DataFrame:
     """How much a circuit reshuffles the grid, and how punishing it is.
 
     Computed from prior visits only. A circuit nobody has raced at gets NaN,
-    which is the honest answer: see cold_start() for how a new track is
-    handled at prediction time.
+    which is the honest answer. The model treats it as unknown.
     """
     df["abs_pos_change"] = (df["grid"] - df["finish_or_last"]).abs().where(df["position"].notna())
 

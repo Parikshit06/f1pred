@@ -73,7 +73,7 @@ def simulate_matrix(
             missing = int((~np.isfinite(grid_given)).sum())
             raise ValueError(
                 f"grid has {missing} missing entries of {n}. A race that has not run yet "
-                "carries no grid in results - fill it from qualifying before simulating."
+                "carries no grid in results. Fill it from qualifying before simulating."
             )
         grid = np.broadcast_to(grid_given, (n_sims, n))
     elif inputs.grid_scores is not None:
@@ -184,13 +184,20 @@ def forecast(
     n_sims: int = config.N_SIMULATIONS,
     grid_temperature: float | None = None,
     seed: int = config.RANDOM_SEED,
+    pl_retirements: bool = False,
 ) -> RaceForecast:
     """One coherent finishing-position distribution for a race.
 
     Plackett-Luce at the calibrated temperature, mixed with the Monte Carlo at
     the fitted weight. See probability.py for why the mixture stays coherent.
     """
-    pl = probability.pl_position_matrix(inputs.scores, temperature, n_samples=max(n_sims, 10_000), seed=seed)
+    pl = probability.pl_position_matrix(
+        inputs.scores,
+        temperature,
+        n_samples=max(n_sims, 10_000),
+        seed=seed,
+        dnf_prob=inputs.dnf_prob if pl_retirements else None,
+    )
     sim = simulate_matrix(
         inputs, n_sims, grid_temperature=grid_temperature if grid_temperature else temperature, seed=seed + 1
     )

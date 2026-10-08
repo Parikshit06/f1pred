@@ -216,7 +216,7 @@ def fetch_session_drivers(
         driver_id = map_driver(r, lookup, season)
         if driver_id is None:
             log.warning(
-                "openf1: no jolpica driver for #%s %s (%s) - left out",
+                "openf1: no jolpica driver for #%s %s (%s), left out",
                 r.get("driver_number"),
                 r.get("name_acronym"),
                 r.get("team_name"),

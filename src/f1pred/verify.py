@@ -276,7 +276,7 @@ def audit_inputs(df: pd.DataFrame) -> Audit:
         return Audit(
             "2. Input coverage",
             FAIL,
-            f"{', '.join(required_dead)} has no data - it cannot influence any prediction",
+            f"{', '.join(required_dead)} has no data, so it cannot influence any prediction",
             "The model is wired for it but the table is empty.",
             table,
         )
@@ -354,7 +354,7 @@ def audit_bias(df: pd.DataFrame, start_season: int, retrain_every: int = 3) -> A
 
     detail = (
         f"{trend['variance_explained'] * 100:.0f}% of raw per-driver bias is explained by predicted\n"
-        f"rank alone (r={trend['r']:.2f}) - an artifact of comparing a fixed ranking to a\n"
+        f"rank alone (r={trend['r']:.2f}): an artifact of comparing a fixed ranking to a\n"
         "mean pulled toward the middle by retirements. The corrected column is what counts."
     )
 

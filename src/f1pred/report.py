@@ -274,7 +274,7 @@ def primary(rows: list[dict], prediction: dict, finished: dict[str, int]) -> str
 def coherent(prediction: dict, tol: float = 0.02) -> bool:
     """Whether the published win chances are the ones in the logged
     distribution. Forecasts from the current pipeline always are (tested).
-    some logged by an earlier version are not, and are never rewritten."""
+    Some logged by an earlier version are not, and are never rewritten."""
     ids = (prediction.get("meta") or {}).get("matrix_driver_ids") or []
     matrix = prediction.get("position_matrix") or []
     if len(ids) != len(matrix) or not matrix:
@@ -285,8 +285,7 @@ def coherent(prediction: dict, tol: float = 0.02) -> bool:
 
 def _by_expected_finish(rows: list[dict]) -> list[dict]:
     """The race table in expected finishing order, so its first ten rows are
-    the likeliest top ten. The favourite and the cars above it stay in order
-    of the chance to win."""
+    the likeliest top ten."""
     if rows and all(isinstance(r.get("exp_position"), (int, float)) for r in rows):
         return sorted(rows, key=lambda r: r["exp_position"])
     return rows

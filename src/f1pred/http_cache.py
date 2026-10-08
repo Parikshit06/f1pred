@@ -96,7 +96,7 @@ class RateLimitedSession:
             wait = max(1.0, self._window[0] - cutoff + 1.0)
             self.throttle_waits += 1
             log.warning(
-                "Hourly budget reached (%d/hr). Pausing %.1f min - normal on a full "
+                "Hourly budget reached (%d/hr). Pausing %.1f min, normal on a full "
                 "backfill. Everything already fetched is cached, so ctrl-C is safe.",
                 self.hourly_limit,
                 wait / 60,
@@ -160,7 +160,7 @@ class RateLimitedSession:
             except (requests.ConnectionError, requests.Timeout) as exc:
                 # A dropped connection or a slow response is transient. Before this
                 # it ended the whole ingest on the first blip.
-                log.warning("Network error on %s (%s) - retrying in %.0fs", url, type(exc).__name__, backoff)
+                log.warning("Network error on %s (%s), retrying in %.0fs", url, type(exc).__name__, backoff)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 60)
                 continue
@@ -190,7 +190,7 @@ class RateLimitedSession:
                 )
                 if self.min_interval > old_interval:
                     log.info(
-                        "Throttled - easing request spacing %.2fs -> %.2fs",
+                        "Throttled, easing request spacing %.2fs -> %.2fs",
                         old_interval,
                         self.min_interval,
                     )
@@ -206,7 +206,7 @@ class RateLimitedSession:
                 continue
 
             if 500 <= resp.status_code < 600:
-                log.warning("Server error %d on %s - retrying", resp.status_code, url)
+                log.warning("Server error %d on %s, retrying", resp.status_code, url)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 60)
                 continue

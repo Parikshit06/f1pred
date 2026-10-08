@@ -458,7 +458,7 @@ def openf1_grid_matches_the_field(con) -> list[Finding]:
         Finding(
             "openf1_grid_matches_the_field",
             WARN,
-            f"{len(df)} OpenF1 grid row(s) for drivers not in the race - that grid will be refused",
+            f"{len(df)} OpenF1 grid row(s) for drivers not in the race, so that grid will be refused",
             df,
         )
     ]
@@ -539,7 +539,7 @@ def retirement_flag_matches_laps(con) -> list[Finding]:
             ERROR,
             f"status '{statuses}' is marked as a retirement on {int(systematic['rows'].sum())} "
             f"entries that finished within two laps of the winner. The upstream status "
-            f"vocabulary has probably changed - update ingest.jolpica.is_finished, "
+            f"vocabulary has probably changed. Update ingest.jolpica.is_finished, "
             f"then run `make repair`.",
             by_status,
         )

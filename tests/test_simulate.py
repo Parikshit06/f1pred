@@ -195,3 +195,15 @@ def test_a_temperature_can_be_fitted_on_the_first_few_finishers():
     orders = [list(np.argsort(-(g + rng.normal(scale=0.5, size=12)))[:3]) for g in groups]
     t = probability.fit_temperature(groups, orders)
     assert 0 < t < 10
+
+
+def test_retirements_in_the_ranking_half_send_a_certain_retirement_last():
+    from f1pred import probability
+
+    scores = np.array([3.0, 2.0, 1.0, 0.0])
+    plain = probability.pl_position_matrix(scores, 1.0, n_samples=4000, seed=1)
+    again = probability.pl_position_matrix(scores, 1.0, n_samples=4000, seed=1, dnf_prob=None)
+    assert np.array_equal(plain, again), "the default must not change"
+    m = probability.pl_position_matrix(scores, 1.0, n_samples=4000, seed=1, dnf_prob=np.array([1.0, 0, 0, 0]))
+    assert m[0, -1] == pytest.approx(1.0)
+    assert np.allclose(m.sum(axis=0), 1.0) and np.allclose(m.sum(axis=1), 1.0)

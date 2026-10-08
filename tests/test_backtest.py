@@ -197,3 +197,23 @@ def test_tied_baseline_values_get_equal_chances():
     )
     t = fc.table.set_index("driver_id")
     assert t.loc["a", "p_win"] == pytest.approx(t.loc["b", "p_win"], abs=0.01)
+
+
+def test_before_practice_the_race_is_scored_without_its_practice():
+    import pandas as pd
+
+    from f1pred import features
+
+    race = pd.DataFrame(
+        {c: [1.0, 2.0] for c in features.PRACTICE_FEATURES + features.PRACTICE_DETAIL_FEATURES}
+    )
+    race["practice_available"] = 1.0
+    race["grid"] = [1.0, 2.0]
+    out = backtest.without_practice(race)
+    practice = [
+        c for c in features.PRACTICE_FEATURES + features.PRACTICE_DETAIL_FEATURES if c != "practice_available"
+    ]
+    assert out[practice].isna().all().all()
+    assert (out["practice_available"] == 0).all()
+    assert out["grid"].tolist() == [1.0, 2.0]
+    assert race["grid"].notna().all(), "the input is left alone"

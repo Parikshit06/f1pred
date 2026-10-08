@@ -194,7 +194,7 @@ def next_race(df: pd.DataFrame) -> tuple[int, int]:
         pending = pending[starts.isna() | (starts > now)]
     if pending.empty:
         raise RuntimeError(
-            "No upcoming race found - every scheduled race has either run or started. "
+            "No upcoming race found. Every scheduled race has either run or started. "
             "Is the schedule ingested for this season?"
         )
     row = pending.sort_values(["season", "round"]).iloc[0]
@@ -273,7 +273,7 @@ def _season_outlook(race: pd.DataFrame, names: dict, season: int, rnd: int) -> d
             season,
             rnd - 1,
         )
-    except Exception as exc:  # noqa: BLE001 - a missing standings row must not
+    except Exception as exc:  # noqa: BLE001 (a missing standings row must not stop the forecast)
         log.warning("season projection unavailable: %s", exc)
         return {}
     if not out:
@@ -443,7 +443,7 @@ def run(
     After qualifying: the official grid (or, until it is published, the
     qualifying order, recorded as such) and the real qualifying result go to
     the race model. The qualifying forecast is then shown for comparison only.
-    it never stands in for the result.
+    It never stands in for the result.
     """
     s = settings or backtest.load_settings()
     df = features.build(include_upcoming=True)
@@ -465,7 +465,11 @@ def run(
     stage = "post_quali" if known_grid else "pre_quali"
     quali_model = backtest.quali_trainer(s)(history)
     race_model = backtest.race_trainer(s)(history)
-    t_race, t_quali = backtest.trailing_temperatures(df, seq, s, stage)
+    # Fitted on past races scored the way this one is: without practice when
+    # none has run yet.
+    has_practice = bool(race["practice_available"].max() > 0)
+    fit_stage = stage if known_grid or has_practice else "pre_practice"
+    t_race, t_quali = backtest.trailing_temperatures(df, seq, s, fit_stage)
 
     # ---- qualifying ------------------------------------------------------
     race["quali_score"] = quali_model.score(race)
@@ -500,7 +504,14 @@ def run(
     # Grids drawn before qualifying use the tuned qualifying temperature, and
     # the qualifying board its trailing refit: each exactly as it is graded
     # (backtest.walk_forward and backtest.walk_forward_quali).
-    fc = simulate.forecast(inputs, t_race, s.blend_weight, n_sims, grid_temperature=s.quali_temperature)
+    fc = simulate.forecast(
+        inputs,
+        t_race,
+        s.blend_weight,
+        n_sims,
+        grid_temperature=s.quali_temperature,
+        pl_retirements=s.pl_retirements,
+    )
     problems = probability.check_distribution(fc.matrix)
     if problems:
         raise RuntimeError(f"forecast is not a coherent distribution: {problems}")
@@ -549,7 +560,7 @@ def run(
             "SELECT race_name, quali_start_utc, sprint_start_utc FROM raw_races WHERE season = ? AND round = ?",
             [season, rnd],
         ).fetchone() or (None, None, None)
-    practice = bool(race["practice_available"].max() > 0)
+    practice = has_practice
     # Qualifying follows FP3, or only FP1 on a sprint weekend.
     last_session = sprint_start is not None and pd.notna(sprint_start) or race["fp3_gap_pct"].notna().any()
 

@@ -45,12 +45,6 @@ def test_prior_rolling_is_not_merely_shifted_by_a_window():
     assert df["avg2"].iloc[2] == pytest.approx(1.5)
 
 
-def test_prior_expanding_excludes_the_current_race():
-    df = _frame([4, 4, 4, 20])
-    df["exp"] = features._prior_expanding(df, "driver_id", "finish_or_last")
-    assert df["exp"].iloc[3] == pytest.approx(4.0)
-
-
 def test_rolling_does_not_bleed_between_drivers():
     a = _frame([1, 1, 1], "alpha")
     b = _frame([20, 20, 20], "beta")
@@ -152,7 +146,7 @@ def test_every_team_feature_uses_the_race_level_helper():
         stripped = line.strip()
         if not stripped.startswith('df["team_'):
             continue
-        if "_prior_rolling(" in stripped or "_prior_expanding(" in stripped:
+        if "_prior_rolling(" in stripped:
             raise AssertionError(
                 f"team feature uses a row-shift helper and will leak across teammates:\n  {stripped}"
             )
@@ -250,3 +244,20 @@ def test_a_retired_car_does_not_drag_its_teams_pace():
     last = df[df["round"] == 4]["pace"].iloc[0]
     # Races 1 and 2 average 3.5. In race 3 only the running car counts, so 3.
     assert last == pytest.approx((3.5 + 3.5 + 3.0) / 3)
+
+
+def test_a_race_without_results_is_not_a_zero_point_race():
+    """Upcoming placeholders, and a race just run whose results are not posted
+    yet, have no points. Summed, they used to count as a race with none."""
+    import numpy as np
+    import pandas as pd
+
+    df = pd.DataFrame(
+        {
+            "constructor_id": ["t"] * 4,
+            "race_seq": [1, 2, 3, 4],
+            "points": [10.0, 10.0, np.nan, np.nan],
+        }
+    )
+    out = features._prior_rolling_by_race(df, "constructor_id", "points", 5, race_agg="sum")
+    assert out.iloc[3] == pytest.approx(10.0), "race 3 has no result yet and must not drag the average"

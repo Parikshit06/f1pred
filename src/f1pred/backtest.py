@@ -57,6 +57,8 @@ class Settings:
     n_sims: int = 3000
     # How many of the first finishers the temperature is fitted on (1 = winner).
     temperature_depth: int = 1
+    # Retirements in the Plackett-Luce half too, not only in the simulation.
+    pl_retirements: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +136,27 @@ def top_order(race: pd.DataFrame, k: int, column: str = "position") -> list[int]
     pos = pd.to_numeric(race[column], errors="coerce").to_numpy(dtype=float)
     ranked = [int(i) for i in np.argsort(np.where(np.isfinite(pos), pos, np.inf))[:k] if np.isfinite(pos[i])]
     return ranked if ranked else None
+
+
+# Stages before the grid is known. Before practice, the race being forecast has
+# no practice yet, so its practice columns are hidden when it is scored.
+PRE_GRID = ("pre_quali", "pre_practice")
+PRACTICE_COLUMNS = [c for c in features.PRACTICE_FEATURES + features.PRACTICE_DETAIL_FEATURES]
+
+
+def without_practice(race: pd.DataFrame) -> pd.DataFrame:
+    """The race as it looks before any practice has run."""
+    out = race.copy()
+    out[[c for c in PRACTICE_COLUMNS if c in out]] = np.nan
+    if "practice_available" in out:
+        out["practice_available"] = 0.0
+    return out
+
+
+def _quali_score(stage: str):
+    if stage != "pre_practice":
+        return None
+    return lambda ranker, race, seq: ranker.score(without_practice(race))
 
 
 def projected_weekend(race: pd.DataFrame, quali_scores: np.ndarray) -> pd.DataFrame:
@@ -222,7 +245,7 @@ def walk_forward(
 
     The `warmup` races before the window are scored too, but only to give the
     rolling temperature its trailing history from the first reported race.
-    they are not graded. `scored` reuses post-qualifying scores from
+    They are not graded. `scored` reuses post-qualifying scores from
     oos_scores() when only the probability step is being varied.
     """
     s = settings or Settings()
@@ -237,8 +260,10 @@ def walk_forward(
 
     quali_scored: dict = {}
     score = None
-    if stage == "pre_quali":
-        quali_scored = oos_scores(df, targets, quali_trainer(s, quali_features, n_seeds), retrain_every)
+    if stage in PRE_GRID:
+        quali_scored = oos_scores(
+            df, targets, quali_trainer(s, quali_features, n_seeds), retrain_every, _quali_score(stage)
+        )
         targets = [t for t in targets if t in quali_scored]
 
         def score(ranker, race, seq):
@@ -289,6 +314,7 @@ def walk_forward(
                 s.n_sims,
                 grid_temperature=s.quali_temperature,
                 seed=config.RANDOM_SEED + seq,
+                pl_retirements=s.pl_retirements,
             )
             table = fc.table.set_index("driver_id")
             pred_rank = pd.Series(-sc, index=race["driver_id"].to_numpy()).rank(method="first")
@@ -531,10 +557,10 @@ def trailing_temperatures(
         return settings.temperature, settings.quali_temperature
     done = completed_races(df, 0)
     trail = done[done["race_seq"] < seq]["race_seq"].tail(probability.ADAPTIVE_WINDOW).tolist()
-    quali = oos_scores(df, trail, quali_trainer(settings), retrain_every)
+    quali = oos_scores(df, trail, quali_trainer(settings), retrain_every, _quali_score(stage))
 
     score = None
-    if stage == "pre_quali":
+    if stage in PRE_GRID:
 
         def score(ranker, race, s):
             return ranker.score(projected_weekend(race, quali[s][1]))
