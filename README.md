@@ -294,6 +294,12 @@ ordered the whole field clearly better on 2022–23 and again on 2024 onward
 clearly worse at the front, NDCG@5 -0.018 (-0.034 to -0.002). The race forecast
 depends most on the front of the grid, so neither is used.
 
+**Circuit type: tested, not used.** Each driver's and team's recent
+finishing at street circuits, or at permanent ones, so that a new or rarely
+visited track borrows from similar ones. Judged on a rule fixed in advance
+(`circuit_type` in `reports/experiments.json`), it made no clear difference on
+2022–23, so the model does not use it.
+
 **Recent form: median, not mean.** Median finishing position over the last
 races lowered 2022–23 log loss by 0.047 (interval 0.003 to 0.093). On 2024
 onward the difference is not clear (-0.018 for the mean, -0.068 to +0.035), so

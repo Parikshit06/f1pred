@@ -63,14 +63,6 @@ METRICS = {
     "pole_hit": ("Pole-sitter called", "hit rate", False),
     "pole_logloss": ("Pole chances", "log loss", True),
 }
-# One probability score per stage, and the winner rate: fixed in advance,
-# with every measure where a reference is clearly ahead added to them.
-HEADLINE = [
-    (None, "winner_hit"),
-    (None, "win_logloss"),
-    ("pre_quali", "win_logloss"),
-    ("qualifying", "pole_logloss"),
-]
 
 
 def _comparisons(bt: dict) -> list[tuple[str, str, dict]]:
@@ -98,44 +90,6 @@ def _verdict(r: dict) -> tuple[str, str]:
     if b in (None, "unclear"):
         return "no clear difference", "flat"
     return "reference clearly better", "bad"
-
-
-def _headline(bt: dict) -> str:
-    """The key results in one row, before any detail."""
-    w = bt.get("window") or {}
-    comps = _comparisons(bt)
-    sections = {s[0]: s[1] for s in STAGES}
-    picked = []
-    for section, metric in HEADLINE:
-        stage = next(k for k, v in sections.items() if v == section)
-        row = next((c for c in comps if c[0] == stage and c[2]["metric"] == metric), None)
-        if row:
-            picked.append(row)
-    picked += [c for c in comps if c[2].get("better") not in ("model", "unclear", None) and c not in picked]
-    if not (picked and w):
-        return ""
-    tiles = []
-    for stage, ref, r in picked:
-        name, term, lower = METRICS.get(r["metric"], (r["metric"], "", False))
-        verdict, cls = _verdict(r)
-        ref_v = _ref_value(r)
-        tiles.append(
-            f"<div class='kr'><span class='kr-s'>{rr.esc(stage)}</span>"
-            f"<b class='kr-m'>{rr.esc(name)} <small>{rr.esc(term)}{', lower is better' if lower else ''}</small></b>"
-            f"<span class='kr-v'>{_fmt(r['metric'], r['model'])}"
-            + (f"<em>vs {_fmt(r['metric'], ref_v)}</em>" if ref_v is not None else "")
-            + f"</span><span class='kr-r'>model vs {rr.esc(ref)}</span>"
-            f"<span class='kr-x {cls}'>{verdict}</span></div>"
-        )
-    through = w.get("through") or ["", ""]
-    tuned = w.get("tuned_on") or ["", ""]
-    return (
-        f"<p class='kr-cap'>Tested on {w.get('n_races')} past races, {w.get('start_season')} round 1 to "
-        f"{through[0]} round {through[1]}, each forecast using only the races before it, with settings "
-        f"fixed beforehand on {tuned[0]}&ndash;{tuned[1]}. Each result is compared with a simple reference, "
-        "and a difference only counts as clear when its 95% interval over races excludes zero.</p>"
-        f"<div class='keyrow'>{''.join(tiles)}</div>"
-    )
 
 
 def _detailed(bt: dict) -> str:
@@ -166,8 +120,10 @@ def _detailed(bt: dict) -> str:
             f"<td class='n mono'>{diff}</td><td class='vd {cls}'>{verdict}</td></tr>"
         )
     return (
-        "<p>Every comparison the evaluation made, model minus reference, with its 95% interval. "
-        "&darr; marks a score where lower is better.</p>"
+        "<p>For anyone who wants the detail: every comparison the evaluation made, model minus "
+        "reference, with its 95% interval. A difference only counts when its interval excludes zero. "
+        "Log loss and Brier score measure how far the chances were from what happened, and NDCG how "
+        "well the top places were ordered. &darr; marks a score where lower is better.</p>"
         "<div class='scroll'><table class='keyres'><thead><tr><th>Measure</th>"
         "<th class='n'>Model</th><th class='n'>Reference</th><th class='n'>Difference</th>"
         f"<th>Verdict</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
@@ -370,8 +326,8 @@ def _hood(bt: dict) -> str:
     )
 
 
-def _part(title: str, body: str, cls: str = "") -> str:
-    return f"<section class='part {cls}'><h2>{title}</h2>{body}</section>" if body else ""
+def _part(key: str, title: str, body: str) -> str:
+    return f"<section class='part' id='{key}'><h2>{title}</h2>{body}</section>" if body else ""
 
 
 def build() -> str:
@@ -387,14 +343,19 @@ def build() -> str:
             "will finish. Here is how that forecast is made, and how often it is right.</p>"
         ),
         "</header>",
-        _headline(bt),
-        _part("What it looks at", _looks_at()),
-        _part("From a ranking to a percentage", _to_chances()),
-        _part("It sharpens through the weekend", _sharpens()),
-        _part("Is it any good?", _good(bt, tb)),
-        _part("What it can&rsquo;t see", _blind_spots()),
-        _part("Every result", _detailed(bt)),
-        _part("Under the hood", _hood(bt)),
+    ]
+    parts = [
+        ("looks-at", "What it looks at", _looks_at()),
+        ("chances", "From a ranking to a percentage", _to_chances()),
+        ("weekend", "It sharpens through the weekend", _sharpens()),
+        ("good", "Is it any good?", _good(bt, tb)),
+        ("blind-spots", "What it can&rsquo;t see", _blind_spots()),
+        ("numbers", "All the numbers", _detailed(bt)),
+        ("hood", "Under the hood", _hood(bt)),
+    ]
+    parts = [(k, t, b) for k, t, b in parts if b]
+    s += [rr.contents([(k, t) for k, t, _ in parts]), *(_part(k, t, b) for k, t, b in parts)]
+    s += [
         "</article>",
         rr.footer(config.REPO_URL),
         "</main>",

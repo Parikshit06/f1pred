@@ -89,8 +89,8 @@ PRACTICE_FEATURES = [
 PRACTICE_MAX_GAP_PCT = 7.0
 
 # Street and temporary circuits, against permanent ones. A circuit seen once
-# or not at all borrows from the others of its type. Candidates only: they are
-# in the model only if circuit_type in reports/experiments.json says so.
+# or not at all borrows from the others of its type. Tested and not used: no
+# clear difference on 2022-23 (circuit_type in reports/experiments.json).
 STREET_CIRCUITS = frozenset(
     {
         "albert_park",

@@ -408,8 +408,9 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
         present = {"race", "qualifying", "record"}
         if (prediction.get("season_outlook") or {}).get("drivers"):
             present.add("championship")
-        s.append(_index(present))
     s.append("</header>")
+    if prediction:
+        s.append(rr.contents([(k, name) for k, name in SECTIONS if k in present]))
 
     if not prediction:
         s.append(
@@ -581,12 +582,6 @@ def races_page() -> str:
         "</main>",
     ]
     return rr.document("".join(s), title="Past races")
-
-
-def _index(present: set[str]) -> str:
-    """The page's sections as one line of links, for scanning."""
-    links = "".join(f"<a href='#{k}'>{name}</a>" for k, name in SECTIONS if k in present)
-    return f"<nav class='onpage' aria-label='On this page'>{links}</nav>"
 
 
 def write(prediction: dict | None = None, path: Path | None = None, archived: bool = False) -> Path:

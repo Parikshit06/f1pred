@@ -492,10 +492,34 @@ footer a{color:var(--ink-2); white-space:nowrap}
 .stages li.now::after{content:""; width:6px; height:6px; border-radius:50%; background:var(--accent);
   margin-left:7px}
 .stages-note{margin-top:6px; font-size:.82rem; color:var(--ink-3)}
-.onpage{display:flex; flex-wrap:wrap; gap:6px 8px; margin-top:26px}
-.onpage a{padding:6px 12px; border-radius:6px; background:var(--chip); color:var(--ink-2); font-size:.85rem;
-  font-weight:500; text-decoration:none; transition:background .3s var(--ease), color .3s var(--ease)}
-.onpage a:hover{color:var(--ink); background:color-mix(in srgb,var(--ink) 10%,var(--chip))}
+
+/* ---- contents: the page's sections, always in reach ---------------------
+   A strip under the top bar, or a column at the left where the screen is
+   wide enough. The section in view is highlighted (see SCRIPT). */
+html{scroll-padding-top:132px}
+@media (prefers-reduced-motion:no-preference){ html{scroll-behavior:smooth} }
+.toc{position:sticky; top:68px; z-index:15; display:flex; gap:4px; overflow-x:auto; scrollbar-width:none;
+  margin:28px -20px 0; padding:8px 20px; border-bottom:1px solid var(--hair);
+  background:color-mix(in srgb,var(--paper) 90%,transparent);
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px)}
+.toc::-webkit-scrollbar{display:none}
+.toc span{display:none}
+.toc a{flex:none; padding:6px 12px; border-radius:6px; color:var(--ink-2); font-size:.85rem; font-weight:500;
+  white-space:nowrap; text-decoration:none; transition:background .3s var(--ease), color .3s var(--ease)}
+.toc a:hover{color:var(--ink); background:var(--chip)}
+.toc a[aria-current]{color:var(--ink); background:var(--chip)}
+@media (max-width:640px){ .toc{top:60px} html{scroll-padding-top:120px} }
+@media (max-width:480px){ .toc{margin-inline:-14px; padding-inline:14px} }
+@media (min-width:1440px){
+  html{scroll-padding-top:90px}
+  .toc{position:fixed; top:110px; left:max(12px, calc((100vw - 1140px) / 2 - 150px)); width:136px;
+    flex-direction:column; margin:0; padding:0; overflow:visible; border:0; background:none;
+    -webkit-backdrop-filter:none; backdrop-filter:none}
+  .toc span{display:block; padding:0 12px 8px; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-3)}
+  .toc a{white-space:normal; padding:6px 12px; border-left:2px solid var(--hair); border-radius:0 6px 6px 0}
+  .toc a[aria-current]{border-left-color:var(--accent)}
+}
 @media (max-width:480px){ .stages li + li::before{width:12px; margin:0 6px} .stages{font-size:.78rem} }
 
 /* ---- empty and notice states --------------------------------------------- */
@@ -561,21 +585,9 @@ section.part{padding-block:40px 30px}
 @media (max-width:560px){ .hood > div{grid-template-columns:1fr} }
 .links{display:flex; flex-wrap:wrap; gap:8px 22px}
 .links a{color:var(--ink); font-weight:500; text-underline-offset:3px; text-decoration-color:var(--ink-3)}
-/* Method page: the key results before any detail. */
-.kr-cap{font-size:.9rem; line-height:1.55; color:var(--ink-3); max-width:70ch; margin:0 0 14px}
-.keyrow{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:0 28px;
-  border-top:2px solid var(--rule); margin-bottom:48px}
-.kr{display:grid; gap:3px; align-content:start; padding:14px 0 16px; border-bottom:1px solid var(--hair)}
-.kr-s{font-size:12px; color:var(--ink-3)}
-.kr-m{font-size:.95rem; font-weight:600}
-.kr-m small{display:block; font-family:var(--mono); font-size:11px; font-weight:400; color:var(--ink-3)}
-.kr-v{margin-top:4px; font-family:var(--mono); font-size:1.4rem; font-weight:600; letter-spacing:-.02em}
-.kr-v em{margin-left:8px; font-style:normal; font-size:.85rem; font-weight:400; color:var(--ink-3)}
-.kr-r{font-size:12px; color:var(--ink-3)}
-.kr-x{margin-top:4px; font-size:12.5px; font-weight:600}
-.kr-x.good, .keyres .vd.good{color:var(--good)}
-.kr-x.bad, .keyres .vd.bad{color:var(--bad)}
-.kr-x.flat, .keyres .vd.flat{color:var(--ink-2); font-weight:400}
+.keyres .vd.good{color:var(--good)}
+.keyres .vd.bad{color:var(--bad)}
+.keyres .vd.flat{color:var(--ink-2); font-weight:400}
 .keyres td small{display:block}
 .keyres{font-size:.84rem}
 .keyres th+th, .keyres td+td{padding-left:18px}
@@ -1123,6 +1135,28 @@ def top_bar(
 # page is complete without it.
 SCRIPT = r"""
 (function(){
+  // Contents: highlight the section in view, and keep it visible in the strip.
+  var nav = document.querySelector('.toc');
+  if(!nav) return;
+  var links = Array.prototype.slice.call(nav.querySelectorAll('a'));
+  var secs = links.map(function(a){ return document.getElementById(a.hash.slice(1)); });
+  var current = -1, queued = false;
+  function update(){
+    queued = false;
+    var i = -1;
+    secs.forEach(function(s, k){ if(s && s.getBoundingClientRect().top < 160) i = k; });
+    if(i === current) return;
+    current = i;
+    links.forEach(function(a, k){
+      if(k === i) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    if(i >= 0 && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = links[i].offsetLeft - 20;
+  }
+  addEventListener('scroll', function(){ if(!queued){ queued = true; requestAnimationFrame(update); } },
+    {passive: true});
+  update();
+})();
+(function(){
   // Sections rise in as they reach the viewport; everything shows at once
   // where the observer is missing or motion is reduced.
   var secs = document.querySelectorAll('main > section');
@@ -1259,6 +1293,12 @@ DESCRIPTION = (
     "Probabilistic forecasts for every Formula 1 Grand Prix: race, qualifying and championship "
     "chances, published before each session and graded after the race."
 )
+
+
+def contents(items: list[tuple[str, str]]) -> str:
+    """Links to the page's sections, as (id, title) pairs."""
+    links = "".join(f"<a href='#{esc(k)}'>{label}</a>" for k, label in items)
+    return f"<nav class='toc' aria-label='On this page'><span>On this page</span>{links}</nav>"
 
 
 def footer(repo_url: str) -> str:

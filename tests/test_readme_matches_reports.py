@@ -304,3 +304,16 @@ def test_the_qualifying_order_experiment_is_quoted_and_not_adopted():
     for m in ("position_error", "ndcg5"):
         lo, hi = r[f"{m}_ci"]
         assert f"{r[f'{m}_diff']:+.3f} ({lo:+.3f} to {hi:+.3f})" in text, f"qualifying order {m}"
+
+
+def test_the_circuit_type_experiment_is_reported_as_not_used():
+    exp = _load("experiments.json").get("circuit_type")
+    if not exp:
+        pytest.skip("circuit_type has not been run")
+    from f1pred import features
+
+    assert not exp["verdict"]["passes_rule"], (
+        "circuit type passed its rule; the README and model should change"
+    )
+    assert "Circuit type: tested, not used" in _readme()
+    assert not set(features.CIRCUIT_TYPE_FEATURES) & set(features.RACE_FEATURES)

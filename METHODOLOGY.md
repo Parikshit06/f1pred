@@ -231,6 +231,15 @@ the final configuration, and later runs report without re-deciding.
   The median of recent qualifying positions made no clear difference. Linear
   gains ordered the whole field clearly better in both windows but were
   clearly worse on NDCG@5 on 2024-, so neither is used.
+* **Circuit type** (`circuit_type`): street and temporary circuits against
+  permanent ones, as each driver's and each team's recent finishing at
+  circuits of the same type, so a circuit seen once or never borrows from the
+  rest of its type. Rule fixed in advance: kept only if clearly better on
+  2022-23 on win log loss or NDCG@5, before or after qualifying, and clearly
+  worse on none of those, NDCG@3 or podium Brier in either window. It made no
+  clear difference on 2022-23 (win log loss +0.012, -0.039 to +0.065, after
+  qualifying), so it is not used. Before qualifying on 2024- it was slightly
+  better, -0.061 (-0.130 to +0.005), but not clearly.
 * **Season projection**: how to score a driver for the rest of the season,
   graded on every title-backtest checkpoint against final driver and team
   points, the final gap between teammates and the champion's probability.

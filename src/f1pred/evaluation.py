@@ -501,6 +501,9 @@ def circuit_type_experiment(df, windows, settings, n_seeds=1, retrain_every=2) -
     the tuning seasons, it is clearly better on one of TYPE_KEEP at either
     stage, and it is clearly worse on none of TYPE_GUARD at either stage in
     either window.
+
+    It did not pass: no clear difference on the tuning seasons at either
+    stage, so the race model does not use it.
     """
     full = list(features.RACE_FEATURES)
     plus = [*full, *features.CIRCUIT_TYPE_FEATURES]
