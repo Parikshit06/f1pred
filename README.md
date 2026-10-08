@@ -113,9 +113,9 @@ make backtest title-backtest calibrate-spread verify   # regenerate reports/*.js
 make experiments                      # the design experiments, about an hour
 ```
 
-The scheduled workflows in [`.github/workflows`](.github/workflows) run the same
+The workflows in [`.github/workflows`](.github/workflows) run the same
 steps: `predict.yml` across each race weekend (and deploys the site),
-`evaluate.yml` monthly.
+`evaluate.yml` on request, when the figures here are brought up to date.
 
 ## Limitations
 

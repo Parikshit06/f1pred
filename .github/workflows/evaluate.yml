@@ -3,10 +3,10 @@ name: Evaluate
 # Historical evaluation, kept apart from the race-weekend pipeline.
 #
 # These numbers describe how the model has performed, not what happens on
-# Sunday, so they are re-measured when the model or the data window changes -
-# not three times a race weekend. Keeping them on a separate schedule is also
-# what stops the published accuracy figures drifting away from the ones written
-# down in the README.
+# Sunday, so they are re-measured on request, when the model changes or the
+# README is brought up to date, never on a timer. A scheduled re-measure would
+# move the figures away from the ones written down in the README, and commits
+# made by this workflow do not trigger CI, so nothing would notice.
 #
 # All slow by design. The backtest fits its settings on 2022-23 and then refits
 # per race across the reported seasons, before and after qualifying. The title
@@ -15,8 +15,6 @@ name: Evaluate
 # run by hand when the model changes, not every month.
 
 on:
-  schedule:
-    - cron: "0 4 1 * *"    # 1st of the month, 04:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -171,6 +169,11 @@ jobs:
       # reports on its next scheduled run.
       - name: Check the pages render against the new evidence
         run: python -m f1pred.cli dashboard
+
+      # The README quotes these figures and a test holds it to them. If they
+      # moved, stop here: the README has to be updated with them, by hand.
+      - name: Check the README still quotes the reports
+        run: python -m pytest -q tests/test_readme_matches_reports.py
 
       - name: Commit evaluation
         run: |
