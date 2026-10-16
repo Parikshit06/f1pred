@@ -44,6 +44,12 @@ PARAMS = {
 }
 
 
+# The qualifying ranker pairs each driver with others across the whole field,
+# not only with its current top eight, which orders the back of the grid better
+# (quali_pairing in reports/experiments.json).
+QUALI_PARAMS = {"lambdarank_pair_method": "mean"}
+
+
 # Seed averaging was accuracy-neutral on the 2021 hold-out. It stays so a
 # published forecast doesn't change just because the model was refit.
 N_SEEDS = 5

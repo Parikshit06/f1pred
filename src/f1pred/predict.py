@@ -472,7 +472,7 @@ def run(
     t_race, t_quali = backtest.trailing_temperatures(df, seq, s, fit_stage)
 
     # ---- qualifying ------------------------------------------------------
-    race["quali_score"] = quali_model.score(race)
+    race["quali_score"] = backtest.quali_scores(quali_model, race, s)
     announced = penalties.for_race(season, rnd)
     ids = race["driver_id"].tolist()
     held_back = [ids.index(p.driver_id) for p in announced if p.places is None and p.driver_id in ids]
@@ -561,8 +561,10 @@ def run(
             [season, rnd],
         ).fetchone() or (None, None, None)
     practice = has_practice
-    # Qualifying follows FP3, or only FP1 on a sprint weekend.
-    last_session = sprint_start is not None and pd.notna(sprint_start) or race["fp3_gap_pct"].notna().any()
+    # The last evidence before qualifying: FP3, or on a sprint weekend the
+    # sprint qualifying result, which follows the weekend's only practice.
+    sprint_weekend = sprint_start is not None and pd.notna(sprint_start)
+    last_session = race["sq_position"].notna().any() if sprint_weekend else race["fp3_gap_pct"].notna().any()
 
     return Prediction(
         season=season,

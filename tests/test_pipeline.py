@@ -39,7 +39,14 @@ def frame(db):
 
 def _cols() -> list[str]:
     # Candidates are held to the same standard as the features in use.
-    return sorted(set(features.RACE_FEATURES + features.QUALI_FEATURES + features.CIRCUIT_TYPE_FEATURES))
+    return sorted(
+        set(
+            features.RACE_FEATURES
+            + features.QUALI_FEATURES
+            + features.CIRCUIT_TYPE_FEATURES
+            + ["sq_position"]
+        )
+    )
 
 
 def _same(a: pd.DataFrame, b: pd.DataFrame) -> pd.Series:

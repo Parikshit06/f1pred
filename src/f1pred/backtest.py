@@ -59,6 +59,8 @@ class Settings:
     temperature_depth: int = 1
     # Retirements in the Plackett-Luce half too, not only in the simulation.
     pl_retirements: bool = False
+    # Weight of sprint qualifying in the qualifying forecast (quali_scores).
+    sprint_weight: float = config.DEFAULT_SPRINT_WEIGHT
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +121,9 @@ def quali_trainer(
     params: dict | None = None,
 ):
     names = feature_names or features.QUALI_FEATURES
+    merged = {**model.QUALI_PARAMS, **(params or {})}
     return lambda h: model.train(
-        h, names, "quali_relevance", current_season_weight=settings.recency, n_seeds=n_seeds, params=params
+        h, names, "quali_relevance", current_season_weight=settings.recency, n_seeds=n_seeds, params=merged
     )
 
 
@@ -145,18 +148,42 @@ PRACTICE_COLUMNS = [c for c in features.PRACTICE_FEATURES + features.PRACTICE_DE
 
 
 def without_practice(race: pd.DataFrame) -> pd.DataFrame:
-    """The race as it looks before any practice has run."""
+    """The race as it looks before any practice (or sprint qualifying) has run."""
     out = race.copy()
-    out[[c for c in PRACTICE_COLUMNS if c in out]] = np.nan
+    out[[c for c in [*PRACTICE_COLUMNS, "sq_position"] if c in out]] = np.nan
     if "practice_available" in out:
         out["practice_available"] = 0.0
     return out
 
 
-def _quali_score(stage: str):
-    if stage != "pre_practice":
-        return None
-    return lambda ranker, race, seq: ranker.score(without_practice(race))
+def sprint_blend(scores: np.ndarray, sq_position: pd.Series | None, weight: float) -> np.ndarray:
+    """The qualifying scores, nudged toward the sprint qualifying order.
+
+    Rescaled to the model's own spread, so its fitted temperature still holds.
+    A race without sprint qualifying is left as it is.
+    """
+    sc = np.asarray(scores, dtype=float)
+    if sq_position is None or weight <= 0:
+        return sc
+    sq = pd.to_numeric(pd.Series(sq_position).reset_index(drop=True), errors="coerce")
+    if sq.notna().sum() < 2:
+        return sc
+    sq = sq.fillna(sq.max() + 1)
+    order = -(sq - sq.mean()) / (sq.std() or 1.0)
+    out = sc + weight * order.to_numpy()
+    return (out - out.mean()) / (out.std() or 1.0) * (np.std(sc) or 1.0)
+
+
+def quali_scores(ranker: model.Ranker, race: pd.DataFrame, settings: Settings) -> np.ndarray:
+    """The qualifying forecast's scores: the model, and sprint qualifying when
+    it has run. The one place both the backtest and the live forecast use."""
+    return sprint_blend(ranker.score(race), race.get("sq_position"), settings.sprint_weight)
+
+
+def _quali_score(stage: str, settings: Settings):
+    if stage == "pre_practice":
+        return lambda ranker, race, seq: quali_scores(ranker, without_practice(race), settings)
+    return lambda ranker, race, seq: quali_scores(ranker, race, settings)
 
 
 def projected_weekend(race: pd.DataFrame, quali_scores: np.ndarray) -> pd.DataFrame:
@@ -262,7 +289,7 @@ def walk_forward(
     score = None
     if stage in PRE_GRID:
         quali_scored = oos_scores(
-            df, targets, quali_trainer(s, quali_features, n_seeds), retrain_every, _quali_score(stage)
+            df, targets, quali_trainer(s, quali_features, n_seeds), retrain_every, _quali_score(stage, s)
         )
         targets = [t for t in targets if t in quali_scored]
 
@@ -382,13 +409,11 @@ def walk_forward_quali(
     n_seeds: int = model.N_SEEDS,
     warmup: int = CALIBRATION_WARMUP,
     params: dict | None = None,
-    adjust: Callable[[pd.DataFrame, np.ndarray], np.ndarray] | None = None,
 ) -> pd.DataFrame:
     """Grade the qualifying forecast: one row per race.
 
     `races` restricts grading to those race_seq values (e.g. weekends with
-    practice data), while the warm-up still seeds the temperature. `adjust`
-    rewrites the model's scores for a graded race before they are graded.
+    practice data), while the warm-up still seeds the temperature.
     """
     s = settings or Settings()
     df = df.sort_values(["race_seq", "driver_id"]).reset_index(drop=True)
@@ -403,7 +428,13 @@ def walk_forward_quali(
     before = df[df["quali_position"].notna() & (df["race_seq"] < window["race_seq"].min())]
     warm = sorted(before["race_seq"].unique())[-warmup:]
     targets = list(warm) + window["race_seq"].tolist()
-    scored = oos_scores(df, targets, quali_trainer(s, quali_features, n_seeds, params), retrain_every)
+    scored = oos_scores(
+        df,
+        targets,
+        quali_trainer(s, quali_features, n_seeds, params),
+        retrain_every,
+        _quali_score("pre_quali", s),
+    )
 
     graded = set(window["race_seq"])
     seen: dict[str, tuple[list, list]] = {}
@@ -413,10 +444,7 @@ def walk_forward_quali(
         pole = winner_index(race, "quali_position")
         # The no-model reference: recent qualifying average, best first.
         recent = race["drv_avg_quali_3"].fillna(race["drv_avg_quali_3"].max() + 1).fillna(1.0)
-        model_scores = np.asarray(sc)
-        if adjust is not None and seq in graded:
-            model_scores = np.asarray(adjust(race, model_scores), dtype=float)
-        candidates = {"model": model_scores, "recent_quali_form": -np.log(recent.rank().to_numpy())}
+        candidates = {"model": np.asarray(sc), "recent_quali_form": -np.log(recent.rank().to_numpy())}
         for method, method_scores in candidates.items():
             groups, poles = seen.setdefault(method, ([], []))
             if seq in graded and pole is not None:
@@ -562,7 +590,7 @@ def trailing_temperatures(
         return settings.temperature, settings.quali_temperature
     done = completed_races(df, 0)
     trail = done[done["race_seq"] < seq]["race_seq"].tail(probability.ADAPTIVE_WINDOW).tolist()
-    quali = oos_scores(df, trail, quali_trainer(settings), retrain_every, _quali_score(stage))
+    quali = oos_scores(df, trail, quali_trainer(settings), retrain_every, _quali_score(stage, settings))
 
     score = None
     if stage in PRE_GRID:

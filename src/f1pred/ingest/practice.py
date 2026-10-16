@@ -35,7 +35,7 @@ from . import openf1
 log = logging.getLogger(__name__)
 
 SOURCE = "practice"
-SESSION_CODES = ("FP1", "FP2", "FP3")
+SESSION_CODES = ("FP1", "FP2", "FP3", "SQ")
 MIN_STINT_LAPS = 5
 # OpenF1 fills a session in as it runs. Read before this long after the
 # chequered flag and the row is stored as provisional, and read again.
@@ -151,10 +151,16 @@ def _settled(scope: str) -> bool:
         row = con.execute(
             "SELECT status, detail FROM ingest_log WHERE source = ? AND scope = ?", [SOURCE, scope]
         ).fetchone()
-        stored = con.execute(
-            "SELECT count(*) FROM raw_session_pace WHERE season = ? AND round = ? AND session = ?",
-            [int(season), int(rnd), code],
-        ).fetchone()[0]
+        if code == "SQ":
+            stored = con.execute(
+                "SELECT count(*) FROM raw_sprint_quali WHERE season = ? AND round = ?",
+                [int(season), int(rnd)],
+            ).fetchone()[0]
+        else:
+            stored = con.execute(
+                "SELECT count(*) FROM raw_session_pace WHERE season = ? AND round = ? AND session = ?",
+                [int(season), int(rnd), code],
+            ).fetchone()[0]
     if row is not None:
         return row[0] == "ok" and not str(row[1]).startswith("provisional")
     return stored > 0
@@ -180,6 +186,8 @@ def ingest_session(
         return 0
     provisional = now - ended < SETTLE
     key = int(session["session_key"])
+    if code == "SQ":
+        return ingest_sprint_quali(client, session, season, rnd, lookup, scope, provisional)
     try:
         laps = _get(client, "laps", key, refresh=provisional)
         if laps.empty:
@@ -211,6 +219,43 @@ def ingest_session(
     )
     with connect() as con:
         n = upsert(con, "raw_session_pace", pace, ["season", "round", "session", "driver_id"])
+    _record(scope, "ok", f"{'provisional, ' if provisional else ''}{n} drivers")
+    return n
+
+
+def ingest_sprint_quali(
+    client: RateLimitedSession,
+    session: pd.Series,
+    season: int,
+    rnd: int,
+    lookup: pd.DataFrame,
+    scope: str,
+    provisional: bool,
+) -> int:
+    """The sprint qualifying classification, one position per driver."""
+    key = int(session["session_key"])
+    try:
+        result = _get(client, "session_result", key, refresh=provisional)
+        drivers = openf1.fetch_session_drivers(client, session, season, lookup, refresh=provisional)
+    except Exception as exc:  # noqa: BLE001 (network or rate limit: retried next run)
+        _record(scope, "failed", f"will retry next run: {exc!r}")
+        return 0
+    if result.empty or "position" not in result:
+        _record(scope, "empty", "no classification published")
+        return 0
+    ids = dict(zip(drivers["driver_number"], drivers["driver_id"]))
+    rows = result.assign(driver_id=result["driver_number"].map(ids)).dropna(subset=["driver_id", "position"])
+    if rows.empty:
+        _record(scope, "empty", "no classification matched to a driver")
+        return 0
+    rows = rows.assign(
+        season=season,
+        round=rnd,
+        position=rows["position"].astype(int),
+        session_start_utc=openf1._utc(session["date_start"]),
+    )[["season", "round", "driver_id", "position", "session_start_utc"]]
+    with connect() as con:
+        n = upsert(con, "raw_sprint_quali", rows, ["season", "round", "driver_id"])
     _record(scope, "ok", f"{'provisional, ' if provisional else ''}{n} drivers")
     return n
 

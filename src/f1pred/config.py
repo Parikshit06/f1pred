@@ -57,6 +57,10 @@ DEFAULT_CURRENT_SEASON_WEIGHT = 2.0  # training weight on current-season races
 DEFAULT_TEMPERATURE = 0.35  # Plackett-Luce sharpness. Below 1 is more decisive
 DEFAULT_BLEND_WEIGHT = 0.7  # Plackett-Luce vs simulation in the mixture
 DEFAULT_QUALI_TEMPERATURE = 0.55  # the qualifying model's own Plackett-Luce temperature
+# Weight of the sprint qualifying order in the qualifying forecast on sprint
+# weekends (backtest.quali_scores). 0 turns it off. Set by sprint_quali in
+# reports/experiments.json.
+DEFAULT_SPRINT_WEIGHT = 0.0
 
 # How far a team's true pace can sit from the model's estimate over a full
 # remaining season, in finishing positions. Mostly model error rather than

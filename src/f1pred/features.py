@@ -270,6 +270,24 @@ def _load() -> Raw:
         openf1_entries = con.execute(
             "SELECT season, round, session, driver_id, constructor_id FROM raw_openf1_entries"
         ).fetchdf()
+        # Sprint qualifying, only where it ran before Grand Prix qualifying. From
+        # 2024 it always has (Friday, against Saturday), which stands in where
+        # the qualifying time is unknown. In 2023 it came after.
+        sprint_quali = con.execute(
+            """
+            SELECT s.season, s.round, s.driver_id, s.position AS sq_position
+            FROM raw_sprint_quali s
+            JOIN raw_races r USING (season, round)
+            WHERE s.season >= 2024
+              AND (r.quali_start_utc IS NULL OR s.session_start_utc < r.quali_start_utc)
+            """
+        ).fetchdf()
+    keys = ["season", "round", "driver_id"]
+    pace = (
+        pace.merge(sprint_quali, on=keys, how="outer")
+        if not sprint_quali.empty
+        else pace.assign(sq_position=np.nan)
+    )
 
     return Raw(results, quali, standings, pace, races, openf1_grid, openf1_entries)
 

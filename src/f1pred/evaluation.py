@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 
 from . import backtest, baselines, config, features, metrics, model, probability, provenance
-from .store import connect
 
 log = logging.getLogger(__name__)
 
@@ -603,7 +602,10 @@ def quali_pairing_experiment(df, windows, settings, n_seeds=1, retrain_every=1) 
     QUALI_ORDER_KEEP and clearly worse on none of QUALI_ORDER_GUARD, and on the
     later seasons it is clearly worse on none of QUALI_ORDER_GUARD.
     """
-    variants = {"top eight (in use)": None, "whole field": {"lambdarank_pair_method": "mean"}}
+    variants = {
+        "top eight": {"lambdarank_pair_method": "topk"},
+        "whole field": {"lambdarank_pair_method": "mean"},
+    }
     cols = ["pole_logloss", "pole_hit", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap"]
     (decide_label, (d0, d1)), (check_label, (c0, _)) = list(windows.items())
     results = {}
@@ -612,7 +614,7 @@ def quali_pairing_experiment(df, windows, settings, n_seeds=1, retrain_every=1) 
             df, d0, settings=settings, n_seeds=n_seeds, retrain_every=retrain_every, params=params
         )
         results[name] = r[r["method"] == "model"]
-    base = "top eight (in use)"
+    base = "top eight"
     decided = _paired_table({k: v[v["season"].between(d0, d1)] for k, v in results.items()}, base, cols)
     checked = _paired_table({k: v[v["season"] >= c0] for k, v in results.items()}, base, cols)
     d, c = decided[1], checked[1]
@@ -642,46 +644,29 @@ def sprint_quali_experiment(df, settings, n_seeds=1) -> dict:
     """Sprint qualifying as evidence for Grand Prix qualifying.
 
     Since 2024, sprint weekends run sprint qualifying (same cars, a full
-    qualifying session) before Grand Prix qualifying. The sprint grid is its
-    result. Tried: the qualifying model's scores blended with the sprint grid,
-    score + w * (standardised sprint grid order), rescaled to the model's
-    spread so the temperature still applies.
+    qualifying session) before Grand Prix qualifying. Tried: the qualifying
+    model's scores blended with the sprint qualifying order
+    (backtest.sprint_blend), using the OpenF1 classification the live forecast
+    uses.
 
-    Rule, fixed before any result was seen: w is chosen from SPRINT_WEIGHTS on
-    the 2024 sprint weekends by the lowest position error. The blend is kept
-    only if, on the 2025-26 sprint weekends, it is clearly better than the
-    model alone on one of SPRINT_KEEP and clearly worse on none of SPRINT_GUARD.
+    Rule, fixed before any result was seen: the weight is chosen from
+    SPRINT_WEIGHTS on the 2024 sprint weekends by the lowest position error.
+    The blend is kept only if, on the 2025-26 sprint weekends, it is clearly
+    better than the model alone on one of SPRINT_KEEP and clearly worse on none
+    of SPRINT_GUARD.
     """
-    with connect(read_only=True) as con:
-        grids = con.execute(
-            "SELECT season, round, driver_id, grid FROM raw_sprint WHERE season >= 2024"
-        ).fetchdf()
-    grids["grid"] = grids["grid"].where(grids["grid"] > 0)
-    sprint = df.merge(grids[["season", "round"]].drop_duplicates(), on=["season", "round"])
-    seqs = sorted(sprint["race_seq"].unique())
-    by_race = {k: dict(zip(g["driver_id"], g["grid"])) for k, g in grids.groupby(["season", "round"])}
+    with_sq = df[df["sq_position"].notna() & (df["season"] >= 2024)]
+    seqs = sorted(with_sq["race_seq"].unique())
+    cols = ["pole_logloss", "pole_hit", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap"]
 
-    def blend(w: float):
-        def adjust(race: pd.DataFrame, sc: np.ndarray) -> np.ndarray:
-            key = (int(race["season"].iloc[0]), int(race["round"].iloc[0]))
-            g = race["driver_id"].map(by_race.get(key, {})).astype(float)
-            g = g.fillna(g.max() + 1 if g.notna().any() else 0.0)
-            order = -(g - g.mean()) / (g.std() or 1.0)
-            out = sc + w * order.to_numpy()
-            return (out - out.mean()) / (out.std() or 1.0) * (np.std(sc) or 1.0)
-
-        return adjust
-
-    def run(adjust=None) -> pd.DataFrame:
-        r = backtest.walk_forward_quali(
-            df, 2024, settings=settings, races=seqs, n_seeds=n_seeds, adjust=adjust
-        )
+    def run(weight: float) -> pd.DataFrame:
+        s = backtest.Settings(**{**asdict(settings), "sprint_weight": weight})
+        r = backtest.walk_forward_quali(df, 2024, settings=s, races=seqs, n_seeds=n_seeds)
         return r[r["method"] == "model"]
 
-    base = run()
-    tuned = {w: run(blend(w)) for w in SPRINT_WEIGHTS}
+    base = run(0.0)
+    tuned = {w: run(w) for w in SPRINT_WEIGHTS}
     pick = min(SPRINT_WEIGHTS, key=lambda w: tuned[w][tuned[w]["season"] == 2024]["position_error"].mean())
-    cols = ["pole_logloss", "pole_hit", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap"]
     choose = {
         "model alone": base[base["season"] == 2024],
         **{f"w={w}": tuned[w][tuned[w]["season"] == 2024] for w in SPRINT_WEIGHTS},
@@ -696,10 +681,14 @@ def sprint_quali_experiment(df, settings, n_seeds=1) -> dict:
     worse = [m for m in SPRINT_GUARD if _clear(row, m) == "worse"]
     return {
         "rule": (
-            f"w picked on 2024 sprint weekends by position error from {SPRINT_WEIGHTS}. Kept only if clearly "
+            f"weight picked on 2024 sprint weekends by position error from {SPRINT_WEIGHTS}. Kept only if clearly "
             f"better on 2025-26 sprint weekends on one of {', '.join(SPRINT_KEEP)} and clearly worse on none of "
             f"{', '.join(SPRINT_GUARD)}"
         ),
+        "weekends": {
+            "2024": int((with_sq.drop_duplicates("race_seq")["season"] == 2024).sum()),
+            "2025-26": int((with_sq.drop_duplicates("race_seq")["season"] >= 2025).sum()),
+        },
         "choosing 2024": _paired_table(choose, "model alone", cols),
         "picked": pick,
         "graded 2025-26": table,

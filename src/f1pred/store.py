@@ -115,6 +115,17 @@ CREATE TABLE IF NOT EXISTS raw_standings (
     PRIMARY KEY (season, round, driver_id)
 );
 
+-- Sprint qualifying classification, from OpenF1. On a sprint weekend it runs
+-- before Grand Prix qualifying, in the same cars.
+CREATE TABLE IF NOT EXISTS raw_sprint_quali (
+    season          INTEGER NOT NULL,
+    round           INTEGER NOT NULL,
+    driver_id       VARCHAR NOT NULL,
+    position        INTEGER,
+    session_start_utc TIMESTAMP,
+    PRIMARY KEY (season, round, driver_id)
+);
+
 -- One row per driver per practice session, from OpenF1 (FastF1 before October 2026).
 CREATE TABLE IF NOT EXISTS raw_session_pace (
     season          INTEGER NOT NULL,

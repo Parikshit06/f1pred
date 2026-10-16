@@ -217,3 +217,24 @@ def test_before_practice_the_race_is_scored_without_its_practice():
     assert (out["practice_available"] == 0).all()
     assert out["grid"].tolist() == [1.0, 2.0]
     assert race["grid"].notna().all(), "the input is left alone"
+
+
+def test_the_sprint_blend_moves_toward_sprint_qualifying_and_keeps_the_spread():
+    import numpy as np
+    import pandas as pd
+
+    scores = np.array([2.0, 1.9, 0.0, -1.0])
+    sq = pd.Series([2, 1, 3, 4])  # the model's second car won sprint qualifying
+    out = backtest.sprint_blend(scores, sq, 0.5)
+    assert np.std(out) == pytest.approx(np.std(scores))
+    assert out[1] - out[0] > scores[1] - scores[0], "the sprint qualifying winner moves up"
+    assert np.array_equal(backtest.sprint_blend(scores, sq, 0.0), scores)
+    assert np.array_equal(backtest.sprint_blend(scores, None, 0.5), scores)
+    assert np.array_equal(backtest.sprint_blend(scores, pd.Series([np.nan] * 4), 0.5), scores)
+
+
+def test_before_practice_sprint_qualifying_is_hidden_too():
+    import pandas as pd
+
+    race = pd.DataFrame({"sq_position": [1.0, 2.0], "grid": [1.0, 2.0]})
+    assert backtest.without_practice(race)["sq_position"].isna().all()
