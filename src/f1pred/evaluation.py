@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from . import backtest, baselines, config, features, metrics, model, probability, provenance
+from .store import connect
 
 log = logging.getLogger(__name__)
 
@@ -589,6 +590,127 @@ def circuit_type_experiment(df, windows, settings, n_seeds=1, retrain_every=2) -
     return out
 
 
+def quali_pairing_experiment(df, windows, settings, n_seeds=1, retrain_every=1) -> dict:
+    """Pairs across the whole field for the qualifying ranker.
+
+    XGBoost's default pairing compares each driver only with the eight it
+    currently ranks highest, which leaves the back of the grid loosely ordered.
+    Tried against it: pairs sampled across the whole field ("mean"), with the
+    same exponential gains, so the front still counts most.
+
+    Rule, fixed before any result was seen: the same as quali_ordering. Kept
+    only if, on the tuning seasons, it is clearly better on one of
+    QUALI_ORDER_KEEP and clearly worse on none of QUALI_ORDER_GUARD, and on the
+    later seasons it is clearly worse on none of QUALI_ORDER_GUARD.
+    """
+    variants = {"top eight (in use)": None, "whole field": {"lambdarank_pair_method": "mean"}}
+    cols = ["pole_logloss", "pole_hit", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap"]
+    (decide_label, (d0, d1)), (check_label, (c0, _)) = list(windows.items())
+    results = {}
+    for name, params in variants.items():
+        r = backtest.walk_forward_quali(
+            df, d0, settings=settings, n_seeds=n_seeds, retrain_every=retrain_every, params=params
+        )
+        results[name] = r[r["method"] == "model"]
+    base = "top eight (in use)"
+    decided = _paired_table({k: v[v["season"].between(d0, d1)] for k, v in results.items()}, base, cols)
+    checked = _paired_table({k: v[v["season"] >= c0] for k, v in results.items()}, base, cols)
+    d, c = decided[1], checked[1]
+    passes = any(_clear(d, m) == "better" for m in QUALI_ORDER_KEEP) and not any(
+        _clear(d, m) == "worse" for m in QUALI_ORDER_GUARD
+    )
+    worse_later = [m for m in QUALI_ORDER_GUARD if _clear(c, m) == "worse"]
+    return {
+        "rule": "as quali_ordering",
+        decide_label: decided,
+        check_label: checked,
+        "verdict": {
+            "passes_tuning": passes,
+            "worse_later_on": worse_later,
+            "passes_rule": passes and not worse_later,
+        },
+        "in_use": base,
+    }
+
+
+SPRINT_WEIGHTS = (0.25, 0.5, 1.0)
+SPRINT_KEEP = ("position_error", "ndcg5")
+SPRINT_GUARD = ("pole_logloss", "ndcg3", "ndcg5", "position_error")
+
+
+def sprint_quali_experiment(df, settings, n_seeds=1) -> dict:
+    """Sprint qualifying as evidence for Grand Prix qualifying.
+
+    Since 2024, sprint weekends run sprint qualifying (same cars, a full
+    qualifying session) before Grand Prix qualifying. The sprint grid is its
+    result. Tried: the qualifying model's scores blended with the sprint grid,
+    score + w * (standardised sprint grid order), rescaled to the model's
+    spread so the temperature still applies.
+
+    Rule, fixed before any result was seen: w is chosen from SPRINT_WEIGHTS on
+    the 2024 sprint weekends by the lowest position error. The blend is kept
+    only if, on the 2025-26 sprint weekends, it is clearly better than the
+    model alone on one of SPRINT_KEEP and clearly worse on none of SPRINT_GUARD.
+    """
+    with connect(read_only=True) as con:
+        grids = con.execute(
+            "SELECT season, round, driver_id, grid FROM raw_sprint WHERE season >= 2024"
+        ).fetchdf()
+    grids["grid"] = grids["grid"].where(grids["grid"] > 0)
+    sprint = df.merge(grids[["season", "round"]].drop_duplicates(), on=["season", "round"])
+    seqs = sorted(sprint["race_seq"].unique())
+    by_race = {k: dict(zip(g["driver_id"], g["grid"])) for k, g in grids.groupby(["season", "round"])}
+
+    def blend(w: float):
+        def adjust(race: pd.DataFrame, sc: np.ndarray) -> np.ndarray:
+            key = (int(race["season"].iloc[0]), int(race["round"].iloc[0]))
+            g = race["driver_id"].map(by_race.get(key, {})).astype(float)
+            g = g.fillna(g.max() + 1 if g.notna().any() else 0.0)
+            order = -(g - g.mean()) / (g.std() or 1.0)
+            out = sc + w * order.to_numpy()
+            return (out - out.mean()) / (out.std() or 1.0) * (np.std(sc) or 1.0)
+
+        return adjust
+
+    def run(adjust=None) -> pd.DataFrame:
+        r = backtest.walk_forward_quali(
+            df, 2024, settings=settings, races=seqs, n_seeds=n_seeds, adjust=adjust
+        )
+        return r[r["method"] == "model"]
+
+    base = run()
+    tuned = {w: run(blend(w)) for w in SPRINT_WEIGHTS}
+    pick = min(SPRINT_WEIGHTS, key=lambda w: tuned[w][tuned[w]["season"] == 2024]["position_error"].mean())
+    cols = ["pole_logloss", "pole_hit", "ndcg3", "ndcg5", "spearman", "position_error", "top10_overlap"]
+    choose = {
+        "model alone": base[base["season"] == 2024],
+        **{f"w={w}": tuned[w][tuned[w]["season"] == 2024] for w in SPRINT_WEIGHTS},
+    }
+    graded = {
+        "model alone": base[base["season"] >= 2025],
+        f"w={pick}": tuned[pick][tuned[pick]["season"] >= 2025],
+    }
+    table = _paired_table(graded, "model alone", cols)
+    row = table[1]
+    keep = any(_clear(row, m) == "better" for m in SPRINT_KEEP)
+    worse = [m for m in SPRINT_GUARD if _clear(row, m) == "worse"]
+    return {
+        "rule": (
+            f"w picked on 2024 sprint weekends by position error from {SPRINT_WEIGHTS}. Kept only if clearly "
+            f"better on 2025-26 sprint weekends on one of {', '.join(SPRINT_KEEP)} and clearly worse on none of "
+            f"{', '.join(SPRINT_GUARD)}"
+        ),
+        "choosing 2024": _paired_table(choose, "model alone", cols),
+        "picked": pick,
+        "graded 2025-26": table,
+        "verdict": {
+            "better_on": [m for m in SPRINT_KEEP if _clear(row, m) == "better"],
+            "worse_on": worse,
+            "passes_rule": keep and not worse,
+        },
+    }
+
+
 def redundancy(df, start, settings, threshold: float = 0.8) -> dict:
     """Feature pairs that carry nearly the same information, and how much each
     group matters when shuffled within the race (permutation importance)."""
@@ -819,6 +941,8 @@ def run_experiments(
         "quali_ordering": lambda: quali_ordering_experiment(df, windows, settings),
         "circuit_type": lambda: circuit_type_experiment(df, windows, settings),
         "retirements": lambda: retirement_experiment(df, windows, settings),
+        "quali_pairing": lambda: quali_pairing_experiment(df, windows, settings),
+        "sprint_quali": lambda: sprint_quali_experiment(df, settings),
         "redundancy": lambda: redundancy(df, start_season, settings),
         "season_projection": lambda: season_projection_experiment(df),
         "parameter_stability": lambda: parameter_stability(
@@ -855,6 +979,8 @@ EXPERIMENTS = (
     "quali_ordering",
     "circuit_type",
     "retirements",
+    "quali_pairing",
+    "sprint_quali",
     "redundancy",
     "season_projection",
     "parameter_stability",

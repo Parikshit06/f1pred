@@ -382,11 +382,13 @@ def walk_forward_quali(
     n_seeds: int = model.N_SEEDS,
     warmup: int = CALIBRATION_WARMUP,
     params: dict | None = None,
+    adjust: Callable[[pd.DataFrame, np.ndarray], np.ndarray] | None = None,
 ) -> pd.DataFrame:
     """Grade the qualifying forecast: one row per race.
 
     `races` restricts grading to those race_seq values (e.g. weekends with
-    practice data), while the warm-up still seeds the temperature.
+    practice data), while the warm-up still seeds the temperature. `adjust`
+    rewrites the model's scores for a graded race before they are graded.
     """
     s = settings or Settings()
     df = df.sort_values(["race_seq", "driver_id"]).reset_index(drop=True)
@@ -411,7 +413,10 @@ def walk_forward_quali(
         pole = winner_index(race, "quali_position")
         # The no-model reference: recent qualifying average, best first.
         recent = race["drv_avg_quali_3"].fillna(race["drv_avg_quali_3"].max() + 1).fillna(1.0)
-        candidates = {"model": np.asarray(sc), "recent_quali_form": -np.log(recent.rank().to_numpy())}
+        model_scores = np.asarray(sc)
+        if adjust is not None and seq in graded:
+            model_scores = np.asarray(adjust(race, model_scores), dtype=float)
+        candidates = {"model": model_scores, "recent_quali_form": -np.log(recent.rank().to_numpy())}
         for method, method_scores in candidates.items():
             groups, poles = seen.setdefault(method, ([], []))
             if seq in graded and pole is not None:
