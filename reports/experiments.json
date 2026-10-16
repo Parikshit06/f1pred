@@ -8,7 +8,8 @@
   "adaptive_temperature": true,
   "n_sims": 3000,
   "temperature_depth": 1,
-  "pl_retirements": false
+  "pl_retirements": false,
+  "sprint_weight": 0.0
  },
  "ablation": {
   "tuning 2022-2023": [
@@ -1143,28 +1144,29 @@
   ]
  },
  "provenance": {
-  "generated_at_utc": "2026-10-08T10:36:51+00:00",
-  "git_commit": "f6ea81bf4bf4",
+  "generated_at_utc": "2026-10-16T20:08:22+00:00",
+  "git_commit": "d1deadeefda0",
   "data": {
    "rows": {
     "raw_drivers": 221,
     "raw_forecast": 0,
     "raw_openf1_entries": 0,
     "raw_openf1_grid": 0,
-    "raw_pitstops": 6605,
-    "raw_qualifying": 3802,
+    "raw_pitstops": 6630,
+    "raw_qualifying": 3824,
     "raw_races": 196,
-    "raw_results": 3810,
-    "raw_session_pace": 3748,
+    "raw_results": 3832,
+    "raw_session_pace": 3770,
     "raw_session_weather": 63,
-    "raw_sprint": 590,
-    "raw_standings": 3951
+    "raw_sprint": 612,
+    "raw_sprint_quali": 366,
+    "raw_standings": 3974
    },
    "results_through": [
     2026,
-    16
+    17
    ],
-   "results_hash": "d9ad5b9adbde"
+   "results_hash": "6066f16f1763"
   },
   "software": {
    "python": "3.12.3",
@@ -3231,5 +3233,132 @@
    "worse_on": [],
    "passes_rule": false
   }
+ },
+ "quali_pairing": {
+  "rule": "as quali_ordering",
+  "tuning 2022-2023": [
+   {
+    "variant": "top eight",
+    "n_races": 44,
+    "pole_logloss": 1.7408548873663272,
+    "pole_hit": 0.4090909090909091,
+    "ndcg3": 0.781670523780856,
+    "ndcg5": 0.8284121815155472,
+    "spearman": 0.6460918922798213,
+    "position_error": 3.6806818181818186,
+    "top10_overlap": 7.5227272727272725
+   },
+   {
+    "variant": "whole field",
+    "n_races": 44,
+    "pole_logloss": 1.6728590710260531,
+    "pole_hit": 0.4318181818181818,
+    "ndcg3": 0.794238839836926,
+    "ndcg5": 0.8415006817527004,
+    "spearman": 0.6735693691203035,
+    "position_error": 3.482954545454545,
+    "top10_overlap": 7.545454545454546,
+    "pole_logloss_diff": -0.0679958163402744,
+    "pole_logloss_ci": [
+     -0.1508378514532948,
+     0.024643116500545043
+    ],
+    "pole_hit_diff": 0.022727272727272728,
+    "pole_hit_ci": [
+     -0.06818181818181818,
+     0.13636363636363635
+    ],
+    "ndcg3_diff": 0.012568316056069888,
+    "ndcg3_ci": [
+     -0.013509204385799122,
+     0.04066163609389321
+    ],
+    "ndcg5_diff": 0.013088500237153099,
+    "ndcg5_ci": [
+     -0.0068089347609429545,
+     0.03367568387082119
+    ],
+    "spearman_diff": 0.027477476840482254,
+    "spearman_ci": [
+     0.009465693713045058,
+     0.04648209064772765
+    ],
+    "position_error_diff": -0.19772727272727264,
+    "position_error_ci": [
+     -0.3318181818181817,
+     -0.06590909090909082
+    ],
+    "top10_overlap_diff": 0.022727272727272728,
+    "top10_overlap_ci": [
+     -0.13636363636363635,
+     0.20454545454545456
+    ]
+   }
+  ],
+  "test 2024-": [
+   {
+    "variant": "top eight",
+    "n_races": 65,
+    "pole_logloss": 1.7013564204436902,
+    "pole_hit": 0.3384615384615385,
+    "ndcg3": 0.797688377656721,
+    "ndcg5": 0.8516645554350755,
+    "spearman": 0.7152906074490779,
+    "position_error": 3.359341185130659,
+    "top10_overlap": 7.923076923076923
+   },
+   {
+    "variant": "whole field",
+    "n_races": 65,
+    "pole_logloss": 1.726527708164197,
+    "pole_hit": 0.3230769230769231,
+    "ndcg3": 0.7903954024784323,
+    "ndcg5": 0.8522831633191105,
+    "spearman": 0.7082092008019565,
+    "position_error": 3.3797570850202434,
+    "top10_overlap": 7.892307692307693,
+    "pole_logloss_diff": 0.025171287720507293,
+    "pole_logloss_ci": [
+     -0.06362220141085201,
+     0.10931840250789332
+    ],
+    "pole_hit_diff": -0.015384615384615385,
+    "pole_hit_ci": [
+     -0.1076923076923077,
+     0.07692307692307693
+    ],
+    "ndcg3_diff": -0.0072929751782887225,
+    "ndcg3_ci": [
+     -0.034418789991136706,
+     0.019853339017266568
+    ],
+    "ndcg5_diff": 0.0006186078840347813,
+    "ndcg5_ci": [
+     -0.013375329538874301,
+     0.014866351698064823
+    ],
+    "spearman_diff": -0.0070814066471212725,
+    "spearman_ci": [
+     -0.021053393811587683,
+     0.006186597986803053
+    ],
+    "position_error_diff": 0.020415899889584078,
+    "position_error_ci": [
+     -0.07878192859771806,
+     0.12402042694147956
+    ],
+    "top10_overlap_diff": -0.03076923076923077,
+    "top10_overlap_ci": [
+     -0.15384615384615385,
+     0.09230769230769231
+    ]
+   }
+  ],
+  "verdict": {
+   "passes_tuning": true,
+   "worse_later_on": [],
+   "passes_rule": true
+  },
+  "in_use": "top eight"
  }
 }
