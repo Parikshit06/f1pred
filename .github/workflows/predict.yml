@@ -125,14 +125,16 @@ jobs:
         continue-on-error: true
         run: python -m f1pred.cli ingest-openf1 --seasons 2026
 
-      # Practice pace for this weekend (FP1-FP3 per-driver aggregates) from
-      # OpenF1. It feeds the qualifying forecast, where held-out testing showed
-      # it helps. A session is read only once it has finished, and read again
-      # if it was read within an hour of the flag. Optional like the step
-      # above: without it the weekend keeps its before-practice forecast.
-      - name: Practice pace (OpenF1, this weekend)
+      # Practice pace (FP1-FP3 per-driver aggregates) and sprint qualifying from
+      # OpenF1, for this weekend and the races the qualifying temperature is
+      # fitted on. They feed the qualifying forecast, where held-out testing
+      # showed they help. Sessions already stored are skipped, a session is read
+      # only once it has finished, and read again if it was read within an hour
+      # of the flag. Optional like the step above: without it the weekend keeps
+      # its before-practice forecast.
+      - name: Practice and sprint qualifying (OpenF1)
         continue-on-error: true
-        run: python -m f1pred.cli ingest-practice --next
+        run: python -m f1pred.cli ingest-practice --seasons 2025-2026
 
       # Ingest applies the current finished/retired rule to rows it writes, but
       # rows already in the database keep whatever rule was in force when they
