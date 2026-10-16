@@ -631,7 +631,7 @@ def quali_pairing_experiment(df, windows, settings, n_seeds=1, retrain_every=1) 
             "worse_later_on": worse_later,
             "passes_rule": passes and not worse_later,
         },
-        "in_use": base,
+        "in_use": "whole field" if model.QUALI_PARAMS.get("lambdarank_pair_method") == "mean" else base,
     }
 
 
@@ -692,6 +692,7 @@ def sprint_quali_experiment(df, settings, n_seeds=1) -> dict:
         "choosing 2024": _paired_table(choose, "model alone", cols),
         "picked": pick,
         "graded 2025-26": table,
+        "in_use": settings.sprint_weight,
         "verdict": {
             "better_on": [m for m in SPRINT_KEEP if _clear(row, m) == "better"],
             "worse_on": worse,

@@ -60,7 +60,7 @@ DEFAULT_QUALI_TEMPERATURE = 0.55  # the qualifying model's own Plackett-Luce tem
 # Weight of the sprint qualifying order in the qualifying forecast on sprint
 # weekends (backtest.quali_scores). 0 turns it off. Set by sprint_quali in
 # reports/experiments.json.
-DEFAULT_SPRINT_WEIGHT = 0.0
+DEFAULT_SPRINT_WEIGHT = 0.5
 
 # How far a team's true pace can sit from the model's estimate over a full
 # remaining season, in finishing positions. Mostly model error rather than
