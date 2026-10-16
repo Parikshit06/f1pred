@@ -317,3 +317,15 @@ def test_the_circuit_type_experiment_is_reported_as_not_used():
     )
     assert "Circuit type: tested, not used" in _readme()
     assert not set(features.CIRCUIT_TYPE_FEATURES) & set(features.RACE_FEATURES)
+
+
+def test_the_qualifying_changes_in_use_match_their_experiments():
+    exp = _load("experiments.json")
+    from f1pred import config, model
+
+    pairing, sprint = exp.get("quali_pairing"), exp.get("sprint_quali")
+    if not (pairing and sprint):
+        pytest.skip("qualifying experiments have not been run")
+    assert pairing["verdict"]["passes_rule"] and model.QUALI_PARAMS.get("lambdarank_pair_method") == "mean"
+    assert sprint["verdict"]["passes_rule"] and config.DEFAULT_SPRINT_WEIGHT == sprint["picked"]
+    assert "Sprint qualifying: in use on sprint weekends" in _readme()

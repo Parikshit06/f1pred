@@ -19,7 +19,7 @@ Three forecasts are logged per weekend, from different information:
 | Stage | Known | Model |
 |---|---|---|
 | Before practice | history only | qualifying ranker predicts the grid, race ranker scores the *projected* weekend |
-| After practice | history and this weekend's FP1-FP3 | as above, with practice feeding the qualifying ranker |
+| After practice | history and this weekend's FP1-FP3, plus sprint qualifying on a sprint weekend | as above, with practice feeding the qualifying ranker and sprint qualifying blended into its scores |
 | After qualifying | the official starting grid and the qualifying result | race ranker on the real grid |
 
 Once qualifying has run, the qualifying forecast is shown only for comparison.
@@ -28,8 +28,8 @@ It never stands in for the result.
 Each stage is graded on its own. Before practice, the race being forecast is
 scored with its practice columns hidden, and the live Wednesday forecast fits
 its temperature on past races scored the same way. Against the championship
-order on 2024 onward, win log loss is -0.284 (-0.545 to -0.017) before practice
-and -0.420 (-0.673 to -0.155) after it. Both are clearly better.
+order on 2024 onward, win log loss is -0.302 (-0.559 to -0.039) before practice
+and -0.414 (-0.667 to -0.154) after it. Both are clearly better.
 
 ## 2. Data
 
@@ -37,7 +37,7 @@ and -0.420 (-0.673 to -0.155) after it. Both are clearly better.
 |---|---|
 | [jolpica-f1](https://github.com/jolpica/jolpica-f1) | results, qualifying, sprints, standings, calendar |
 | [OpenF1](https://openf1.org) | the official starting grid (penalties applied) and per-session entry lists, 2023+ |
-| [OpenF1](https://openf1.org) | practice pace: per-driver aggregates of FP1-FP3 laps (fetched with [FastF1](https://github.com/theOehrly/Fast-F1) before October 2026) |
+| [OpenF1](https://openf1.org) | practice pace: per-driver aggregates of FP1-FP3 laps (fetched with [FastF1](https://github.com/theOehrly/Fast-F1) before October 2026), and the sprint qualifying classification |
 
 Everything lands in DuckDB. `raw_*` tables hold what the sources returned, and
 derived data (features) never overwrites them. HTTP responses are cached, jolpica
@@ -250,6 +250,23 @@ the final configuration, and later runs report without re-deciding.
   (podium 2.9% to 1.5%, top ten 7.2% to 4.9%), but podium
   Brier was not clearly better (-0.0015, -0.0033 to +0.0001), so
   it is not used.
+* **Qualifying pairing** (`quali_pairing`): XGBoost's default pairs each
+  driver only with the eight it currently ranks highest. Pairs across the whole
+  field, with the same exponential gains, were judged on the qualifying-order
+  rule above. On 2022-23 position error was -0.198 (-0.332 to -0.066) and Spearman
+  +0.027 (+0.009 to +0.046), both clearly better, with nothing clearly worse in either
+  window, so the qualifying ranker uses it.
+* **Sprint qualifying** (`sprint_quali`): from 2024, sprint qualifying runs
+  before Grand Prix qualifying. Its order is blended into the qualifying
+  model's scores (`backtest.sprint_blend`, rescaled to the model's spread so the
+  temperature still holds), using the OpenF1 classification the live forecast
+  uses. Rule fixed in advance: weight picked from 0.25, 0.5 and 1 on the 2024
+  sprint weekends by position error, then kept only if clearly better on
+  2025-26 on position error or NDCG@5 and clearly worse on none of those, NDCG@3
+  or pole log loss. Weight 0.5 was picked. On the twelve 2025-26 sprint
+  weekends position error was -0.713 (-1.120 to -0.329) and pole log loss
+  -0.248 (-0.392 to -0.118), so it is in use. On a sprint weekend the after-practice
+  forecast waits for sprint qualifying.
 * **Circuit type** (`circuit_type`): street and temporary circuits against
   permanent ones, as each driver's and each team's recent finishing at
   circuits of the same type, so a circuit seen once or never borrows from the
@@ -319,12 +336,15 @@ included.
 * Win probabilities are well calibrated overall (expected calibration error
   under 1%), though the few win calls above 70% came true less often than
   stated. The most confident podium and top-10 calls are over-confident:
-  podium calls averaging 94% came true 78% of the time, and top-10 calls
+  podium calls averaging 94% came true 79% of the time, and top-10 calls
   averaging 96% came true 87% (`reliability` in `reports/backtest.json`),
   and mid-range top-ten chances are under-confident. The temperature is fitted
   on winners only. Fitting it on the first three places improves those calls
   but worsens win log loss on 2022-23 (section 5), so it is not used.
-* Races are noisy and the sample is small. 64 test races is enough to
+* GitHub runs scheduled jobs late when it is busy (every four to six hours
+  over the Singapore weekend instead of hourly), so forecasts can be logged
+  hours later than planned, though still before the session.
+* Races are noisy and the sample is small. 65 test races is enough to
   separate the model from naive baselines. Against the calibrated starting
   grid it is level on probabilities and behind on ordering the whole field
   (Kendall rank correlation), once qualifying has run.

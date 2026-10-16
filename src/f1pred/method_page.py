@@ -139,6 +139,7 @@ INPUTS = [
     "How often the car breaks down",
     "Their record at this track",
     "This weekend's practice times (for qualifying)",
+    "Sprint qualifying, on sprint weekends (for qualifying)",
 ]
 
 WEEKEND = [

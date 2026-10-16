@@ -34,7 +34,7 @@ covered by the evaluation below.
 
 ```mermaid
 flowchart TD
-    A["jolpica-f1: results, qualifying, standings<br/>OpenF1: official grid, entry lists, practice laps"] --> B[("DuckDB<br/>21 data checks")]
+    A["jolpica-f1: results, qualifying, standings<br/>OpenF1: official grid, entry lists,<br/>practice laps, sprint qualifying"] --> B[("DuckDB<br/>21 data checks")]
     B --> C["Features<br/>(earlier races only)"]
     C --> Q["Qualifying model<br/>+ this weekend's practice"]
     C --> R["Race model"]
@@ -49,8 +49,8 @@ flowchart TD
 ```
 
 1. **Collect.** Every race since 2018: results, qualifying and standings from
-   jolpica-f1, and the official starting grid, entry lists and practice lap
-   times from OpenF1. 21 data checks run before anything is modelled.
+   jolpica-f1, and the official starting grid, entry lists, practice lap times
+   and sprint qualifying results from OpenF1. 21 data checks run before anything is modelled.
 2. **Describe each driver, using only the past.** Recent results, the team's
    form, one-lap pace, record at this circuit, championship position. Each is
    built only from races before the one being forecast, so the model can never
@@ -68,7 +68,7 @@ flowchart TD
 
 ## How good is it
 
-Every race from 2024 round 1 to 2026 round 16, **64 races**, was replayed: the
+Every race from 2024 round 1 to 2026 round 17, **65 races**, was replayed: the
 model was trained only on the races before it, made its forecast, and was
 scored against the result. Its settings were fitted on 2022-23. Later seasons
 were used only to rule out a change that made things clearly worse, and to
@@ -79,11 +79,11 @@ forecast anyone could make without a model.
 |---|---|---|
 | Before practice | the championship order | **Better** on win chances, and it names more of the top five. |
 | After practice | the championship order | **Better** on win and podium chances, and it names more of the top five. |
-| Qualifying | each driver's recent qualifying form | **Better**, helped by this weekend's practice times. |
+| Qualifying | each driver's recent qualifying form | **Better**, helped by this weekend's practice times and, on sprint weekends, sprint qualifying. |
 | After qualifying | the starting grid | **Level.** Once the grid is known it holds most of what can be predicted. |
 
 - Win chances are reliable on average. Its most confident calls are too sure:
-  podium calls around 94% came true 78% of the time.
+  podium calls around 94% came true 79% of the time.
 - The title favourite was right 89% of the time, but backing the points
   leader would have been right almost as often.
 
@@ -121,7 +121,7 @@ steps: `predict.yml` across each race weekend (and deploys the site),
 
 - Win chances are reliable overall, but the few win calls above 70% came true
   less often than stated. The most confident podium and top-10 calls are too
-  sure: podium calls averaging 94% came true 78% of the time, and top-10 calls
+  sure: podium calls averaging 94% came true 79% of the time, and top-10 calls
   averaging 96% came true 87%.
 - Not modelled: weather, tyre and pit strategy, in-race penalties, team orders,
   upgrades, safety-car timing, failures shared by a team's two cars.
@@ -135,7 +135,10 @@ steps: `predict.yml` across each race weekend (and deploys the site),
 - Grid penalties are known before the official grid only when a team has
   announced them. Those are entered by hand in `grid_penalties.json`, with
   their source. Any other penalty is missed until the official grid appears.
-- 64 test races is a small sample.
+- 65 test races is a small sample.
+- GitHub runs scheduled jobs late when it is busy. Over the Singapore weekend
+  the hourly runs came every four to six hours, so forecasts were logged
+  before each session but hours later than planned.
 - The season projection assumes current form holds, widened by a calibrated
   pace-drift term.
 
@@ -168,36 +171,36 @@ After qualifying, against the calibrated grid and championship order
 
 | Approach | NDCG@3 | NDCG@5 | Winner | Podium overlap | Win log loss | Podium Brier |
 |---|---|---|---|---|---|---|
-| **This model** | 0.854 | 0.896 | **67%** | 1.94 of 3 | **1.187** | **0.068** |
-| Grid order, calibrated | **0.859** | **0.898** | 59% | **2.06 of 3** | 1.325 | **0.068** |
-| Championship order | 0.754 | 0.806 | 30% | 1.69 of 3 | 2.149 | 0.095 |
+| **This model** | 0.856 | 0.897 | **68%** | 1.94 of 3 | **1.173** | **0.067** |
+| Grid order, calibrated | **0.861** | **0.900** | 60% | **2.06 of 3** | 1.309 | 0.068 |
+| Championship order | 0.751 | 0.803 | 29% | 1.68 of 3 | 2.169 | 0.095 |
 
 Each comparison is paired race by race, with a 95% bootstrap interval.
 "Inconclusive" means the interval includes zero.
 
 | Stage | Metric | Model | Reference | Difference (95% interval) | Verdict |
 |---|---|---|---|---|---|
-| After qualifying | NDCG@3 | 0.854 | 0.859 (grid) | -0.005 (-0.030 to +0.020) | inconclusive |
-|  | NDCG@5 | 0.896 | 0.898 (grid) | -0.002 (-0.018 to +0.014) | inconclusive |
-|  | Winner called | 67% | 59% (grid) | +8 pts (-3 to +19) | inconclusive |
-|  | Win log loss | 1.187 | 1.325 (grid) | -0.138 (-0.345 to +0.068) | inconclusive |
-|  | Podium Brier | 0.068 | 0.068 (grid) | -0.000 (-0.006 to +0.006) | inconclusive |
-|  | Kendall | 0.521 | 0.548 (grid) | -0.027 (-0.053 to -0.001) | **grid better** |
-| After practice | Win log loss | 1.730 | 2.149 (championship order) | -0.420 (-0.673 to -0.155) | **model better** |
-|  | Podium Brier | 0.084 | 0.095 (championship order) | -0.011 (-0.018 to -0.003) | **model better** |
-|  | Top-5 overlap | 3.69 of 5 | 3.44 of 5 (championship order) | +0.250 (+0.062 to +0.453) | **model better** |
-| Before practice | Win log loss | 1.866 | 2.149 (championship order) | -0.284 (-0.545 to -0.017) | **model better** |
-|  | Podium Brier | 0.088 | 0.095 (championship order) | -0.007 (-0.015 to +0.002) | inconclusive |
-|  | Top-5 overlap | 3.66 of 5 | 3.44 of 5 (championship order) | +0.219 (+0.031 to +0.422) | **model better** |
-| Qualifying | Pole log loss | 1.707 | 2.108 (recent qualifying form) | -0.402 (-0.678 to -0.133) | **model better** |
-|  | NDCG@5 | 0.854 | 0.810 (recent qualifying form) | +0.044 (+0.019 to +0.070) | **model better** |
+| After qualifying | NDCG@3 | 0.856 | 0.861 (grid) | -0.005 (-0.030 to +0.020) | inconclusive |
+|  | NDCG@5 | 0.897 | 0.900 (grid) | -0.003 (-0.019 to +0.014) | inconclusive |
+|  | Winner called | 68% | 60% (grid) | +8 pts (-3 to +18) | inconclusive |
+|  | Win log loss | 1.173 | 1.309 (grid) | -0.136 (-0.349 to +0.065) | inconclusive |
+|  | Podium Brier | 0.067 | 0.068 (grid) | -0.000 (-0.006 to +0.005) | inconclusive |
+|  | Kendall | 0.522 | 0.549 (grid) | -0.027 (-0.052 to -0.002) | **grid better** |
+| After practice | Win log loss | 1.755 | 2.169 (championship order) | -0.414 (-0.667 to -0.154) | **model better** |
+|  | Podium Brier | 0.085 | 0.095 (championship order) | -0.010 (-0.017 to -0.002) | **model better** |
+|  | Top-5 overlap | 3.66 of 5 | 3.43 of 5 (championship order) | +0.231 (+0.031 to +0.462) | **model better** |
+| Before practice | Win log loss | 1.867 | 2.169 (championship order) | -0.302 (-0.559 to -0.039) | **model better** |
+|  | Podium Brier | 0.089 | 0.095 (championship order) | -0.006 (-0.014 to +0.002) | inconclusive |
+|  | Top-5 overlap | 3.66 of 5 | 3.43 of 5 (championship order) | +0.231 (+0.015 to +0.462) | **model better** |
+| Qualifying | Pole log loss | 1.681 | 2.105 (recent qualifying form) | -0.424 (-0.653 to -0.194) | **model better** |
+|  | NDCG@5 | 0.857 | 0.810 (recent qualifying form) | +0.046 (+0.025 to +0.069) | **model better** |
 
-After qualifying the model's win log loss is 0.138 lower than the grid's, but
-the interval runs from -0.34 to +0.07. Over the whole field (Kendall rank
+After qualifying the model's win log loss is 0.136 lower than the grid's, but
+the interval runs from -0.35 to +0.07. Over the whole field (Kendall rank
 correlation), the grid is clearly better.
 
 **Calibration.** When the model says X%, the average gap to what happened
-(expected calibration error, per driver) is 0.5% for wins, 2.5% for podiums
+(expected calibration error, per driver) is 0.5% for wins, 2.4% for podiums
 and 6.0% for the top ten. That average covers every driver in every race, most
 of them with chances near zero, so it reads small. The most confident bands
 are the weak spot (see Limitations), and the method page shows every band.
@@ -299,7 +302,18 @@ qualifying positions made no clear difference in either window. Linear gains
 ordered the whole field clearly better on 2022-23 and again on 2024 onward
 (position error -0.251 (-0.388 to -0.116) places), but on 2024 onward they were
 clearly worse at the front, NDCG@5 -0.018 (-0.034 to -0.002). The race forecast
-depends most on the front of the grid, so neither is used.
+depends most on the front of the grid, so neither is used. A third fix is in
+use: XGBoost had paired each driver only with the eight it ranks highest, and
+pairing across the whole field instead ordered 2022-23 clearly better
+(position error -0.198 (-0.332 to -0.066) places) and changed nothing clearly on 2024
+onward (`quali_pairing`).
+
+**Sprint qualifying: in use on sprint weekends.** Since 2024 a sprint weekend
+runs sprint qualifying, in the same cars, before Grand Prix qualifying. Its
+order is blended into the qualifying forecast at a weight picked on the six
+sprint weekends of 2024. On the twelve of 2025-26, qualifying position error
+went from 3.44 to 2.72 places, -0.713 (-1.120 to -0.329), and pole log loss
+from 1.899 to 1.650, -0.248 (-0.392 to -0.118) (`sprint_quali`).
 
 **Circuit type: tested, not used.** Each driver's and team's recent
 finishing at street circuits, or at permanent ones, so that a new or rarely
