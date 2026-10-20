@@ -4,8 +4,9 @@ name: Evaluate
 #
 # These numbers describe how the model has performed, not what happens on
 # Sunday, so they are re-measured on request, when the model changes or the
-# README is brought up to date, never on a timer. A scheduled re-measure would
-# move the figures away from the ones written down in the README, and commits
+# docs are brought up to date, never on a timer. A scheduled re-measure would
+# move the figures away from the ones written down in the README and
+# METHODOLOGY, and commits
 # made by this workflow do not trigger CI, so nothing would notice.
 #
 # All slow by design. The backtest fits its settings on 2022-23 and then refits
@@ -170,9 +171,9 @@ jobs:
       - name: Check the pages render against the new evidence
         run: python -m f1pred.cli dashboard
 
-      # The README quotes these figures and a test holds it to them. If they
-      # moved, stop here: the README has to be updated with them, by hand.
-      - name: Check the README still quotes the reports
+      # The README and METHODOLOGY quote these figures and a test holds them to
+      # it. If they moved, stop here: the docs have to be updated, by hand.
+      - name: Check the docs still quote the reports
         run: python -m pytest -q tests/test_readme_matches_reports.py
 
       - name: Commit evaluation

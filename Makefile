@@ -26,18 +26,19 @@ demo:
 	$(PY) -m f1pred.cli demo
 
 # ---- data (resumable) --------------------------------------------------------
-data: data-jolpica data-openf1
+data: data-jolpica data-openf1 data-practice
 
 data-jolpica:
 	$(PY) -m f1pred.cli ingest-jolpica --seasons $(SEASONS)
 
-# Official starting grids and weekend entry lists (2023+).
+# Official starting grids and weekend entry lists, current season.
 data-openf1:
 	$(PY) -m f1pred.cli ingest-openf1 --seasons 2026
 
-# Practice pace for the race weekend in progress (FP1-FP3 aggregates only).
+# Practice pace (FP1-FP3 aggregates only) and sprint qualifying, 2024 onward.
+# Sessions already stored are skipped.
 data-practice:
-	$(PY) -m f1pred.cli ingest-practice --next
+	$(PY) -m f1pred.cli ingest-practice --seasons 2024-2026
 
 validate:
 	$(PY) -m f1pred.cli validate

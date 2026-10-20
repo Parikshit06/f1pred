@@ -1,8 +1,10 @@
-"""The README's figures must match the reports/*.json they come from.
+"""The figures in the README and METHODOLOGY must match the reports/*.json
+they come from.
 
-The README is written by hand, so nothing updates it when an evaluation
-refreshes the evidence. This catches the drift. A failure means the README
-needs updating, and the message says to what.
+Both are written by hand, so nothing updates them when an evaluation refreshes
+the evidence. This catches the drift. The README keeps the headline and
+METHODOLOGY section 11 the full results, so the two are checked as one text.
+A failure means the docs need updating, and the message says to what.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
+METHODOLOGY = ROOT / "METHODOLOGY.md"
 REPORTS = ROOT / "reports"
 
 
@@ -27,7 +30,7 @@ def _load(name: str) -> dict:
 def _readme() -> str:
     if not README.exists():
         pytest.skip("no README in this checkout")
-    return README.read_text()
+    return README.read_text() + "\n" + METHODOLOGY.read_text()
 
 
 def _summary(method: str, section: str | None = None) -> dict:

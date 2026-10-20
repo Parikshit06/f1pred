@@ -2,11 +2,10 @@
 
 [![CI](https://github.com/Parikshit06/f1pred/actions/workflows/ci.yml/badge.svg)](https://github.com/Parikshit06/f1pred/actions/workflows/ci.yml)
 
-Probabilistic forecasts for every Formula 1 Grand Prix. Before each session it
-publishes each driver's chance to win, reach the podium and finish in the top 5
-and top 10, along with a qualifying forecast and a championship projection.
-Every forecast is saved before the session it forecasts and graded against the
-result afterwards.
+Forecasts for every Formula 1 Grand Prix. Before each session it publishes
+each driver's chance to take pole, win, reach the podium and finish in the top
+10, plus a championship projection. Every forecast is saved before the session
+and graded against the result afterwards, so the track record is public.
 
 **[Live forecast](https://parikshit06.github.io/f1pred/)** ·
 **[Method and accuracy](https://parikshit06.github.io/f1pred/method.html)** ·
@@ -15,398 +14,123 @@ result afterwards.
 
 ## What it predicts
 
-A race weekend produces three forecasts, each from more information than the
-last, and then a graded result:
+Each race weekend gets three forecasts, each with more information than the
+last:
 
 | When | What it knows | What is published |
 |---|---|---|
-| Wednesday of race week | past races only | race, qualifying and championship forecasts |
-| After practice | this weekend's practice times too | qualifying forecast, and a race forecast on the projected grid |
+| Wednesday of race week | past races only | qualifying, race and championship forecasts |
+| After practice | this weekend's practice, and sprint qualifying on sprint weekends | updated qualifying and race forecasts |
 | After qualifying | the official starting grid | race forecast on the real grid |
-| After the race | the result | the forecast graded, and kept on a page of its own |
+| After the race | the result | the forecast graded on a page of its own |
 
 Forecasts are committed to [`predictions/`](predictions/) as they are made and
-never edited, so the track record cannot be tidied up afterwards. The live
-record starts at the 2026 Azerbaijan Grand Prix (round 15). Earlier races are
-covered by the evaluation below.
+never edited. The live record starts at the 2026 Azerbaijan Grand Prix.
 
 ## How it works
 
 ```mermaid
 flowchart TD
-    A["jolpica-f1: results, qualifying, standings<br/>OpenF1: official grid, entry lists,<br/>practice laps, sprint qualifying"] --> B[("DuckDB<br/>21 data checks")]
-    B --> C["Features<br/>(earlier races only)"]
-    C --> Q["Qualifying model<br/>+ this weekend's practice"]
-    C --> R["Race model"]
-    Q -- "before qualifying:<br/>projected grid" --> R
-    G["Official starting grid<br/>(penalties applied)"] -- "after qualifying" --> R
-    R --> P["Model's own probabilities"]
-    R --> M["10,000 simulated races<br/>retirements, safety cars, grid"]
-    P --> F["One set of finishing chances<br/>win · podium · top 5 · top 10"]
-    M --> F
-    F --> W["Forecast saved to predictions/<br/>→ website"]
-    F --> E["Evaluation on past races<br/>→ reports/*.json"]
+    subgraph data ["Data"]
+        J["jolpica-f1, since 2018<br/>results, qualifying, standings"]
+        O["OpenF1<br/>official grids, entry lists,<br/>practice laps, sprint qualifying"]
+    end
+    J --> DB[("DuckDB<br/>21 data checks")]
+    O --> DB
+    DB --> X["Driver and team features<br/>built from earlier races only"]
+    X --> Q["Qualifying model<br/>XGBoost ranker"]
+    X --> R["Race model<br/>XGBoost ranker"]
+    Q -- "projected grid,<br/>before qualifying" --> R
+    DB -- "official grid,<br/>after qualifying" --> R
+    R --> S["10,000 simulated races<br/>retirements, safety cars,<br/>blended with the model's odds"]
+    R --> T["10,000 simulated seasons"]
+    Q --> P["Qualifying chances<br/>pole, top 10"]
+    S --> F["Race chances<br/>win, podium, top 10"]
+    T --> C["Championship chances"]
+    P --> W["Saved before the session,<br/>published to the website"]
+    F --> W
+    C --> W
+    W --> G["Graded after the race"]
 ```
 
-1. **Collect.** Every race since 2018: results, qualifying and standings from
-   jolpica-f1, and the official starting grid, entry lists, practice lap times
-   and sprint qualifying results from OpenF1. 21 data checks run before anything is modelled.
-2. **Describe each driver, using only the past.** Recent results, the team's
-   form, one-lap pace, record at this circuit, championship position. Each is
-   built only from races before the one being forecast, so the model can never
-   peek at the answer.
-3. **Put the drivers in order.** Two XGBoost models learn to rank drivers, one
-   for qualifying and one for the race. Before qualifying, the qualifying
-   model's predicted order stands in for the grid.
-4. **Turn the order into chances.** The race is simulated 10,000 times, with
-   retirements, safety cars and (before qualifying) an uncertain grid, and
-   blended with the model's own probabilities. Win, podium, top 5 and top 10
-   all come from the same simulated results, so they always agree with each
-   other.
-5. **Publish, then grade.** The forecast is saved and published before the
-   session. After the race it is scored against what happened.
+1. **Collect.** Results and qualifying for every race since 2018, plus
+   official grids, practice times and sprint qualifying from OpenF1. 21 data
+   checks run before anything is modelled.
+2. **Describe each driver from the past only.** Recent results, the team's
+   form, one-lap pace and record at this circuit, all built from earlier races
+   so the model never sees the answer.
+3. **Rank the drivers.** One model predicts the qualifying order, another the
+   race order. Before qualifying, the predicted qualifying order stands in for
+   the grid.
+4. **Turn the order into chances.** The race is simulated 10,000 times with
+   retirements, safety cars and an uncertain grid, and blended with the
+   model's own odds. Win, podium and top 10 all come from one set of finishing
+   chances, so they always agree.
+5. **Publish, then grade.** The forecast goes out before the session and is
+   scored against the result.
 
 ## How good is it
 
-Every race from 2024 round 1 to 2026 round 17, **65 races**, was replayed: the
-model was trained only on the races before it, made its forecast, and was
-scored against the result. Its settings were fitted on 2022-23. Later seasons
-were used only to rule out a change that made things clearly worse, and to
-pick how practice is used (on 2024). Each stage is compared with a simple
-forecast anyone could make without a model.
+Every race from 2024 to the 2026 Singapore Grand Prix, **65 races**, was
+replayed with a model that only knew the races before it. Each stage is
+compared with a simple forecast anyone could make without a model:
 
-| Stage | Compared with | Result |
+| Forecast | Compared with | Result |
 |---|---|---|
-| Before practice | the championship order | **Better** on win chances, and it names more of the top five. |
-| After practice | the championship order | **Better** on win and podium chances, and it names more of the top five. |
-| Qualifying | each driver's recent qualifying form | **Better**, helped by this weekend's practice times and, on sprint weekends, sprint qualifying. |
-| After qualifying | the starting grid | **Level.** Once the grid is known it holds most of what can be predicted. |
+| Race, before practice | the championship order | **Better** on win chances, and names more of the top five |
+| Race, after practice | the championship order | **Better** on win and podium chances, and names more of the top five |
+| Qualifying | each driver's recent qualifying | **Better**, helped by practice and sprint qualifying |
+| Race, after qualifying | the starting grid | **Level**. Once the grid is known it holds most of what can be predicted |
 
-- Win chances are reliable on average. Its most confident calls are too sure:
-  podium calls around 94% came true 79% of the time.
-- The title favourite was right 89% of the time, but backing the points
-  leader would have been right almost as often.
+Its most confident calls are a little too sure: podium calls averaging 94%
+came true 79% of the time. The full figures, with confidence intervals, are in
+[METHODOLOGY.md](METHODOLOGY.md#11-results-in-detail) and on the
+[method page](https://parikshit06.github.io/f1pred/method.html).
 
-So the model earns its keep before qualifying and in forecasting qualifying
-itself. The numbers behind each verdict are under [Results in detail](#results-in-detail).
+## Run it
 
-## Reproduce it
-
-No API keys and no data download: the demo runs the whole pipeline on a made-up
-championship.
+The demo runs the whole pipeline offline on a made-up championship, with no
+API keys:
 
 ```bash
 git clone https://github.com/Parikshit06/f1pred.git && cd f1pred
 make setup   # exact versions from uv.lock (Python 3.11-3.13)
-make demo    # ingest → features → evaluation → forecast → site, offline
+make demo    # data, features, evaluation, forecast and website
 make test    # unit, leakage and end-to-end tests
 ```
 
 With real data:
 
 ```bash
-make data-jolpica SEASONS=2018-2026   # ~15 min first time, rate-limited, cached
-make data-openf1                      # official grids and entry lists
+make data                    # results since 2018, grids, practice (slow the first time, then cached)
 make repair validate features
-make predict dashboard                # forecast the next race, render the site in reports/
-make backtest title-backtest calibrate-spread verify   # regenerate reports/*.json
-make experiments                      # the design experiments, about an hour
+make predict dashboard       # forecast the next race, build the site in reports/
 ```
 
-The workflows in [`.github/workflows`](.github/workflows) run the same
-steps: `predict.yml` across each race weekend (and deploys the site),
-`evaluate.yml` on request, when the figures here are brought up to date.
+GitHub Actions runs the same steps across each race weekend and deploys the
+site ([`predict.yml`](.github/workflows/predict.yml)).
 
 ## Limitations
 
-- Win chances are reliable overall, but the few win calls above 70% came true
-  less often than stated. The most confident podium and top-10 calls are too
-  sure: podium calls averaging 94% came true 79% of the time, and top-10 calls
-  averaging 96% came true 87%.
-- Not modelled: weather, tyre and pit strategy, in-race penalties, team orders,
-  upgrades, safety-car timing, failures shared by a team's two cars.
-- The qualifying forecast orders the back of the grid loosely, so
-  backmarkers' chances of reaching the top ten in qualifying are too high.
-- Practice before October 2026 was fetched with FastF1, which cannot reach
-  F1's timing data from GitHub's servers, so no after-practice forecast was
-  logged before then. Practice now comes from OpenF1. Recomputed from OpenF1
-  on 13 past sessions, every best lap matched FastF1's to the millisecond and
-  95% of long-run times were within a tenth of a second.
-- Grid penalties are known before the official grid only when a team has
-  announced them. Those are entered by hand in `grid_penalties.json`, with
-  their source. Any other penalty is missed until the official grid appears.
+- Not modelled: weather, tyre and pit strategy, in-race penalties, team
+  orders, upgrades and safety-car timing.
+- The most confident podium and top-10 calls are too sure: podium calls
+  averaging 94% came true 79% of the time, and top-10 calls averaging 96% came
+  true 87%.
+- Grid penalties are known before the official grid only when a team announces
+  them. Those are entered by hand in
+  [`grid_penalties.json`](grid_penalties.json), with their source.
 - 65 test races is a small sample.
-- GitHub runs scheduled jobs late when it is busy. Over the Singapore weekend
-  the hourly runs came every four to six hours, so forecasts were logged
-  before each session but hours later than planned.
-- The season projection assumes current form holds, widened by a calibrated
-  pace-drift term.
+- GitHub can run scheduled jobs hours late when it is busy, so a forecast can
+  be logged later than planned, though still before the session.
 
----
-
-The rest of this page is technical detail. [METHODOLOGY.md](METHODOLOGY.md)
-has the full method.
-
-## What the measures mean
-
-- **Log loss**: how surprised the forecast was by what happened. Giving the
-  winner a 2% chance costs far more than giving them 40%. Lower is better.
-- **Brier score**: the average squared gap between a forecast chance and what
-  happened (1 or 0). Lower is better.
-- **NDCG@3, NDCG@5**: how well the top three or five were put in order, from 0
-  to 1, with the top places counting most.
-- **Kendall**: how well the whole predicted order matches the result, from -1
-  to 1.
-- **Calibration error**: the average gap between a stated chance and how often
-  it came true.
-- **95% interval**: the range the true difference probably lies in. If it
-  includes zero, the two forecasts cannot be told apart.
-- **Walk-forward**: each race is forecast by a model trained only on races
-  before it, the way it would have run live.
-
-## Results in detail
-
-After qualifying, against the calibrated grid and championship order
-(`reports/backtest.json`, generated by `make backtest`):
-
-| Approach | NDCG@3 | NDCG@5 | Winner | Podium overlap | Win log loss | Podium Brier |
-|---|---|---|---|---|---|---|
-| **This model** | 0.856 | 0.897 | **68%** | 1.94 of 3 | **1.173** | **0.067** |
-| Grid order, calibrated | **0.861** | **0.900** | 60% | **2.06 of 3** | 1.309 | 0.068 |
-| Championship order | 0.751 | 0.803 | 29% | 1.68 of 3 | 2.169 | 0.095 |
-
-Each comparison is paired race by race, with a 95% bootstrap interval.
-"Inconclusive" means the interval includes zero.
-
-| Stage | Metric | Model | Reference | Difference (95% interval) | Verdict |
-|---|---|---|---|---|---|
-| After qualifying | NDCG@3 | 0.856 | 0.861 (grid) | -0.005 (-0.030 to +0.020) | inconclusive |
-|  | NDCG@5 | 0.897 | 0.900 (grid) | -0.003 (-0.019 to +0.014) | inconclusive |
-|  | Winner called | 68% | 60% (grid) | +8 pts (-3 to +18) | inconclusive |
-|  | Win log loss | 1.173 | 1.309 (grid) | -0.136 (-0.349 to +0.065) | inconclusive |
-|  | Podium Brier | 0.067 | 0.068 (grid) | -0.000 (-0.006 to +0.005) | inconclusive |
-|  | Kendall | 0.522 | 0.549 (grid) | -0.027 (-0.052 to -0.002) | **grid better** |
-| After practice | Win log loss | 1.755 | 2.169 (championship order) | -0.414 (-0.667 to -0.154) | **model better** |
-|  | Podium Brier | 0.085 | 0.095 (championship order) | -0.010 (-0.017 to -0.002) | **model better** |
-|  | Top-5 overlap | 3.66 of 5 | 3.43 of 5 (championship order) | +0.231 (+0.031 to +0.462) | **model better** |
-| Before practice | Win log loss | 1.867 | 2.169 (championship order) | -0.302 (-0.559 to -0.039) | **model better** |
-|  | Podium Brier | 0.089 | 0.095 (championship order) | -0.006 (-0.014 to +0.002) | inconclusive |
-|  | Top-5 overlap | 3.66 of 5 | 3.43 of 5 (championship order) | +0.231 (+0.015 to +0.462) | **model better** |
-| Qualifying | Pole log loss | 1.681 | 2.105 (recent qualifying form) | -0.424 (-0.653 to -0.194) | **model better** |
-|  | NDCG@5 | 0.857 | 0.810 (recent qualifying form) | +0.046 (+0.025 to +0.069) | **model better** |
-
-After qualifying the model's win log loss is 0.136 lower than the grid's, but
-the interval runs from -0.35 to +0.07. Over the whole field (Kendall rank
-correlation), the grid is clearly better.
-
-**Calibration.** When the model says X%, the average gap to what happened
-(expected calibration error, per driver) is 0.5% for wins, 2.4% for podiums
-and 6.0% for the top ten. That average covers every driver in every race, most
-of them with chances near zero, so it reads small. The most confident bands
-are the weak spot (see Limitations), and the method page shows every band.
-
-## Leakage prevention
-
-- Rolling windows shift a whole race before aggregating. Team features
-  collapse to one value per team per race first, so a driver never sees the
-  teammate's result from the same race.
-- **Truncation test**: features built from data ending at race *k* equal
-  features built from everything, for every race up to *k*. It caught a real
-  leak: a season-progress feature divided by the number of races already run.
-- **Tampering test**: reversing one race's result moves no feature of that
-  race or any earlier one.
-- The walk-forward trains on `race_seq < k` only, and a test spies on every fit
-  to prove it. Before qualifying, every grid and qualifying input is replaced by
-  its projection, so the real result can't reach a pre-qualifying forecast.
-
-## What each piece is worth
-
-`make experiments` writes `reports/experiments.json`. Every experiment is a
-walk-forward with race-paired intervals. Choices are made on 2022-23 and
-checked on 2024 onward (practice, below, has its own held-out split). Each was made
-once, on the final configuration, and is not re-decided when the evaluation is
-refreshed. Experiments fit one seed per model, so their figures sit slightly
-off the headline's five-seed ones.
-
-**Calibration and the simulation.** The same out-of-sample scores on 2024
-onward, turned into probabilities five ways:
-
-| Probability step | Win log loss | Podium Brier | Calibration error, win |
-|---|---|---|---|
-| Raw scores (temperature 1, no simulation) | 1.686 | 0.0747 | 3.8% |
-| Temperature fitted on 2022-23, held | **1.226** | 0.0679 | 0.3% |
-| Temperature refitted on the last 24 races (in use) | 1.229 | 0.0683 | 0.4% |
-| Refitted, Plackett-Luce only | 1.301 | 0.0716 | 0.3% |
-| Refitted, simulation only | 1.256 | **0.0651** | 0.5% |
-| Refitted on the first three finishers, not just the winner | 1.261 | 0.0662 | 1.0% |
-
-Calibration is most of the gain. A held and a refitted temperature are level,
-and mixing the two probability models beats either alone on log loss. Fitting
-the temperature on the first three finishers was tested against the
-over-confident podium and top-10 calls: it improves their calibration on both
-2022-23 and 2024 onward, but worsens win log loss on 2022-23 (0.928 against
-0.883), so it is not used.
-
-**Ablation: what adds information once the grid is known.**
-
-- **Everything together vs the grid alone**: log loss 0.840 vs 1.628 on
-  2022-23 (difference +0.788, interval +0.462 to +1.155), but 1.229 vs 1.326 on
-  2024 onward (not clear).
-- **Adding one block at a time to the grid** (log loss on 2022-23): grid only
-  1.628, + driver form 0.957, + team form 1.220, + both 0.914, full model
-  0.840. Recent driver form carries most of what the model adds beyond the
-  grid. On 2024 onward none of these differences is clear.
-- **Driver form and team form** are the groups whose removal clearly costs
-  log loss on 2022-23: +0.186 (+0.046 to +0.348) and +0.082 (+0.004 to
-  +0.168). Removing **circuit history** clearly hurts ranking (NDCG@5 -0.011,
-  -0.021 to -0.001).
-- **Qualifying position and gap to pole** duplicate the grid (correlation
-  0.95 with it): removing them changes nothing clearly. They stay because they
-  are how a car that took a grid penalty is recognised as fast.
-- **Tested and left out**: the driver's own qualifying record (average grid
-  and qualifying place, pole rate, one-lap gap) made 2022-23 clearly worse
-  after qualifying, +0.078 (+0.027 to +0.138), and before it, +0.043 (+0.009
-  to +0.078). It reaches the race through the grid already, so inside the race
-  model it counted twice. The teammate qualifying gap also made it worse,
-  +0.049 (+0.010 to +0.089). Both, as rolling averages, still feed the
-  qualifying model.
-- On 2024 onward, no single group's removal or addition is clear either way.
-
-**Practice pace (FP1-FP3): qualifying only, earned on held-out data.**
-Practice is used as this weekend's evidence, never as a long-term driver
-feature: each driver's gap to the fastest car in each session, their latest
-session's gap and rank, the gap to their teammate, the team's best car, the
-change from FP1 to FP2 to FP3, and how consistent those were. Stored as
-compact numbers for the 59 weekends of 2024-26 stored when it was tested, no telemetry. The design was
-chosen on 2024, then graded on 35 untouched weekends of 2025-26 against the
-same model without practice:
-
-| Qualifying forecast, with practice minus without (2025-26) | Difference (95% interval) |
-|---|---|
-| Qualifying position error (places) | -0.280 (-0.429 to -0.128) |
-| Pole log loss | -0.203 (-0.404 to -0.009) |
-| NDCG@5 | +0.028 (+0.000 to +0.059) |
-| NDCG@3 | +0.040 (-0.006 to +0.089) |
-
-Practice clearly improves the qualifying forecast, so it feeds the qualifying
-model. After qualifying it adds nothing beyond the official grid (race log loss
-+0.029, -0.051 to +0.117), so the race model never sees it.
-
-**Qualifying: the front of the grid over the back.** The qualifying ranker
-uses NDCG's exponential gains, so training concentrates on the front of the
-grid and orders the back loosely. On 2024 onward it is no better than recent
-qualifying form at ordering the whole field, and it gives backmarkers too good
-a chance of the top ten. Two fixes were tested with the rule fixed in advance
-(`quali_ordering` in `reports/experiments.json`). The median of recent
-qualifying positions made no clear difference in either window. Linear gains
-ordered the whole field clearly better on 2022-23 and again on 2024 onward
-(position error -0.251 (-0.388 to -0.116) places), but on 2024 onward they were
-clearly worse at the front, NDCG@5 -0.018 (-0.034 to -0.002). The race forecast
-depends most on the front of the grid, so neither is used. A third fix is in
-use: XGBoost had paired each driver only with the eight it ranks highest, and
-pairing across the whole field instead ordered 2022-23 clearly better
-(position error -0.198 (-0.332 to -0.066) places) and changed nothing clearly on 2024
-onward (`quali_pairing`).
-
-**Sprint qualifying: in use on sprint weekends.** Since 2024 a sprint weekend
-runs sprint qualifying, in the same cars, before Grand Prix qualifying. Its
-order is blended into the qualifying forecast at a weight picked on the six
-sprint weekends of 2024. On the twelve of 2025-26, qualifying position error
-went from 3.44 to 2.72 places, -0.713 (-1.120 to -0.329), and pole log loss
-from 1.899 to 1.650, -0.248 (-0.392 to -0.118) (`sprint_quali`).
-
-**Circuit type: tested, not used.** Each driver's and team's recent
-finishing at street circuits, or at permanent ones, so that a new or rarely
-visited track borrows from similar ones. Judged on a rule fixed in advance
-(`circuit_type` in `reports/experiments.json`), it made no clear difference on
-2022-23, so the model does not use it.
-
-**Retirements in both halves: tested, not used.** Plackett-Luce has no
-retirements, so with the 0.7 blend only 30% of each car's retirement risk
-reaches the published chances. Applying retirements to both halves lowered the
-podium and top-10 calibration error on 2022-23 (podium 2.9% to
-1.5%, top ten 7.2% to 4.9%), but the rule fixed in advance
-judges Brier scores, and podium Brier was not clearly better
-(-0.0015, -0.0033 to +0.0001). So it is not used (`retirements` in
-`reports/experiments.json`). It is the strongest lead for a later season.
-
-**Recent form: median, not mean.** Median finishing position over the last
-races lowered 2022-23 log loss by 0.047 (interval 0.003 to 0.093). On 2024
-onward the mean was 0.018 better, with an interval from -0.068 to +0.035, so
-it is a marginal call.
-
-**XGBoost settings** were compared on 2021 and on 2022-23 without intervals,
-as a stability check rather than a search. No candidate is best on both:
-depth 3 is best on 2022-23 and among the worst on 2021. The settings in use
-(depth 4, 400 trees) are kept.
-
-## Explainability
-
-Every logged forecast stores, for each driver, SHAP contributions from XGBoost's
-own TreeSHAP (`pred_contribs`, identical to `shap.TreeExplainer`). The published
-score is the mean of five seeds, each standardised within the race, so each
-seed's contributions are centred and scaled the same way before the mean. The contributions then sum
-exactly to the score that was published (tested). They describe what the model
-relied on, not causes.
-
-## Championship projection
-
-The rest of the season is simulated 10,000 times, sprints included, from each
-driver's median score over their last eight real weekends. Every driver with
-points stays in the title race, including one sitting out a race. Graded on
-27 checkpoints across 7 completed seasons (2019-2025), each projected with a
-model trained only on races before it:
-
-- **Who wins**: the favourite was right 89% of the time, Brier 0.077. That
-  is a low bar: the favourite was simply the points leader at 26 of 27
-  checkpoints, and backing the leader would have been right 85% of the time.
-  Above 95% it is 14 for 14, but the 95% interval on that runs down to
-  0.79, so a published 99.9% means the arithmetic says it's over, not one
-  chance in a thousand. The misses are all in 2025's Piastri-Norris season
-  (after rounds 8, 13 and 18).
-- **How close**: every points total carries a 10th-90th percentile range,
-  sized on 2019-22 and graded on 2023-25 (`make calibrate-spread`):
-
-| Projection | Constructors inside the range | Width | Teammate gap inside | Target |
-|---|---|---|---|---|
-| Race luck only | 54% | 39 pts | 72% | 80% |
-| **With the season-long pace term** | **86%** | 108 pts | 74% | 80% |
-
-The pace term was sized on 2019-22, and on 2023-25 constructors land a little
-wide of the target (86% against 80%). The teammate gap is still short of 80%:
-on 2019-22 the ranges needed no extra driver term, but on 2023-25 they were too
-narrow.
-
-## Project structure
-
-```
-src/f1pred/
-  ingest/            jolpica, OpenF1 (grid, entries), practice (OpenF1 lap aggregates)
-  store.py           DuckDB schema (raw tables are never overwritten)
-  validate.py        21 data checks
-  weekend.py         who is in the race, and where each car starts
-  features.py        temporal feature layer
-  model.py           XGBoost rankers, ensemble SHAP
-  probability.py     Plackett-Luce, calibration, one coherent distribution
-  simulate.py        Monte Carlo race simulation and forecast()
-  predict.py         forecast one race, with provenance
-  baselines.py       grid order and other no-model forecasts
-  backtest.py        walk-forward, tuning
-  metrics.py         ranking and probability metrics, bootstrap
-  evaluation.py      headline backtest and experiments
-  championship.py    season projection (sprints included)
-  title_backtest.py, spread_calibration.py   grading the season projection
-  verify.py          release gate: leakage, calibration, coherence
-  report*.py, method_page.py   the website
-  demo.py            synthetic championship for make demo and CI
-predictions/         every logged forecast (the track record)
-reports/             measured figures, which the README is tested against
-tests/               unit, leakage, pipeline (end-to-end on the demo data)
-```
+More in [METHODOLOGY.md](METHODOLOGY.md#10-limitations).
 
 ## Data and licence
 
-Code: MIT. Data belongs to its sources: [jolpica-f1](https://github.com/jolpica/jolpica-f1)
-(CC BY-NC-SA 4.0, see its [terms](https://github.com/jolpica/jolpica-f1/blob/main/TERMS.md)),
-[OpenF1](https://openf1.org). Practice history before October 2026 was
-fetched with [FastF1](https://github.com/theOehrly/Fast-F1). This is an unofficial project, not associated with Formula 1.
+Code: MIT. Data belongs to its sources:
+[jolpica-f1](https://github.com/jolpica/jolpica-f1) (CC BY-NC-SA 4.0, see its
+[terms](https://github.com/jolpica/jolpica-f1/blob/main/TERMS.md)) and
+[OpenF1](https://openf1.org). Practice history before October 2026 was fetched
+with [FastF1](https://github.com/theOehrly/Fast-F1). This is an unofficial
+project, not associated with Formula 1.
