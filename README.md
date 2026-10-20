@@ -12,6 +12,15 @@ and graded against the result afterwards, so the track record is public.
 **[Past races](https://parikshit06.github.io/f1pred/races.html)** ·
 **[Full methodology](METHODOLOGY.md)**
 
+<a href="https://parikshit06.github.io/f1pred/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/forecast-dark.jpg">
+    <img src="assets/forecast-light.jpg" alt="The race forecast page for the 2026 Singapore Grand Prix, showing each driver's chance to win beside the result">
+  </picture>
+</a>
+
+*The Singapore Grand Prix forecast, published the day before the race. Verstappen was the favourite at 41% and won.*
+
 ## What it predicts
 
 Each race weekend gets three forecasts, each with more information than the
