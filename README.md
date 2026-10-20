@@ -82,8 +82,7 @@ compared with a simple forecast anyone could make without a model:
 | Qualifying | each driver's recent qualifying | **Better**, helped by practice and sprint qualifying |
 | Race, after qualifying | the starting grid | **Level**. Once the grid is known it holds most of what can be predicted |
 
-Its most confident calls are a little too sure: podium calls averaging 94%
-came true 79% of the time. The full figures, with confidence intervals, are in
+The full figures, with confidence intervals, are in
 [METHODOLOGY.md](METHODOLOGY.md#11-results-in-detail) and on the
 [method page](https://parikshit06.github.io/f1pred/method.html).
 
