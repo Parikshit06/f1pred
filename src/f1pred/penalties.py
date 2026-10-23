@@ -18,8 +18,9 @@ more places below their form, against one in six on a normal weekend (807),
 and only half reached the top ten, against 94%. So their qualifying forecast is
 a mix: the usual lap, or a lap held back to about 14th of 20, which is where
 those drivers landed. The share held back is the excess over a normal weekend,
-(0.67 - 0.16) / (1 - 0.16). Place penalties are left alone: the grid still
-depends on the lap, so drivers push.
+(0.67 - 0.16) / (1 - 0.16). Only front-runners were measured, so any other car
+starting from the back keeps its usual qualifying forecast. Place penalties are
+left alone: the grid still depends on the lap, so drivers push.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ PATH = config.ROOT / "grid_penalties.json"
 BACK = "back"
 _BACK_OFFSET = 1000.0  # behind every possible grid slot
 HOLD_BACK_SHARE = 0.6  # see the module docstring
+FRONT_RUNNER = 6  # recent qualifying average at or better than this
 HOLD_BACK_SLOT = 0.7  # a held-back lap lands about 14th of 20
 
 
@@ -98,11 +100,22 @@ def apply(grid: np.ndarray, places: np.ndarray) -> np.ndarray:
     return out
 
 
+def held_back(driver_ids: list[str], recent_quali, penalties: list[Penalty]) -> list[int]:
+    """Field positions of the back-of-grid starters who may hold back in
+    qualifying. Only front-runners were measured doing it, so a midfield car
+    keeps its usual forecast. recent_quali is each driver's average
+    qualifying place over the last five races, in field order."""
+    back = {p.driver_id for p in penalties if p.places is None}
+    form = np.asarray(recent_quali, dtype=float)
+    return [i for i, d in enumerate(driver_ids) if d in back and form[i] <= FRONT_RUNNER]
+
+
 def held_back_scores(scores: np.ndarray, held: list[int]) -> np.ndarray:
-    """Qualifying scores with each held-back driver moved to the score of the
-    car that would otherwise qualify at HOLD_BACK_SLOT of the field."""
+    """Qualifying scores with each held-back driver moved down to the score of
+    the car that would otherwise qualify at HOLD_BACK_SLOT of the field. A
+    held-back lap is never faster than the usual one."""
     out = np.asarray(scores, dtype=float).copy()
     others = np.sort(np.delete(out, held))[::-1]
     slot = min(len(others) - 1, round(HOLD_BACK_SLOT * len(out)) - 1)
-    out[held] = others[slot]
+    out[held] = np.minimum(out[held], others[slot])
     return out

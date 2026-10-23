@@ -218,8 +218,8 @@ def ranking_forecast(
     """Plackett-Luce alone, for qualifying: one lap has no retirements or safety
     cars worth simulating, so its distribution is the ranking's own.
 
-    held_back: drivers starting from the back whatever they qualify, forecast
-    as a mix of their usual lap and a held-back one (penalties.py)."""
+    held_back: front-runners starting from the back whatever they qualify,
+    forecast as a mix of their usual lap and a held-back one (penalties.py)."""
     matrix = probability.pl_position_matrix(scores, temperature, n_samples, seed)
     if held_back:
         alt = probability.pl_position_matrix(

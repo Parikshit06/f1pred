@@ -475,7 +475,7 @@ def run(
     race["quali_score"] = backtest.quali_scores(quali_model, race, s)
     announced = penalties.for_race(season, rnd)
     ids = race["driver_id"].tolist()
-    held_back = [ids.index(p.driver_id) for p in announced if p.places is None and p.driver_id in ids]
+    held_back = penalties.held_back(ids, race["drv_avg_quali_5"].to_numpy(), announced)
     q = simulate.ranking_forecast(ids, race["quali_score"].to_numpy(), t_quali, held_back=held_back)
     for col in ("p_win", "p_podium", "p_top5", "p_top10", "exp_position"):
         race[f"q_{col}"] = q.column(col)

@@ -156,3 +156,21 @@ def test_a_held_back_lap_lands_around_fourteenth_of_twenty():
     scores = np.linspace(4.0, 0.0, 20)
     out = penalties.held_back_scores(scores, [0])
     assert int((out > out[0]).sum()) + 1 == 14
+
+
+def test_a_held_back_lap_never_moves_a_driver_up():
+    scores = np.linspace(4.0, 0.0, 20)
+    out = penalties.held_back_scores(scores, [17])
+    assert out[17] == scores[17]
+
+
+def test_only_front_runners_are_held_back():
+    """The hold-back was measured on drivers qualifying in the top six of late.
+    A midfield car starting from the back keeps its usual forecast."""
+    ids = ["front", "mid", "rookie", "other"]
+    form = np.array([2.4, 13.0, np.nan, 5.0])
+    announced = [
+        penalties.Penalty(d, None, "Power unit change", "https://example.com", "2026-10-23")
+        for d in ("front", "mid", "rookie")
+    ]
+    assert penalties.held_back(ids, form, announced) == [0]
