@@ -80,8 +80,9 @@ who started from the back since 2018, two in three qualified three or more
 places below their form, against one in six on a normal weekend, and only
 half reached the top ten, against 94%. Their qualifying forecast is therefore
 a mix of the usual lap and a lap held back to about 14th, weighted by that
-excess (0.6). Place penalties are left alone, because the grid still depends
-on the lap.
+excess (0.6). Only front-runners were measured, so any other car starting
+from the back keeps its usual qualifying forecast. Place penalties are left
+alone, because the grid still depends on the lap.
 
 `make validate` runs 21 checks before anything is modelled: coverage,
 referential integrity, positions, the retirement flag against laps completed,
@@ -389,6 +390,9 @@ tests/               unit, leakage, pipeline (end-to-end on the demo data)
   Recomputed from OpenF1 on 13 past sessions, every best lap matched to the
   millisecond and 95% of long-run medians were within 0.1 s (largest gap
   0.32 s). The stored history is kept as fetched.
+* OpenF1 refuses requests without a key while an F1 session is live. A run
+  that lands during a session goes without OpenF1 (grid, entries, practice)
+  and logs the attempt, and the next run fetches it.
 * Before the official grid is published, only penalties announced in advance
   and entered in `grid_penalties.json` are applied. Any other penalty is
   missed until the official grid appears.
