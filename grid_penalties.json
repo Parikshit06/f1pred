@@ -7,5 +7,32 @@
     "reason": "Power unit change after his retirement in Malaysia",
     "source": "https://racer.com/2026/10/07/russell-gets-power-unit-penalty-for-singapore-gp",
     "announced": "2026-10-07"
+  },
+  {
+    "season": 2026,
+    "round": 18,
+    "driver_id": "bortoleto",
+    "penalty": "back",
+    "reason": "Fourth energy store and control electronics, 20 places, so the back of the grid",
+    "source": "https://www.the-race.com/formula-1/three-drivers-get-grid-penalties-at-f1s-us-gp/",
+    "announced": "2026-10-23"
+  },
+  {
+    "season": 2026,
+    "round": 18,
+    "driver_id": "colapinto",
+    "penalty": 10,
+    "reason": "Fourth control electronics",
+    "source": "https://www.the-race.com/formula-1/three-drivers-get-grid-penalties-at-f1s-us-gp/",
+    "announced": "2026-10-23"
+  },
+  {
+    "season": 2026,
+    "round": 18,
+    "driver_id": "arvid_lindblad",
+    "penalty": 5,
+    "reason": "Sixth internal combustion engine",
+    "source": "https://www.the-race.com/formula-1/three-drivers-get-grid-penalties-at-f1s-us-gp/",
+    "announced": "2026-10-23"
   }
 ]
