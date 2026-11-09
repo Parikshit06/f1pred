@@ -307,7 +307,11 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
         if force or not already_ingested(con, "drivers", str(season)) or season == config.CURRENT_SEASON:
             url = f"{config.JOLPICA_BASE}/{season}/drivers.json?limit={{limit}}&offset={{offset}}"
             try:
-                records = session.paginate(url, ("DriverTable", "Drivers"), refresh=force)
+                # A driver can join mid-season, so the live season's list bypasses the
+                # cache like its results. Otherwise a debut result arrives with no driver.
+                records = session.paginate(
+                    url, ("DriverTable", "Drivers"), refresh=force or season == config.CURRENT_SEASON
+                )
                 n = upsert(con, "raw_drivers", parse_drivers(records, season), ["season", "driver_id"])
                 counts["drivers"] = n
                 log_ingest(con, "drivers", str(season), "ok" if n else "empty", f"{n} rows")

@@ -279,3 +279,64 @@ def test_a_safety_car_or_red_flag_holds_until_the_track_is_green():
     spans = practice.not_clear_periods(rc)
     assert len(spans) == 1
     assert spans[0][1] == pd.Timestamp("2026-10-09T08:20:00+00:00")
+
+
+def test_the_live_seasons_driver_list_is_fetched_fresh(tmp_path, monkeypatch):
+    """A driver who joins mid-season has to reach raw_drivers, or his first
+    result has no driver and validation stops the run. Past seasons may come
+    from the cache, the live one may not."""
+    from f1pred import config
+
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "f1.duckdb")
+    store.init_db()
+
+    class Session:
+        def __init__(self):
+            self.refreshed = {}
+
+        def paginate(self, url, key_path, refresh=False):
+            self.refreshed[url.split("/f1/")[1].split(".json")[0]] = refresh
+            return []
+
+    s = Session()
+    jolpica.ingest_season(s, config.CURRENT_SEASON)
+    jolpica.ingest_season(s, config.CURRENT_SEASON - 3)
+    assert s.refreshed[f"{config.CURRENT_SEASON}/drivers"] is True
+    assert s.refreshed[f"{config.CURRENT_SEASON - 3}/drivers"] is False
+
+
+def test_a_debut_driver_on_a_retired_drivers_number_maps_to_the_debutant():
+    """Câmara made his debut in 2026 on #51, Fittipaldi's number in 2020.
+    jolpica lists him with a name only, no code or number, so the match has to
+    come from this season's surnames before any older season's numbers."""
+    import pandas as pd
+
+    from f1pred.ingest import openf1
+
+    lookup = pd.DataFrame(
+        [
+            {
+                "driver_id": "rafael_camara",
+                "code": None,
+                "permanent_number": None,
+                "family_name": "Camara",
+                "season": 2026,
+            },
+            {
+                "driver_id": "bearman",
+                "code": "BEA",
+                "permanent_number": 87,
+                "family_name": "Bearman",
+                "season": 2026,
+            },
+            {
+                "driver_id": "pietro_fittipaldi",
+                "code": "FIT",
+                "permanent_number": 51,
+                "family_name": "Fittipaldi",
+                "season": 2020,
+            },
+        ]
+    )
+    entry = {"name_acronym": "CAM", "driver_number": 51, "last_name": "Câmara"}
+    assert openf1.map_driver(entry, lookup, 2026) == "rafael_camara"
