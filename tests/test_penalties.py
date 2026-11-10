@@ -174,3 +174,23 @@ def test_only_front_runners_are_held_back():
         for d in ("front", "mid", "rookie")
     ]
     assert penalties.held_back(ids, form, announced) == [0]
+
+
+def test_the_official_grid_logs_a_new_after_qualifying_forecast_once(tmp_path, monkeypatch):
+    """Right after qualifying the forecast stands on the qualifying order. The
+    official grid, with penalties applied, is new information: it is logged
+    beside the first forecast, and only once."""
+    now = datetime.now(UTC)
+
+    def after_quali(generated, source):
+        f = _forecast(tmp_path, monkeypatch, generated, [])
+        f.grid_known = True
+        f.meta["grid_source"] = source
+        return f
+
+    first = after_quali(now - timedelta(hours=12), "qualifying").save()
+    assert after_quali(now - timedelta(hours=8), "qualifying").save() == first
+    official = after_quali(now - timedelta(hours=4), "openf1").save()
+    assert official is not None and official != first
+    after_quali(now, "results").save()
+    assert len(list(tmp_path.glob("*.json"))) == 2

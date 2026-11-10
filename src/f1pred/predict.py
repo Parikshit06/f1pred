@@ -80,13 +80,24 @@ class Prediction:
         """An earlier forecast for this race at this stage, if there is one.
 
         A grid penalty announced after the latest of them is new information,
-        not a retry, so it reopens the stage: the next forecast is logged
-        beside the earlier ones, which stay as they were.
+        not a retry, and so is the official grid replacing the qualifying
+        order. Either reopens the stage: the next forecast is logged beside the
+        earlier ones, which stay as they were.
         """
         matches = sorted(config.PREDICTIONS.glob(f"{self.season}-{self.round:02d}-{self.tag()}-*.json"))
-        if not matches or self.new_penalties_since(matches[-1]):
+        if not matches or self.new_penalties_since(matches[-1]) or self.official_grid_since(matches[-1]):
             return None
         return matches[0]
+
+    def official_grid_since(self, earlier: Path) -> bool:
+        """This forecast stands on the official grid and `earlier` stood on the
+        qualifying order, before penalties were applied."""
+        try:
+            before = (json.loads(earlier.read_text()).get("meta") or {}).get("grid_source")
+        except (OSError, json.JSONDecodeError):
+            return False
+        now = self.meta.get("grid_source")
+        return before == "qualifying" and now not in (None, "qualifying", "projected")
 
     def new_penalties_since(self, earlier: Path) -> set[str]:
         """Drivers this forecast applies a grid penalty to that `earlier` did not."""
@@ -118,7 +129,8 @@ class Prediction:
         One file per race per stage keeps the record honest: a second pre-quali
         file from a later run would look like the forecast was retried until it
         looked good. It also lets the workflow run often without littering. The
-        one exception is a newly announced grid penalty (see existing).
+        exceptions are a newly announced grid penalty and the official grid
+        arriving (see existing).
         """
         prior = None if force else self.existing()
         if prior is not None:

@@ -72,7 +72,9 @@ one that qualified there, and back-of-grid starters keep their qualifying
 order. They are never applied to an official grid, which has them already, or
 to the training history, where the real grid is known. A penalty announced
 after a forecast was logged is new information, so the next run logs a new
-forecast for that stage beside the earlier one, which stays as it was.
+forecast for that stage beside the earlier one, which stays as it was. The same
+holds when the official grid replaces the qualifying order after qualifying:
+the forecast on the official grid is logged beside the first one.
 
 A back-of-grid penalty changes qualifying too, because there is little left to
 qualify for. Of 21 front-runners (recent qualifying average in the top six)
