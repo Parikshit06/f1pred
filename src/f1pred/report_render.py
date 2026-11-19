@@ -51,7 +51,7 @@ TEAM_NAMES = {
     "aston_martin": "Aston Martin",
     "alpine": "Alpine",
     "williams": "Williams",
-    "rb": "RB",
+    "rb": "Racing Bulls",  # its name since 2025, and the site shows the current season
     "alphatauri": "AlphaTauri",
     "haas": "Haas",
     "audi": "Audi",
@@ -295,9 +295,7 @@ section > .body{min-width:0}
   align-items:center; gap:0 10px}
 
 @media (max-width:480px){
-  /* Too wide for a 320px screen with every column; drop "Now". */
-  .gridC{grid-template-columns:20px 3px minmax(60px,1fr) 66px 70px; gap:0 8px}
-  .gridC > .c-now, .colhead.gridC > span:nth-child(4){display:none}
+  .gridC{grid-template-columns:20px 3px minmax(60px,1fr) 44px 66px 70px; gap:0 8px}
   .wrap{padding-inline:14px}
   .bar .inner{padding:0 14px}
   /* The chart scrolls sideways rather than shrinking its labels to nothing. */
@@ -439,6 +437,9 @@ footer a{color:var(--ink-2); white-space:nowrap}
 }
 @media (max-width:360px){
   /* The smallest phones: same columns, tighter, so the table fits 320px. */
+  /* Too wide for a 320px screen with every column, so drop "Now". */
+  .gridC{grid-template-columns:20px 3px minmax(60px,1fr) 66px 70px; gap:0 8px}
+  .gridC > .c-now, .colhead.gridC > span:nth-child(4){display:none}
   .grid6{grid-template-columns:18px 3px minmax(56px,1fr) 38px 60px 44px 36px; gap:0 5px}
   .grid6.fin{grid-template-columns:18px 3px minmax(48px,1fr) 32px 56px 38px 32px 36px; gap:0 4px}
 }
@@ -772,9 +773,8 @@ def win_track(rows: list[dict], finished: bool = False, n: int = 8) -> str:
     ticks = "".join(f"<i style='--q:{q}'>{q:.0%}</i>" for q in (0, 0.25, 0.5, 0.75, 1))
     out.append(
         f"<div class='wrow waxis'><span></span><span class='wtrack'>{ticks}</span></div>"
-        "<p class='fnote'>Listed by chance to win. Each percentage is that driver's share of wins "
-        "in 10,000 simulated races, "
-        "blended with the ranking's own odds. "
+        "<p class='fnote'>Listed by chance to win. Each percentage is how often that driver won "
+        "in 10,000 simulated races, averaged with the model's direct estimate. "
         "The nearer a car is to the chequered flag, the likelier the win.</p></div>"
     )
     return "".join(out)
@@ -1170,6 +1170,11 @@ SCRIPT = r"""
   addEventListener('scroll', function(){ if(!queued){ queued = true; requestAnimationFrame(update); } },
     {passive: true});
   update();
+})();
+(function(){
+  // On a narrow screen the points chart scrolls: open it on the projection,
+  // the newest part, rather than on round 1.
+  document.querySelectorAll('.chart').forEach(function(c){ c.scrollLeft = c.scrollWidth; });
 })();
 (function(){
   // Sections rise in as they reach the viewport; everything shows at once

@@ -924,3 +924,15 @@ def test_an_open_title_says_when_it_can_be_settled():
     text = report.championship_lede(_outlook(lead=30, clinch_in=2, clinched=False))
     assert "Antonelli leads Verstappen by 30 points with 75 still available over 3 races." in text
     assert "earliest it can be settled is round 22" in text
+
+
+def test_the_lead_names_whoever_is_second_on_points_now():
+    """Brazil: Russell was second on points (242) but third in the projection.
+    The 123-point lead was over Russell, so the sentence must name him."""
+    drivers = [
+        {"name": "Antonelli", "now": 365},
+        {"name": "Verstappen", "now": 236},
+        {"name": "Russell", "now": 242},
+    ]
+    text = report.championship_lede(_outlook(drivers=drivers, lead=123, clinch_in=0, clinched=True))
+    assert "a lead of 123 points over Russell" in text

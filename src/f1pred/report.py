@@ -464,7 +464,7 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
                     "<p class='chart-cap'>Points after each round for the top five drivers. Solid lines "
                     "are results so far, dashed lines the projection, and each shaded band the range 8 in "
                     "10 simulated seasons fall inside.</p>"
-                    "<p class='chart-hint'>Swipe the chart sideways to see the projection.</p>"
+                    "<p class='chart-hint'>Swipe the chart sideways to see earlier rounds.</p>"
                     + rr.progression_chart(outlook["series"], outlook["last_actual_round"])
                     if outlook.get("series")
                     else ""
@@ -574,7 +574,9 @@ def write(prediction: dict | None = None, path: Path | None = None, archived: bo
 
 def championship_lede(outlook: dict) -> str:
     """The sentence above the championship tables: where the title stands."""
-    d = outlook["drivers"]
+    # The lead is measured on points so far, so the rival is whoever is second
+    # on points now, not second in the projection.
+    d = sorted(outlook["drivers"], key=lambda r: -(r.get("now") or 0))
     leader, rival = rr.esc(d[0]["name"]), rr.esc(d[1]["name"] if len(d) > 1 else "")
     k, after = outlook.get("clinch_in"), outlook.get("after_round") or 0
     sprints = outlook.get("sprints_left")

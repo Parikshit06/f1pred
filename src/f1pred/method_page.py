@@ -254,7 +254,7 @@ def _claims(bt: dict, tb: dict | None = None) -> str:
             if top and float(top["ci_high"]) < float(top["stated"])
             else ""
         )
-        out.append(("When it says 30%, it happens about 30% of the time.", tail))
+        out.append(("Mostly, when it says 30%, it happens about 30% of the time.", tail))
     checkpoints = (tb or {}).get("checkpoints") or []
     lead = _leader_record(checkpoints) if checkpoints else None
     if lead:
