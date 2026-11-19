@@ -37,8 +37,6 @@ MIN_GRID_COVERAGE = 0.9
 FIELD_SIZE = (16, 26)
 MAX_CARS_PER_TEAM = 2
 
-GRID_SOURCES = ("results", "openf1", "qualifying")
-
 
 # ---------------------------------------------------------------------------
 # Checks

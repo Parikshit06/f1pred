@@ -95,12 +95,6 @@ def test_contributions_credit_the_feature_that_matters(ranker):
     assert FEATS[int(np.argmax(phi))] == "skill"
 
 
-def test_importance_is_averaged_over_seeds(ranker):
-    imp = model.feature_importance(ranker)
-    assert set(imp["feature"]) <= set(FEATS)
-    assert imp["share_pct"].sum() == pytest.approx(100.0, abs=0.5)
-
-
 def test_missing_feature_columns_are_refused(ranker):
     with pytest.raises(KeyError):
         ranker.score(_history().drop(columns="car"))

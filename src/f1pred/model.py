@@ -185,18 +185,3 @@ def train(
 
 def train_race(df: pd.DataFrame, **kw) -> Ranker:
     return train(df, features.RACE_FEATURES, "race_relevance", **kw)
-
-
-def feature_importance(ranker: Ranker, top: int = 15) -> pd.DataFrame:
-    """Total gain per feature, averaged over the seeds. In-sample and biased
-    toward features with many split points: evaluation.py measures importance
-    out of sample instead. This is for a quick look."""
-    frames = [
-        pd.Series(b.get_booster().get_score(importance_type="total_gain"), name=i)
-        for i, b in enumerate(ranker.boosters)
-    ]
-    gain = pd.concat(frames, axis=1).fillna(0.0).mean(axis=1)
-    out = gain.rename("gain").rename_axis("feature").reset_index().sort_values("gain", ascending=False)
-    total = out["gain"].sum()
-    out["share_pct"] = (out["gain"] / total * 100).round(1) if total else 0.0
-    return out.head(top).reset_index(drop=True)
