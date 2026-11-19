@@ -246,14 +246,16 @@ def clinch_round(
     Leader takes the maximum from each round and the rival nothing: settled
     after k rounds once L + M[:k] > R + M[k:], where M holds each remaining
     round's maximum (sprints and bonus points included). Pass the rounds'
-    maxima, or a count of plain race weekends worth `win` each. None if not
-    before the finale.
+    maxima, or a count of plain race weekends worth `win` each. 0 if it is
+    already settled, None if not before the finale.
     """
     maxima = np.full(int(races_left), win) if np.isscalar(races_left) else np.asarray(races_left, dtype=float)
     if len(maxima) == 0:
         return None
     gap = leader_points - rival_points
     total = maxima.sum()
+    if gap > total + 1e-9:
+        return 0
     for k in range(1, len(maxima) + 1):
         taken = maxima[:k].sum()
         if gap + taken > total - taken + 1e-9:

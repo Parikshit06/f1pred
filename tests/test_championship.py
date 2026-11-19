@@ -118,8 +118,8 @@ def test_clinch_is_none_when_the_season_is_over():
     assert champ.clinch_round(100, 100, 0) is None
 
 
-def test_clinch_is_immediate_when_the_lead_already_exceeds_what_is_left():
-    assert champ.clinch_round(400, 100, 2) == 1
+def test_clinch_is_zero_when_the_lead_already_exceeds_what_is_left():
+    assert champ.clinch_round(400, 100, 2) == 0
 
 
 def test_the_projection_carries_a_range_not_just_a_mean():
@@ -392,7 +392,7 @@ def test_clinching_counts_the_sprint_points_still_on_offer():
 
 
 def test_clinch_accepts_a_plain_count_of_races():
-    assert champ.clinch_round(100, 50, 1) == 1
+    assert champ.clinch_round(100, 80, 1) == 1
 
 
 # ---------------------------------------------------------------------------

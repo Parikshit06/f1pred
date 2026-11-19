@@ -189,14 +189,6 @@ def history_of(preds: list[dict], result_of, names_db: dict[str, str]) -> list[d
 # ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
-GRID_SOURCES = {
-    "results": "official starting grid",
-    "openf1": "official starting grid",
-    "qualifying": "qualifying order (grid penalties not yet published)",
-    "projected": "grid not known yet: projected from the qualifying forecast",
-}
-
-
 def _when(ts: str | None) -> str:
     try:
         return f"{datetime.fromisoformat(str(ts).replace(' ', 'T')):%a %d %b, %H:%M} UTC"
@@ -457,21 +449,7 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
         outlook = prediction.get("season_outlook") or {}
         if outlook and outlook.get("drivers"):
             d = outlook["drivers"]
-            leader, rival = d[0]["name"], (d[1]["name"] if len(d) > 1 else "")
-            k, after = outlook.get("clinch_in"), outlook.get("after_round") or 0
-            sprints = outlook.get("sprints_left")
-            lede = (
-                f"{rr.esc(leader)} leads {rr.esc(rival)} by {outlook.get('lead', 0):.0f} points with "
-                f"{outlook.get('points_available', 0)} still available over {outlook['n_races']} races"
-                + (f" and {sprints} sprint{'s' if sprints != 1 else ''}" if sprints else "")
-                + "."
-                + (
-                    f" The earliest it can be settled is round {after + k}."
-                    if k and k < outlook["n_races"]
-                    else ""
-                )
-                + " Projected from 10,000 simulated seasons. The range under each total covers 8 in 10."
-            )
+            lede = championship_lede(outlook)
             body = (
                 f"<p class='cap'>{lede}</p>"
                 + "<div class='pair'>"
@@ -589,3 +567,22 @@ def write(prediction: dict | None = None, path: Path | None = None, archived: bo
     path.write_text(build(prediction, archived=archived))
     log.info("Wrote %s", path)
     return path
+
+
+def championship_lede(outlook: dict) -> str:
+    """The sentence above the championship tables: where the title stands."""
+    d = outlook["drivers"]
+    leader, rival = rr.esc(d[0]["name"]), rr.esc(d[1]["name"] if len(d) > 1 else "")
+    k, after = outlook.get("clinch_in"), outlook.get("after_round") or 0
+    sprints = outlook.get("sprints_left")
+    left = f"{outlook.get('points_available', 0)} still available over {outlook['n_races']} races" + (
+        f" and {sprints} sprint{'s' if sprints != 1 else ''}" if sprints else ""
+    )
+    lead = f"{outlook.get('lead', 0):.0f} points"
+    if k == 0 or outlook.get("clinched"):
+        text = f"{leader} is champion: a lead of {lead} over {rival}, with {left}."
+    else:
+        text = f"{leader} leads {rival} by {lead} with {left}."
+        if k and k < outlook["n_races"]:
+            text += f" The earliest it can be settled is round {after + k}."
+    return text + " Projected from 10,000 simulated seasons. The range under each total covers 8 in 10."

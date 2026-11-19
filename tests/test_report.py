@@ -899,3 +899,28 @@ def test_a_penalised_start_is_not_credited_to_the_lap():
     assert out.loc[0, "grid"] == pytest.approx(-0.2)
     assert out.loc[0, "one_lap_pace"] == pytest.approx(0.6)
     assert out.loc[1, "grid"] == pytest.approx(0.5)
+
+
+def _outlook(**over):
+    base = {
+        "drivers": [{"name": "Antonelli"}, {"name": "Verstappen"}],
+        "n_races": 3,
+        "points_available": 75,
+        "sprints_left": 0,
+        "after_round": 20,
+    }
+    return {**base, **over}
+
+
+def test_a_settled_title_is_called_settled():
+    """A 119-point lead with 75 left is a title won, not one that can be
+    settled at the next round."""
+    text = report.championship_lede(_outlook(lead=119, clinch_in=0, clinched=True))
+    assert "Antonelli is champion" in text
+    assert "can be settled" not in text
+
+
+def test_an_open_title_says_when_it_can_be_settled():
+    text = report.championship_lede(_outlook(lead=30, clinch_in=2, clinched=False))
+    assert "Antonelli leads Verstappen by 30 points with 75 still available over 3 races." in text
+    assert "earliest it can be settled is round 22" in text
