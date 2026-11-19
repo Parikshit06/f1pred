@@ -44,7 +44,7 @@ flowchart TD
         J["jolpica-f1, since 2018<br/>results, qualifying, standings"]
         O["OpenF1<br/>official grids, entry lists,<br/>practice laps, sprint qualifying"]
     end
-    J --> DB[("DuckDB<br/>21 data checks")]
+    J --> DB[("DuckDB<br/>22 data checks")]
     O --> DB
     DB --> X["Driver and team features<br/>built from earlier races only"]
     X --> Q["Qualifying model<br/>XGBoost ranker"]
@@ -63,7 +63,7 @@ flowchart TD
 ```
 
 1. **Collect.** Results and qualifying for every race since 2018, plus
-   official grids, practice times and sprint qualifying from OpenF1. 21 data
+   official grids, practice times and sprint qualifying from OpenF1. 22 data
    checks run before anything is modelled.
 2. **Describe each driver from the past only.** Recent results, the team's
    form, one-lap pace and record at this circuit, all built from earlier races

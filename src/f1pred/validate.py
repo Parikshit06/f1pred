@@ -481,6 +481,22 @@ def no_failed_ingests(con) -> list[Finding]:
     return [Finding("no_failed_ingests", WARN, f"{len(df)} ingest task(s) recorded as failed", df)]
 
 
+@check
+def standings_match_results(con) -> list[Finding]:
+    """Standings read before jolpica updated them carry the previous round's
+    totals. Ingest reads those rounds again, so this should clear by itself."""
+    from .ingest.jolpica import standings_behind_results
+
+    seasons = [r[0] for r in con.execute("SELECT DISTINCT season FROM raw_standings").fetchall()]
+    rows = [(s, r) for s in seasons for r in sorted(standings_behind_results(con, s))]
+    if not rows:
+        return []
+    df = pd.DataFrame(rows, columns=["season", "round"])
+    return [
+        Finding("standings_match_results", WARN, f"{len(df)} round(s) of standings behind their results", df)
+    ]
+
+
 def run(con: duckdb.DuckDBPyConnection | None = None) -> Report:
     report = Report()
     if con is not None:

@@ -340,3 +340,24 @@ def test_a_debut_driver_on_a_retired_drivers_number_maps_to_the_debutant():
     )
     entry = {"name_acronym": "CAM", "driver_number": 51, "last_name": "Câmara"}
     assert openf1.map_driver(entry, lookup, 2026) == "rafael_camara"
+
+
+def test_standings_read_before_jolpica_updated_them_are_caught(con):
+    """Standings fetched between a race's results and jolpica's standings
+    update carry the previous round's totals. They are found by adding up the
+    results, so the next run reads them again."""
+    con.execute(
+        "INSERT INTO raw_results (season, round, driver_id, position, points) VALUES "
+        "(2026, 1, 'a', 1, 25), (2026, 1, 'b', 2, 18), (2026, 2, 'a', 2, 18), (2026, 2, 'b', 1, 25)"
+    )
+    con.execute(
+        "INSERT INTO raw_sprint (season, round, driver_id, position, points) VALUES (2026, 2, 'a', 1, 8)"
+    )
+    con.execute(
+        "INSERT INTO raw_standings (season, round, driver_id, position, points) VALUES "
+        "(2026, 1, 'a', 1, 25), (2026, 1, 'b', 2, 18), (2026, 2, 'a', 1, 25), (2026, 2, 'b', 2, 18)"
+    )
+    assert jolpica.standings_behind_results(con, 2026) == {2}
+    con.execute("UPDATE raw_standings SET points = 51 WHERE round = 2 AND driver_id = 'a'")
+    con.execute("UPDATE raw_standings SET points = 43 WHERE round = 2 AND driver_id = 'b'")
+    assert jolpica.standings_behind_results(con, 2026) == set()

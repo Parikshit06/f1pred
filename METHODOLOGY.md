@@ -86,7 +86,7 @@ excess (0.6). Only front-runners were measured, so any other car starting
 from the back keeps its usual qualifying forecast. Place penalties are left
 alone, because the grid still depends on the lap.
 
-`make validate` runs 21 checks before anything is modelled: coverage,
+`make validate` runs 22 checks before anything is modelled: coverage,
 referential integrity, positions, the retirement flag against laps completed,
 grid slots, and time ordering (practice before qualifying and the race).
 
@@ -351,7 +351,7 @@ Where the code lives:
 src/f1pred/
   ingest/            jolpica, OpenF1 (grid, entries), practice (OpenF1 lap aggregates)
   store.py           DuckDB schema (raw tables are never overwritten)
-  validate.py        21 data checks
+  validate.py        22 data checks
   weekend.py         who is in the race, and where each car starts
   penalties.py       grid penalties announced before the official grid
   features.py        temporal feature layer

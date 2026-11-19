@@ -298,6 +298,28 @@ _ROUND_ENDPOINTS = [
 ]
 
 
+def standings_behind_results(con, season: int) -> set[int]:
+    """Rounds whose stored standings don't add up to the points in the race and
+    sprint results up to that round. jolpica publishes a race's results before
+    its standings, so standings read in between are the previous round's."""
+    rows = con.execute(
+        """
+        WITH pts AS (
+            SELECT round, sum(points) AS p FROM (
+                SELECT round, points FROM raw_results WHERE season = ?
+                UNION ALL
+                SELECT round, points FROM raw_sprint WHERE season = ?
+            ) GROUP BY 1
+        ),
+        cum AS (SELECT round, sum(p) OVER (ORDER BY round) AS total FROM pts),
+        st AS (SELECT round, sum(points) AS total FROM raw_standings WHERE season = ? GROUP BY 1)
+        SELECT st.round FROM st JOIN cum USING (round) WHERE abs(st.total - cum.total) > 0.5
+        """,
+        [season, season, season],
+    ).fetchall()
+    return {int(r[0]) for r in rows}
+
+
 def ingest_season(session: RateLimitedSession, season: int, force: bool = False) -> dict[str, int]:
     """Pull every season-level endpoint plus per-round standings."""
     counts: dict[str, int] = {}
@@ -349,6 +371,7 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
             ).fetchall()
         ]
 
+        behind = standings_behind_results(con, season) if season == config.CURRENT_SEASON else set()
         for source, suffix, key_path, parser, table, keys in _ROUND_ENDPOINTS:
             total = 0
             for rnd in rounds:
@@ -358,7 +381,11 @@ def ingest_season(session: RateLimitedSession, season: int, force: bool = False)
                 # Future rounds return an empty 200. In the live season that means "not yet",
                 # so it isn't marked done or served from cache next time: otherwise the back
                 # half of the standings never arrives and the projection comes back empty.
-                stale = status == "empty" and season == config.CURRENT_SEASON
+                # Standings read soon after a race can still be the previous round's, so a
+                # round whose standings disagree with its results is read again.
+                stale = season == config.CURRENT_SEASON and (
+                    status == "empty" or (source == "standings" and rnd in behind)
+                )
                 if not force and status in ("ok", "empty") and not stale:
                     continue
 
