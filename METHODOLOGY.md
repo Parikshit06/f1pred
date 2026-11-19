@@ -255,6 +255,15 @@ the final configuration, and later runs report without re-deciding.
   (podium 2.9% to 1.5%, top ten 7.2% to 4.9%), but podium
   Brier was not clearly better (-0.0015, -0.0033 to +0.0001), so
   it is not used.
+  It costs nothing elsewhere: win log loss is level in both windows, and on
+  2024 onward podium calibration error falls from 2.5% to 1.8% and top-ten
+  from 6.2% to 4.5%. A second test was fixed on 19 November 2026, before any
+  of its races had run. It is judged once, on the first 24 races after 2026
+  round 20, and the change is used if, on those races, win log loss is no
+  worse on average, podium and top-ten Brier are both lower on average, and
+  podium calibration error is lower. It is a weaker bar than the first
+  (averages, not intervals), set because the first test already pointed the
+  same way in both windows and the new races are untouched.
 * **Qualifying pairing** (`quali_pairing`): XGBoost's default pairs each
   driver only with the eight it currently ranks highest. Pairs across the whole
   field, with the same exponential gains, were judged on the qualifying-order

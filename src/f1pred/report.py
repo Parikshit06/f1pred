@@ -416,7 +416,9 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
         s.append(
             _section(
                 "Race forecast",
-                "The ten drivers expected to finish highest, from 10,000 simulated races."
+                "The ten drivers expected to finish highest, listed by their average finishing place in "
+                "10,000 simulated races. That can differ from the order of win chances above: a driver "
+                "who wins more often can also finish lower more often."
                 + (
                     " Win, podium, top 5 and top 10 are all counted from the same simulated finishing "
                     "orders, so they always agree with each other."
@@ -436,7 +438,8 @@ def build(prediction: dict | None = None, archived: bool = False) -> str:
                     "The top ten of the qualifying forecast, made before the session, with where each "
                     "driver actually starts. The race forecast above uses the real grid."
                     if qualified
-                    else "The ten drivers expected to qualify highest, from past qualifying and this "
+                    else "The ten drivers expected to qualify highest, listed by their average qualifying "
+                    "place, from past qualifying and this "
                     "weekend's practice where it has run. Each simulated race draws its own grid from "
                     "this forecast."
                 ),

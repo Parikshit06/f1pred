@@ -772,7 +772,8 @@ def win_track(rows: list[dict], finished: bool = False, n: int = 8) -> str:
     ticks = "".join(f"<i style='--q:{q}'>{q:.0%}</i>" for q in (0, 0.25, 0.5, 0.75, 1))
     out.append(
         f"<div class='wrow waxis'><span></span><span class='wtrack'>{ticks}</span></div>"
-        "<p class='fnote'>Each percentage is that driver's share of wins in 10,000 simulated races, "
+        "<p class='fnote'>Listed by chance to win. Each percentage is that driver's share of wins "
+        "in 10,000 simulated races, "
         "blended with the ranking's own odds. "
         "The nearer a car is to the chequered flag, the likelier the win.</p></div>"
     )
