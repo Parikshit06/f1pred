@@ -291,12 +291,12 @@ section > .body{min-width:0}
 .rng{display:block; font-size:9.5px; font-weight:400; color:var(--ink-3);
   letter-spacing:.02em; margin-top:1px}
 
-.gridC{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 66px 52px;
+.gridC{display:grid; grid-template-columns:22px 3px minmax(90px,1fr) 52px 66px 70px;
   align-items:center; gap:0 10px}
 
 @media (max-width:480px){
   /* Too wide for a 320px screen with every column; drop "Now". */
-  .gridC{grid-template-columns:20px 3px minmax(70px,1fr) 66px 50px; gap:0 8px}
+  .gridC{grid-template-columns:20px 3px minmax(60px,1fr) 66px 70px; gap:0 8px}
   .gridC > .c-now, .colhead.gridC > span:nth-child(4){display:none}
   .wrap{padding-inline:14px}
   .bar .inner{padding:0 14px}
@@ -436,6 +436,11 @@ footer a{color:var(--ink-2); white-space:nowrap}
 @media (max-width:480px){
   .grid6{grid-template-columns:18px 3px minmax(70px,1fr) 42px 70px 46px 38px; gap:0 8px}
   .grid6.fin{grid-template-columns:18px 3px minmax(60px,1fr) 36px 60px 40px 34px 40px; gap:0 6px}
+}
+@media (max-width:360px){
+  /* The smallest phones: same columns, tighter, so the table fits 320px. */
+  .grid6{grid-template-columns:18px 3px minmax(56px,1fr) 38px 60px 44px 36px; gap:0 5px}
+  .grid6.fin{grid-template-columns:18px 3px minmax(48px,1fr) 32px 56px 38px 32px 36px; gap:0 4px}
 }
 
 /* ---- the forecast: favourite, then the top five ----------------------- */
